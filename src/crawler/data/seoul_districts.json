@@ -1,0 +1,46 @@
+{
+  "districts": [
+    {
+      "district_name": "강남구",
+      "district_code": "1168000000",
+      "dongs": [
+        {
+          "dong_name": "삼성동",
+          "cortarNo": "1168010100",
+          "bounds": {
+            "leftLon": 127.05,
+            "rightLon": 127.07,
+            "topLat": 37.52,
+            "bottomLat": 37.5
+          }
+        },
+        {
+          "dong_name": "역삼동",
+          "cortarNo": "1168010200",
+          "bounds": {
+            "leftLon": 127.03,
+            "rightLon": 127.05,
+            "topLat": 37.51,
+            "bottomLat": 37.49
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "서초구",
+      "district_code": "1165000000",
+      "dongs": [
+        {
+          "dong_name": "반포동",
+          "cortarNo": "1165010100",
+          "bounds": {
+            "leftLon": 126.99,
+            "rightLon": 127.01,
+            "topLat": 37.51,
+            "bottomLat": 37.49
+          }
+        }
+      ]
+    }
+  ]
+}
