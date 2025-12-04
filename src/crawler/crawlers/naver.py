@@ -31,17 +31,23 @@ class NaverRealEstateCrawler:
         cortar_no = dong["cortarNo"]
         bounds = dong["bounds"]
 
+        # 중심 좌표 계산
+        center_lon = (bounds["leftLon"] + bounds["rightLon"]) / 2
+        center_lat = (bounds["topLat"] + bounds["bottomLat"]) / 2
+
+        # 모바일 API 사용 (데스크톱 API는 더 이상 작동하지 않음)
         api_url = (
-            f"https://new.land.naver.com/api/complexes/single-markers/2.0?"
+            f"https://m.land.naver.com/cluster/ajax/complexList?"
             f"cortarNo={cortar_no}&"
-            f"zoom=17&"
-            f"priceType=RETAIL&"
-            f"realEstateType=APT&"
-            f"tradeType=A1&"
-            f"leftLon={bounds['leftLon']}&"
-            f"rightLon={bounds['rightLon']}&"
-            f"topLat={bounds['topLat']}&"
-            f"bottomLat={bounds['bottomLat']}"
+            f"rletTpCd=APT&"  # 아파트
+            f"tradTpCd=A1&"  # 매매
+            f"z=17&"
+            f"lat={center_lat}&"
+            f"lon={center_lon}&"
+            f"btm={bounds['bottomLat']}&"
+            f"lft={bounds['leftLon']}&"
+            f"top={bounds['topLat']}&"
+            f"rgt={bounds['rightLon']}"
         )
 
         self.logger.info(
@@ -63,26 +69,35 @@ class NaverRealEstateCrawler:
         return self._parse_api_response(result)
 
     def _parse_api_response(self, response: dict[str, Any]) -> list[dict[str, Any]]:
-        items = response.get("list", [])
+        # 모바일 API는 "result" 키에 데이터가 들어있음
+        items = response.get("result", [])
         results = []
 
         for item in items:
+            # HTML 태그 제거 함수 (가격 문자열에서 <em> 태그 제거)
+            def clean_price(price_str: str) -> str:
+                if not price_str:
+                    return ""
+                return price_str.replace("<em class='txt_unit'>", "").replace("</em>", "").strip()
+
             results.append(
                 {
-                    "marker_id": item["markerId"],
-                    "complex_name": item["complexName"],
-                    "latitude": item["latitude"],
-                    "longitude": item["longitude"],
-                    "real_estate_type": item["realEstateTypeName"],
-                    "completion_year_month": item["completionYearMonth"],
-                    "total_dong_count": item["totalDongCount"],
-                    "total_household_count": item["totalHouseholdCount"],
-                    "floor_area_ratio": item["floorAreaRatio"],
-                    "min_area": item["minArea"],
-                    "max_area": item["maxArea"],
-                    "deal_count": item["dealCount"],
-                    "lease_count": item["leaseCount"],
-                    "total_article_count": item["totalArticleCount"],
+                    "complex_id": item.get("hscpNo", ""),
+                    "complex_name": item.get("hscpNm", ""),
+                    "real_estate_type": item.get("hscpTypeNm", ""),
+                    "completion_year_month": item.get("useAprvYmd", ""),
+                    "total_dong_count": item.get("totDongCnt", 0),
+                    "total_household_count": item.get("totHsehCnt", 0),
+                    "min_area": item.get("minSpc", ""),
+                    "max_area": item.get("maxSpc", ""),
+                    "deal_count": item.get("dealCnt", 0),
+                    "lease_count": item.get("leaseCnt", 0),
+                    "rent_count": item.get("rentCnt", 0),
+                    "total_article_count": item.get("totalAtclCnt", 0),
+                    "deal_price_min": clean_price(item.get("dealPrcMin", "")),
+                    "deal_price_max": clean_price(item.get("dealPrcMax", "")),
+                    "lease_price_min": clean_price(item.get("leasePrcMin", "")),
+                    "lease_price_max": clean_price(item.get("leasePrcMax", "")),
                 }
             )
 
