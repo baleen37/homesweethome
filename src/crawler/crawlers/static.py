@@ -1,4 +1,6 @@
 import requests
+from typing import Any
+
 from bs4 import BeautifulSoup
 
 from crawler.crawlers.base import BaseCrawler
@@ -15,7 +17,7 @@ class StaticCrawler(BaseCrawler):
         response.raise_for_status()
         return response.text
 
-    def parse(self, html: str) -> list[dict]:
+    def parse(self, html: str) -> list[dict[str, Any]]:
         """BeautifulSoup으로 파싱"""
         soup = BeautifulSoup(html, "lxml")
 
