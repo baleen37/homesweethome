@@ -5,23 +5,1451 @@
       "district_code": "1168000000",
       "dongs": [
         {
-          "dong_name": "삼성동",
-          "cortarNo": "1168010100",
+          "dong_name": "개포동",
+          "cortarNo": "1168010300",
           "bounds": {
-            "leftLon": 127.05,
-            "rightLon": 127.07,
-            "topLat": 37.52,
-            "bottomLat": 37.5
+            "leftLon": 127.0534,
+            "rightLon": 127.0734,
+            "topLat": 37.492968,
+            "bottomLat": 37.472968
+          }
+        },
+        {
+          "dong_name": "논현동",
+          "cortarNo": "1168010800",
+          "bounds": {
+            "leftLon": 127.02137499999999,
+            "rightLon": 127.041375,
+            "topLat": 37.523582999999995,
+            "bottomLat": 37.503583
+          }
+        },
+        {
+          "dong_name": "대치동",
+          "cortarNo": "1168010600",
+          "bounds": {
+            "leftLon": 127.05546299999999,
+            "rightLon": 127.075463,
+            "topLat": 37.50911,
+            "bottomLat": 37.489110000000004
+          }
+        },
+        {
+          "dong_name": "도곡동",
+          "cortarNo": "1168011800",
+          "bounds": {
+            "leftLon": 127.03505,
+            "rightLon": 127.05505000000001,
+            "topLat": 37.498143,
+            "bottomLat": 37.478143
+          }
+        },
+        {
+          "dong_name": "삼성동",
+          "cortarNo": "1168010500",
+          "bounds": {
+            "leftLon": 127.04538699999999,
+            "rightLon": 127.065387,
+            "topLat": 37.524792,
+            "bottomLat": 37.504792
+          }
+        },
+        {
+          "dong_name": "세곡동",
+          "cortarNo": "1168011100",
+          "bounds": {
+            "leftLon": 127.0946,
+            "rightLon": 127.11460000000001,
+            "topLat": 37.47436,
+            "bottomLat": 37.45436
+          }
+        },
+        {
+          "dong_name": "수서동",
+          "cortarNo": "1168011500",
+          "bounds": {
+            "leftLon": 127.09488599999999,
+            "rightLon": 127.114886,
+            "topLat": 37.498855999999996,
+            "bottomLat": 37.478856
+          }
+        },
+        {
+          "dong_name": "신사동",
+          "cortarNo": "1168010700",
+          "bounds": {
+            "leftLon": 127.0129,
+            "rightLon": 127.03290000000001,
+            "topLat": 37.534141999999996,
+            "bottomLat": 37.514142
+          }
+        },
+        {
+          "dong_name": "압구정동",
+          "cortarNo": "1168011000",
+          "bounds": {
+            "leftLon": 127.0136,
+            "rightLon": 127.0336,
+            "topLat": 37.5391,
+            "bottomLat": 37.5191
           }
         },
         {
           "dong_name": "역삼동",
-          "cortarNo": "1168010200",
+          "cortarNo": "1168010100",
           "bounds": {
-            "leftLon": 127.03,
-            "rightLon": 127.05,
-            "topLat": 37.51,
-            "bottomLat": 37.49
+            "leftLon": 127.02895,
+            "rightLon": 127.04895,
+            "topLat": 37.509775999999995,
+            "bottomLat": 37.489776
+          }
+        },
+        {
+          "dong_name": "율현동",
+          "cortarNo": "1168011300",
+          "bounds": {
+            "leftLon": 127.1014,
+            "rightLon": 127.12140000000001,
+            "topLat": 37.4817,
+            "bottomLat": 37.4617
+          }
+        },
+        {
+          "dong_name": "일원동",
+          "cortarNo": "1168011400",
+          "bounds": {
+            "leftLon": 127.071638,
+            "rightLon": 127.091638,
+            "topLat": 37.497485,
+            "bottomLat": 37.477485
+          }
+        },
+        {
+          "dong_name": "자곡동",
+          "cortarNo": "1168011200",
+          "bounds": {
+            "leftLon": 127.091,
+            "rightLon": 127.111,
+            "topLat": 37.486599999999996,
+            "bottomLat": 37.4666
+          }
+        },
+        {
+          "dong_name": "청담동",
+          "cortarNo": "1168010400",
+          "bounds": {
+            "leftLon": 127.04235,
+            "rightLon": 127.06235000000001,
+            "topLat": 37.535492,
+            "bottomLat": 37.515492
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "강동구",
+      "district_code": "1174000000",
+      "dongs": [
+        {
+          "dong_name": "강일동",
+          "cortarNo": "1174011000",
+          "bounds": {
+            "leftLon": 127.16781399999999,
+            "rightLon": 127.187814,
+            "topLat": 37.579397,
+            "bottomLat": 37.559397000000004
+          }
+        },
+        {
+          "dong_name": "고덕동",
+          "cortarNo": "1174010200",
+          "bounds": {
+            "leftLon": 127.14609999999999,
+            "rightLon": 127.1661,
+            "topLat": 37.5753,
+            "bottomLat": 37.5553
+          }
+        },
+        {
+          "dong_name": "길동",
+          "cortarNo": "1174010500",
+          "bounds": {
+            "leftLon": 127.13595,
+            "rightLon": 127.15595,
+            "topLat": 37.5479,
+            "bottomLat": 37.5279
+          }
+        },
+        {
+          "dong_name": "둔촌동",
+          "cortarNo": "1174010600",
+          "bounds": {
+            "leftLon": 127.133,
+            "rightLon": 127.153,
+            "topLat": 37.5363,
+            "bottomLat": 37.5163
+          }
+        },
+        {
+          "dong_name": "명일동",
+          "cortarNo": "1174010100",
+          "bounds": {
+            "leftLon": 127.13969999999999,
+            "rightLon": 127.1597,
+            "topLat": 37.558692,
+            "bottomLat": 37.538692000000005
+          }
+        },
+        {
+          "dong_name": "상일동",
+          "cortarNo": "1174010300",
+          "bounds": {
+            "leftLon": 127.15551599999999,
+            "rightLon": 127.175516,
+            "topLat": 37.561582,
+            "bottomLat": 37.541582000000005
+          }
+        },
+        {
+          "dong_name": "성내동",
+          "cortarNo": "1174010800",
+          "bounds": {
+            "leftLon": 127.1189,
+            "rightLon": 127.1389,
+            "topLat": 37.540482999999995,
+            "bottomLat": 37.520483
+          }
+        },
+        {
+          "dong_name": "암사동",
+          "cortarNo": "1174010700",
+          "bounds": {
+            "leftLon": 127.12083799999999,
+            "rightLon": 127.140838,
+            "topLat": 37.567924999999995,
+            "bottomLat": 37.547925
+          }
+        },
+        {
+          "dong_name": "천호동",
+          "cortarNo": "1174010900",
+          "bounds": {
+            "leftLon": 127.11664999999999,
+            "rightLon": 127.13665,
+            "topLat": 37.553217,
+            "bottomLat": 37.533217
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "강북구",
+      "district_code": "1130500000",
+      "dongs": [
+        {
+          "dong_name": "미아동",
+          "cortarNo": "1130510100",
+          "bounds": {
+            "leftLon": 127.01079999999999,
+            "rightLon": 127.0308,
+            "topLat": 37.6322,
+            "bottomLat": 37.6122
+          }
+        },
+        {
+          "dong_name": "번동",
+          "cortarNo": "1130510200",
+          "bounds": {
+            "leftLon": 127.027013,
+            "rightLon": 127.047013,
+            "topLat": 37.639215,
+            "bottomLat": 37.619215000000004
+          }
+        },
+        {
+          "dong_name": "수유동",
+          "cortarNo": "1130510300",
+          "bounds": {
+            "leftLon": 126.99459999999999,
+            "rightLon": 127.0146,
+            "topLat": 37.647099999999995,
+            "bottomLat": 37.6271
+          }
+        },
+        {
+          "dong_name": "우이동",
+          "cortarNo": "1130510400",
+          "bounds": {
+            "leftLon": 126.99199999999999,
+            "rightLon": 127.012,
+            "topLat": 37.6733,
+            "bottomLat": 37.6533
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "강서구",
+      "district_code": "1150000000",
+      "dongs": [
+        {
+          "dong_name": "가양동",
+          "cortarNo": "1150010400",
+          "bounds": {
+            "leftLon": 126.83539999999999,
+            "rightLon": 126.8554,
+            "topLat": 37.5781,
+            "bottomLat": 37.5581
+          }
+        },
+        {
+          "dong_name": "개화동",
+          "cortarNo": "1150011000",
+          "bounds": {
+            "leftLon": 126.79679999999999,
+            "rightLon": 126.8168,
+            "topLat": 37.5974,
+            "bottomLat": 37.577400000000004
+          }
+        },
+        {
+          "dong_name": "공항동",
+          "cortarNo": "1150010800",
+          "bounds": {
+            "leftLon": 126.80036299999999,
+            "rightLon": 126.820363,
+            "topLat": 37.568767,
+            "bottomLat": 37.548767000000005
+          }
+        },
+        {
+          "dong_name": "과해동",
+          "cortarNo": "1150011100",
+          "bounds": {
+            "leftLon": 126.7772,
+            "rightLon": 126.7972,
+            "topLat": 37.5762,
+            "bottomLat": 37.556200000000004
+          }
+        },
+        {
+          "dong_name": "내발산동",
+          "cortarNo": "1150010600",
+          "bounds": {
+            "leftLon": 126.8254,
+            "rightLon": 126.84540000000001,
+            "topLat": 37.5635,
+            "bottomLat": 37.5435
+          }
+        },
+        {
+          "dong_name": "등촌동",
+          "cortarNo": "1150010200",
+          "bounds": {
+            "leftLon": 126.85119999999999,
+            "rightLon": 126.8712,
+            "topLat": 37.5618,
+            "bottomLat": 37.5418
+          }
+        },
+        {
+          "dong_name": "마곡동",
+          "cortarNo": "1150010500",
+          "bounds": {
+            "leftLon": 126.82039999999999,
+            "rightLon": 126.8404,
+            "topLat": 37.5838,
+            "bottomLat": 37.5638
+          }
+        },
+        {
+          "dong_name": "방화동",
+          "cortarNo": "1150010900",
+          "bounds": {
+            "leftLon": 126.803325,
+            "rightLon": 126.82332500000001,
+            "topLat": 37.587333,
+            "bottomLat": 37.567333000000005
+          }
+        },
+        {
+          "dong_name": "염창동",
+          "cortarNo": "1150010100",
+          "bounds": {
+            "leftLon": 126.86097,
+            "rightLon": 126.88097,
+            "topLat": 37.563759999999995,
+            "bottomLat": 37.54376
+          }
+        },
+        {
+          "dong_name": "오곡동",
+          "cortarNo": "1150011200",
+          "bounds": {
+            "leftLon": 126.774,
+            "rightLon": 126.79400000000001,
+            "topLat": 37.5634,
+            "bottomLat": 37.543400000000005
+          }
+        },
+        {
+          "dong_name": "오쇠동",
+          "cortarNo": "1150011300",
+          "bounds": {
+            "leftLon": 126.7884,
+            "rightLon": 126.8084,
+            "topLat": 37.5535,
+            "bottomLat": 37.533500000000004
+          }
+        },
+        {
+          "dong_name": "외발산동",
+          "cortarNo": "1150010700",
+          "bounds": {
+            "leftLon": 126.8107,
+            "rightLon": 126.83070000000001,
+            "topLat": 37.5594,
+            "bottomLat": 37.5394
+          }
+        },
+        {
+          "dong_name": "화곡동",
+          "cortarNo": "1150010300",
+          "bounds": {
+            "leftLon": 126.834525,
+            "rightLon": 126.85452500000001,
+            "topLat": 37.552099999999996,
+            "bottomLat": 37.5321
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "관악구",
+      "district_code": "1162000000",
+      "dongs": [
+        {
+          "dong_name": "남현동",
+          "cortarNo": "1162010300",
+          "bounds": {
+            "leftLon": 126.96783699999999,
+            "rightLon": 126.987837,
+            "topLat": 37.484539,
+            "bottomLat": 37.464539
+          }
+        },
+        {
+          "dong_name": "봉천동",
+          "cortarNo": "1162010100",
+          "bounds": {
+            "leftLon": 126.94669999999999,
+            "rightLon": 126.9667,
+            "topLat": 37.485299999999995,
+            "bottomLat": 37.4653
+          }
+        },
+        {
+          "dong_name": "신림동",
+          "cortarNo": "1162010200",
+          "bounds": {
+            "leftLon": 126.9246,
+            "rightLon": 126.94460000000001,
+            "topLat": 37.4732,
+            "bottomLat": 37.4532
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "광진구",
+      "district_code": "1121500000",
+      "dongs": [
+        {
+          "dong_name": "광장동",
+          "cortarNo": "1121510400",
+          "bounds": {
+            "leftLon": 127.093025,
+            "rightLon": 127.11302500000001,
+            "topLat": 37.556892,
+            "bottomLat": 37.536892
+          }
+        },
+        {
+          "dong_name": "구의동",
+          "cortarNo": "1121510300",
+          "bounds": {
+            "leftLon": 127.07833699999999,
+            "rightLon": 127.098337,
+            "topLat": 37.553982999999995,
+            "bottomLat": 37.533983
+          }
+        },
+        {
+          "dong_name": "군자동",
+          "cortarNo": "1121510900",
+          "bounds": {
+            "leftLon": 127.065837,
+            "rightLon": 127.08583700000001,
+            "topLat": 37.565121999999995,
+            "bottomLat": 37.545122
+          }
+        },
+        {
+          "dong_name": "능동",
+          "cortarNo": "1121510200",
+          "bounds": {
+            "leftLon": 127.070499,
+            "rightLon": 127.09049900000001,
+            "topLat": 37.56378,
+            "bottomLat": 37.543780000000005
+          }
+        },
+        {
+          "dong_name": "자양동",
+          "cortarNo": "1121510500",
+          "bounds": {
+            "leftLon": 127.066006,
+            "rightLon": 127.08600600000001,
+            "topLat": 37.543214,
+            "bottomLat": 37.523214
+          }
+        },
+        {
+          "dong_name": "중곡동",
+          "cortarNo": "1121510100",
+          "bounds": {
+            "leftLon": 127.07759999999999,
+            "rightLon": 127.0976,
+            "topLat": 37.5731,
+            "bottomLat": 37.5531
+          }
+        },
+        {
+          "dong_name": "화양동",
+          "cortarNo": "1121510700",
+          "bounds": {
+            "leftLon": 127.06129999999999,
+            "rightLon": 127.0813,
+            "topLat": 37.5565,
+            "bottomLat": 37.536500000000004
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "구로구",
+      "district_code": "1153000000",
+      "dongs": [
+        {
+          "dong_name": "가리봉동",
+          "cortarNo": "1153010300",
+          "bounds": {
+            "leftLon": 126.877738,
+            "rightLon": 126.897738,
+            "topLat": 37.493351,
+            "bottomLat": 37.473351
+          }
+        },
+        {
+          "dong_name": "개봉동",
+          "cortarNo": "1153010700",
+          "bounds": {
+            "leftLon": 126.846813,
+            "rightLon": 126.86681300000001,
+            "topLat": 37.504393,
+            "bottomLat": 37.484393000000004
+          }
+        },
+        {
+          "dong_name": "고척동",
+          "cortarNo": "1153010600",
+          "bounds": {
+            "leftLon": 126.8498,
+            "rightLon": 126.86980000000001,
+            "topLat": 37.5124,
+            "bottomLat": 37.4924
+          }
+        },
+        {
+          "dong_name": "구로동",
+          "cortarNo": "1153010200",
+          "bounds": {
+            "leftLon": 126.8723,
+            "rightLon": 126.8923,
+            "topLat": 37.503699999999995,
+            "bottomLat": 37.4837
+          }
+        },
+        {
+          "dong_name": "궁동",
+          "cortarNo": "1153010900",
+          "bounds": {
+            "leftLon": 126.81769999999999,
+            "rightLon": 126.8377,
+            "topLat": 37.5109,
+            "bottomLat": 37.4909
+          }
+        },
+        {
+          "dong_name": "신도림동",
+          "cortarNo": "1153010100",
+          "bounds": {
+            "leftLon": 126.870583,
+            "rightLon": 126.890583,
+            "topLat": 37.517765999999995,
+            "bottomLat": 37.497766
+          }
+        },
+        {
+          "dong_name": "오류동",
+          "cortarNo": "1153010800",
+          "bounds": {
+            "leftLon": 126.828375,
+            "rightLon": 126.848375,
+            "topLat": 37.502143,
+            "bottomLat": 37.482143
+          }
+        },
+        {
+          "dong_name": "온수동",
+          "cortarNo": "1153011000",
+          "bounds": {
+            "leftLon": 126.8107,
+            "rightLon": 126.83070000000001,
+            "topLat": 37.5038,
+            "bottomLat": 37.4838
+          }
+        },
+        {
+          "dong_name": "천왕동",
+          "cortarNo": "1153011100",
+          "bounds": {
+            "leftLon": 126.8291,
+            "rightLon": 126.8491,
+            "topLat": 37.4902,
+            "bottomLat": 37.470200000000006
+          }
+        },
+        {
+          "dong_name": "항동",
+          "cortarNo": "1153011200",
+          "bounds": {
+            "leftLon": 126.8158,
+            "rightLon": 126.8358,
+            "topLat": 37.491,
+            "bottomLat": 37.471000000000004
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "금천구",
+      "district_code": "1154500000",
+      "dongs": [
+        {
+          "dong_name": "가산동",
+          "cortarNo": "1154510100",
+          "bounds": {
+            "leftLon": 126.881732,
+            "rightLon": 126.90173200000001,
+            "topLat": 37.486903999999996,
+            "bottomLat": 37.466904
+          }
+        },
+        {
+          "dong_name": "독산동",
+          "cortarNo": "1154510200",
+          "bounds": {
+            "leftLon": 126.8902,
+            "rightLon": 126.9102,
+            "topLat": 37.476185,
+            "bottomLat": 37.456185000000005
+          }
+        },
+        {
+          "dong_name": "시흥동",
+          "cortarNo": "1154510300",
+          "bounds": {
+            "leftLon": 126.9015,
+            "rightLon": 126.92150000000001,
+            "topLat": 37.459599999999995,
+            "bottomLat": 37.4396
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "노원구",
+      "district_code": "1135000000",
+      "dongs": [
+        {
+          "dong_name": "공릉동",
+          "cortarNo": "1135010300",
+          "bounds": {
+            "leftLon": 127.0777,
+            "rightLon": 127.0977,
+            "topLat": 37.6406,
+            "bottomLat": 37.6206
+          }
+        },
+        {
+          "dong_name": "상계동",
+          "cortarNo": "1135010500",
+          "bounds": {
+            "leftLon": 127.0624,
+            "rightLon": 127.0824,
+            "topLat": 37.676899999999996,
+            "bottomLat": 37.6569
+          }
+        },
+        {
+          "dong_name": "월계동",
+          "cortarNo": "1135010200",
+          "bounds": {
+            "leftLon": 127.044275,
+            "rightLon": 127.06427500000001,
+            "topLat": 37.639374,
+            "bottomLat": 37.619374
+          }
+        },
+        {
+          "dong_name": "중계동",
+          "cortarNo": "1135010600",
+          "bounds": {
+            "leftLon": 127.0711,
+            "rightLon": 127.09110000000001,
+            "topLat": 37.660874,
+            "bottomLat": 37.640874000000004
+          }
+        },
+        {
+          "dong_name": "하계동",
+          "cortarNo": "1135010400",
+          "bounds": {
+            "leftLon": 127.063575,
+            "rightLon": 127.08357500000001,
+            "topLat": 37.648249,
+            "bottomLat": 37.628249000000004
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "도봉구",
+      "district_code": "1132000000",
+      "dongs": [
+        {
+          "dong_name": "도봉동",
+          "cortarNo": "1132010800",
+          "bounds": {
+            "leftLon": 127.0201,
+            "rightLon": 127.04010000000001,
+            "topLat": 37.695299999999996,
+            "bottomLat": 37.6753
+          }
+        },
+        {
+          "dong_name": "방학동",
+          "cortarNo": "1132010600",
+          "bounds": {
+            "leftLon": 127.02369999999999,
+            "rightLon": 127.0437,
+            "topLat": 37.674774,
+            "bottomLat": 37.654774
+          }
+        },
+        {
+          "dong_name": "쌍문동",
+          "cortarNo": "1132010500",
+          "bounds": {
+            "leftLon": 127.0149,
+            "rightLon": 127.03490000000001,
+            "topLat": 37.6626,
+            "bottomLat": 37.6426
+          }
+        },
+        {
+          "dong_name": "창동",
+          "cortarNo": "1132010700",
+          "bounds": {
+            "leftLon": 127.03491299999999,
+            "rightLon": 127.054913,
+            "topLat": 37.656389999999995,
+            "bottomLat": 37.63639
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "동대문구",
+      "district_code": "1123000000",
+      "dongs": [
+        {
+          "dong_name": "답십리동",
+          "cortarNo": "1123010500",
+          "bounds": {
+            "leftLon": 127.04639999999999,
+            "rightLon": 127.0664,
+            "topLat": 37.58,
+            "bottomLat": 37.56
+          }
+        },
+        {
+          "dong_name": "신설동",
+          "cortarNo": "1123010100",
+          "bounds": {
+            "leftLon": 127.014625,
+            "rightLon": 127.034625,
+            "topLat": 37.583942,
+            "bottomLat": 37.563942000000004
+          }
+        },
+        {
+          "dong_name": "용두동",
+          "cortarNo": "1123010200",
+          "bounds": {
+            "leftLon": 127.02619999999999,
+            "rightLon": 127.0462,
+            "topLat": 37.5858,
+            "bottomLat": 37.5658
+          }
+        },
+        {
+          "dong_name": "이문동",
+          "cortarNo": "1123011000",
+          "bounds": {
+            "leftLon": 127.05239999999999,
+            "rightLon": 127.0724,
+            "topLat": 37.6096,
+            "bottomLat": 37.589600000000004
+          }
+        },
+        {
+          "dong_name": "장안동",
+          "cortarNo": "1123010600",
+          "bounds": {
+            "leftLon": 127.06139999999999,
+            "rightLon": 127.0814,
+            "topLat": 37.5811,
+            "bottomLat": 37.5611
+          }
+        },
+        {
+          "dong_name": "전농동",
+          "cortarNo": "1123010400",
+          "bounds": {
+            "leftLon": 127.0467,
+            "rightLon": 127.06670000000001,
+            "topLat": 37.5903,
+            "bottomLat": 37.5703
+          }
+        },
+        {
+          "dong_name": "제기동",
+          "cortarNo": "1123010300",
+          "bounds": {
+            "leftLon": 127.02709999999999,
+            "rightLon": 127.0471,
+            "topLat": 37.594699999999996,
+            "bottomLat": 37.5747
+          }
+        },
+        {
+          "dong_name": "청량리동",
+          "cortarNo": "1123010700",
+          "bounds": {
+            "leftLon": 127.0364,
+            "rightLon": 127.05640000000001,
+            "topLat": 37.5982,
+            "bottomLat": 37.5782
+          }
+        },
+        {
+          "dong_name": "회기동",
+          "cortarNo": "1123010800",
+          "bounds": {
+            "leftLon": 127.045313,
+            "rightLon": 127.065313,
+            "topLat": 37.600808,
+            "bottomLat": 37.580808000000005
+          }
+        },
+        {
+          "dong_name": "휘경동",
+          "cortarNo": "1123010900",
+          "bounds": {
+            "leftLon": 127.0527,
+            "rightLon": 127.07270000000001,
+            "topLat": 37.598574,
+            "bottomLat": 37.578574
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "동작구",
+      "district_code": "1159000000",
+      "dongs": [
+        {
+          "dong_name": "노량진동",
+          "cortarNo": "1159010100",
+          "bounds": {
+            "leftLon": 126.93159999999999,
+            "rightLon": 126.9516,
+            "topLat": 37.521499999999996,
+            "bottomLat": 37.5015
+          }
+        },
+        {
+          "dong_name": "대방동",
+          "cortarNo": "1159010800",
+          "bounds": {
+            "leftLon": 126.91635,
+            "rightLon": 126.93635,
+            "topLat": 37.518133,
+            "bottomLat": 37.498133
+          }
+        },
+        {
+          "dong_name": "동작동",
+          "cortarNo": "1159010600",
+          "bounds": {
+            "leftLon": 126.966016,
+            "rightLon": 126.986016,
+            "topLat": 37.504973,
+            "bottomLat": 37.484973000000004
+          }
+        },
+        {
+          "dong_name": "본동",
+          "cortarNo": "1159010400",
+          "bounds": {
+            "leftLon": 126.94608799999999,
+            "rightLon": 126.966088,
+            "topLat": 37.523058,
+            "bottomLat": 37.503058
+          }
+        },
+        {
+          "dong_name": "사당동",
+          "cortarNo": "1159010700",
+          "bounds": {
+            "leftLon": 126.9619,
+            "rightLon": 126.98190000000001,
+            "topLat": 37.4953,
+            "bottomLat": 37.475300000000004
+          }
+        },
+        {
+          "dong_name": "상도1동",
+          "cortarNo": "1159010300",
+          "bounds": {
+            "leftLon": 126.94099999999999,
+            "rightLon": 126.961,
+            "topLat": 37.516842,
+            "bottomLat": 37.496842
+          }
+        },
+        {
+          "dong_name": "상도동",
+          "cortarNo": "1159010200",
+          "bounds": {
+            "leftLon": 126.9337,
+            "rightLon": 126.95370000000001,
+            "topLat": 37.5091,
+            "bottomLat": 37.4891
+          }
+        },
+        {
+          "dong_name": "신대방동",
+          "cortarNo": "1159010900",
+          "bounds": {
+            "leftLon": 126.90719999999999,
+            "rightLon": 126.9272,
+            "topLat": 37.5021,
+            "bottomLat": 37.4821
+          }
+        },
+        {
+          "dong_name": "흑석동",
+          "cortarNo": "1159010500",
+          "bounds": {
+            "leftLon": 126.9529,
+            "rightLon": 126.97290000000001,
+            "topLat": 37.5152,
+            "bottomLat": 37.495200000000004
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "마포구",
+      "district_code": "1144000000",
+      "dongs": [
+        {
+          "dong_name": "공덕동",
+          "cortarNo": "1144010200",
+          "bounds": {
+            "leftLon": 126.942988,
+            "rightLon": 126.96298800000001,
+            "topLat": 37.557533,
+            "bottomLat": 37.537533
+          }
+        },
+        {
+          "dong_name": "구수동",
+          "cortarNo": "1144011300",
+          "bounds": {
+            "leftLon": 126.922288,
+            "rightLon": 126.942288,
+            "topLat": 37.555985,
+            "bottomLat": 37.535985000000004
+          }
+        },
+        {
+          "dong_name": "노고산동",
+          "cortarNo": "1144011000",
+          "bounds": {
+            "leftLon": 126.928,
+            "rightLon": 126.94800000000001,
+            "topLat": 37.564099999999996,
+            "bottomLat": 37.5441
+          }
+        },
+        {
+          "dong_name": "당인동",
+          "cortarNo": "1144011800",
+          "bounds": {
+            "leftLon": 126.9093,
+            "rightLon": 126.92930000000001,
+            "topLat": 37.553,
+            "bottomLat": 37.533
+          }
+        },
+        {
+          "dong_name": "대흥동",
+          "cortarNo": "1144010800",
+          "bounds": {
+            "leftLon": 126.934187,
+            "rightLon": 126.954187,
+            "topLat": 37.564440999999995,
+            "bottomLat": 37.544441
+          }
+        },
+        {
+          "dong_name": "도화동",
+          "cortarNo": "1144010400",
+          "bounds": {
+            "leftLon": 126.940213,
+            "rightLon": 126.96021300000001,
+            "topLat": 37.547599999999996,
+            "bottomLat": 37.5276
+          }
+        },
+        {
+          "dong_name": "동교동",
+          "cortarNo": "1144012100",
+          "bounds": {
+            "leftLon": 126.91378999999999,
+            "rightLon": 126.93379,
+            "topLat": 37.568627,
+            "bottomLat": 37.548627
+          }
+        },
+        {
+          "dong_name": "마포동",
+          "cortarNo": "1144010700",
+          "bounds": {
+            "leftLon": 126.93397499999999,
+            "rightLon": 126.953975,
+            "topLat": 37.547191999999995,
+            "bottomLat": 37.527192
+          }
+        },
+        {
+          "dong_name": "망원동",
+          "cortarNo": "1144012300",
+          "bounds": {
+            "leftLon": 126.8916,
+            "rightLon": 126.9116,
+            "topLat": 37.5661,
+            "bottomLat": 37.5461
+          }
+        },
+        {
+          "dong_name": "상수동",
+          "cortarNo": "1144011500",
+          "bounds": {
+            "leftLon": 126.91409999999999,
+            "rightLon": 126.9341,
+            "topLat": 37.5569,
+            "bottomLat": 37.5369
+          }
+        },
+        {
+          "dong_name": "상암동",
+          "cortarNo": "1144012700",
+          "bounds": {
+            "leftLon": 126.879111,
+            "rightLon": 126.899111,
+            "topLat": 37.587606,
+            "bottomLat": 37.567606000000005
+          }
+        },
+        {
+          "dong_name": "서교동",
+          "cortarNo": "1144012000",
+          "bounds": {
+            "leftLon": 126.91092499999999,
+            "rightLon": 126.930925,
+            "topLat": 37.562458,
+            "bottomLat": 37.542458
+          }
+        },
+        {
+          "dong_name": "성산동",
+          "cortarNo": "1144012500",
+          "bounds": {
+            "leftLon": 126.8955,
+            "rightLon": 126.91550000000001,
+            "topLat": 37.576066999999995,
+            "bottomLat": 37.556067
+          }
+        },
+        {
+          "dong_name": "신공덕동",
+          "cortarNo": "1144010300",
+          "bounds": {
+            "leftLon": 126.94546299999999,
+            "rightLon": 126.965463,
+            "topLat": 37.552233,
+            "bottomLat": 37.532233000000005
+          }
+        },
+        {
+          "dong_name": "신수동",
+          "cortarNo": "1144011100",
+          "bounds": {
+            "leftLon": 126.924526,
+            "rightLon": 126.94452600000001,
+            "topLat": 37.556861999999995,
+            "bottomLat": 37.536862
+          }
+        },
+        {
+          "dong_name": "신정동",
+          "cortarNo": "1144011700",
+          "bounds": {
+            "leftLon": 126.920513,
+            "rightLon": 126.94051300000001,
+            "topLat": 37.553391999999995,
+            "bottomLat": 37.533392
+          }
+        },
+        {
+          "dong_name": "아현동",
+          "cortarNo": "1144010100",
+          "bounds": {
+            "leftLon": 126.9461,
+            "rightLon": 126.96610000000001,
+            "topLat": 37.5646,
+            "bottomLat": 37.5446
+          }
+        },
+        {
+          "dong_name": "연남동",
+          "cortarNo": "1144012400",
+          "bounds": {
+            "leftLon": 126.912027,
+            "rightLon": 126.932027,
+            "topLat": 37.574501,
+            "bottomLat": 37.554501
+          }
+        },
+        {
+          "dong_name": "염리동",
+          "cortarNo": "1144010900",
+          "bounds": {
+            "leftLon": 126.93565,
+            "rightLon": 126.95565,
+            "topLat": 37.557083,
+            "bottomLat": 37.537083
+          }
+        },
+        {
+          "dong_name": "용강동",
+          "cortarNo": "1144010500",
+          "bounds": {
+            "leftLon": 126.931625,
+            "rightLon": 126.951625,
+            "topLat": 37.551832999999995,
+            "bottomLat": 37.531833
+          }
+        },
+        {
+          "dong_name": "중동",
+          "cortarNo": "1144012600",
+          "bounds": {
+            "leftLon": 126.8955,
+            "rightLon": 126.91550000000001,
+            "topLat": 37.581725,
+            "bottomLat": 37.561725
+          }
+        },
+        {
+          "dong_name": "창전동",
+          "cortarNo": "1144011400",
+          "bounds": {
+            "leftLon": 126.92,
+            "rightLon": 126.94000000000001,
+            "topLat": 37.5601,
+            "bottomLat": 37.5401
+          }
+        },
+        {
+          "dong_name": "토정동",
+          "cortarNo": "1144010600",
+          "bounds": {
+            "leftLon": 126.929688,
+            "rightLon": 126.94968800000001,
+            "topLat": 37.5485,
+            "bottomLat": 37.5285
+          }
+        },
+        {
+          "dong_name": "하중동",
+          "cortarNo": "1144011600",
+          "bounds": {
+            "leftLon": 126.91792199999999,
+            "rightLon": 126.937922,
+            "topLat": 37.553827999999996,
+            "bottomLat": 37.533828
+          }
+        },
+        {
+          "dong_name": "합정동",
+          "cortarNo": "1144012200",
+          "bounds": {
+            "leftLon": 126.895725,
+            "rightLon": 126.91572500000001,
+            "topLat": 37.559433,
+            "bottomLat": 37.539433
+          }
+        },
+        {
+          "dong_name": "현석동",
+          "cortarNo": "1144011200",
+          "bounds": {
+            "leftLon": 126.9245,
+            "rightLon": 126.9445,
+            "topLat": 37.551899999999996,
+            "bottomLat": 37.5319
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "서대문구",
+      "district_code": "1141000000",
+      "dongs": [
+        {
+          "dong_name": "남가좌동",
+          "cortarNo": "1141012000",
+          "bounds": {
+            "leftLon": 126.91126299999999,
+            "rightLon": 126.931263,
+            "topLat": 37.586192,
+            "bottomLat": 37.566192
+          }
+        },
+        {
+          "dong_name": "냉천동",
+          "cortarNo": "1141010500",
+          "bounds": {
+            "leftLon": 126.9528,
+            "rightLon": 126.9728,
+            "topLat": 37.5772,
+            "bottomLat": 37.5572
+          }
+        },
+        {
+          "dong_name": "대신동",
+          "cortarNo": "1141011300",
+          "bounds": {
+            "leftLon": 126.9335,
+            "rightLon": 126.9535,
+            "topLat": 37.569527,
+            "bottomLat": 37.549527000000005
+          }
+        },
+        {
+          "dong_name": "대현동",
+          "cortarNo": "1141011200",
+          "bounds": {
+            "leftLon": 126.937,
+            "rightLon": 126.95700000000001,
+            "topLat": 37.571,
+            "bottomLat": 37.551
+          }
+        },
+        {
+          "dong_name": "미근동",
+          "cortarNo": "1141010400",
+          "bounds": {
+            "leftLon": 126.95729999999999,
+            "rightLon": 126.9773,
+            "topLat": 37.5734,
+            "bottomLat": 37.5534
+          }
+        },
+        {
+          "dong_name": "봉원동",
+          "cortarNo": "1141011500",
+          "bounds": {
+            "leftLon": 126.9371,
+            "rightLon": 126.95710000000001,
+            "topLat": 37.582699999999996,
+            "bottomLat": 37.5627
+          }
+        },
+        {
+          "dong_name": "북가좌동",
+          "cortarNo": "1141011900",
+          "bounds": {
+            "leftLon": 126.90078799999999,
+            "rightLon": 126.920788,
+            "topLat": 37.589541999999994,
+            "bottomLat": 37.569542
+          }
+        },
+        {
+          "dong_name": "북아현동",
+          "cortarNo": "1141011000",
+          "bounds": {
+            "leftLon": 126.944525,
+            "rightLon": 126.96452500000001,
+            "topLat": 37.573825,
+            "bottomLat": 37.553825
+          }
+        },
+        {
+          "dong_name": "신촌동",
+          "cortarNo": "1141011400",
+          "bounds": {
+            "leftLon": 126.92909999999999,
+            "rightLon": 126.9491,
+            "topLat": 37.5751,
+            "bottomLat": 37.5551
+          }
+        },
+        {
+          "dong_name": "연희동",
+          "cortarNo": "1141011700",
+          "bounds": {
+            "leftLon": 126.92255,
+            "rightLon": 126.94255000000001,
+            "topLat": 37.582425,
+            "bottomLat": 37.562425000000005
+          }
+        },
+        {
+          "dong_name": "영천동",
+          "cortarNo": "1141010800",
+          "bounds": {
+            "leftLon": 126.94786599999999,
+            "rightLon": 126.967866,
+            "topLat": 37.580583,
+            "bottomLat": 37.560583
+          }
+        },
+        {
+          "dong_name": "옥천동",
+          "cortarNo": "1141010700",
+          "bounds": {
+            "leftLon": 126.94908,
+            "rightLon": 126.96908,
+            "topLat": 37.579178999999996,
+            "bottomLat": 37.559179
+          }
+        },
+        {
+          "dong_name": "창천동",
+          "cortarNo": "1141011600",
+          "bounds": {
+            "leftLon": 126.929513,
+            "rightLon": 126.94951300000001,
+            "topLat": 37.567802,
+            "bottomLat": 37.547802000000004
+          }
+        },
+        {
+          "dong_name": "천연동",
+          "cortarNo": "1141010600",
+          "bounds": {
+            "leftLon": 126.94868,
+            "rightLon": 126.96868,
+            "topLat": 37.577365,
+            "bottomLat": 37.557365000000004
+          }
+        },
+        {
+          "dong_name": "충정로2가",
+          "cortarNo": "1141010100",
+          "bounds": {
+            "leftLon": 126.9538,
+            "rightLon": 126.97380000000001,
+            "topLat": 37.574842,
+            "bottomLat": 37.554842
+          }
+        },
+        {
+          "dong_name": "충정로3가",
+          "cortarNo": "1141010200",
+          "bounds": {
+            "leftLon": 126.9521,
+            "rightLon": 126.97210000000001,
+            "topLat": 37.5723,
+            "bottomLat": 37.5523
+          }
+        },
+        {
+          "dong_name": "합동",
+          "cortarNo": "1141010300",
+          "bounds": {
+            "leftLon": 126.9559,
+            "rightLon": 126.97590000000001,
+            "topLat": 37.5714,
+            "bottomLat": 37.5514
+          }
+        },
+        {
+          "dong_name": "현저동",
+          "cortarNo": "1141010900",
+          "bounds": {
+            "leftLon": 126.94399999999999,
+            "rightLon": 126.964,
+            "topLat": 37.583999999999996,
+            "bottomLat": 37.564
+          }
+        },
+        {
+          "dong_name": "홍은동",
+          "cortarNo": "1141011800",
+          "bounds": {
+            "leftLon": 126.9275,
+            "rightLon": 126.9475,
+            "topLat": 37.6031,
+            "bottomLat": 37.5831
+          }
+        },
+        {
+          "dong_name": "홍제동",
+          "cortarNo": "1141011100",
+          "bounds": {
+            "leftLon": 126.93679999999999,
+            "rightLon": 126.9568,
+            "topLat": 37.5972,
+            "bottomLat": 37.577200000000005
           }
         }
       ]
@@ -31,13 +1459,3363 @@
       "district_code": "1165000000",
       "dongs": [
         {
+          "dong_name": "내곡동",
+          "cortarNo": "1165010900",
+          "bounds": {
+            "leftLon": 127.05377999999999,
+            "rightLon": 127.07378,
+            "topLat": 37.464929,
+            "bottomLat": 37.444929
+          }
+        },
+        {
           "dong_name": "반포동",
+          "cortarNo": "1165010700",
+          "bounds": {
+            "leftLon": 126.9919,
+            "rightLon": 127.01190000000001,
+            "topLat": 37.5147,
+            "bottomLat": 37.4947
+          }
+        },
+        {
+          "dong_name": "방배동",
           "cortarNo": "1165010100",
           "bounds": {
-            "leftLon": 126.99,
-            "rightLon": 127.01,
-            "topLat": 37.51,
-            "bottomLat": 37.49
+            "leftLon": 126.97864,
+            "rightLon": 126.99864000000001,
+            "topLat": 37.494265,
+            "bottomLat": 37.474265
+          }
+        },
+        {
+          "dong_name": "서초동",
+          "cortarNo": "1165010800",
+          "bounds": {
+            "leftLon": 127.00643699999999,
+            "rightLon": 127.026437,
+            "topLat": 37.498518,
+            "bottomLat": 37.478518
+          }
+        },
+        {
+          "dong_name": "신원동",
+          "cortarNo": "1165011100",
+          "bounds": {
+            "leftLon": 127.05409999999999,
+            "rightLon": 127.0741,
+            "topLat": 37.4548,
+            "bottomLat": 37.4348
+          }
+        },
+        {
+          "dong_name": "양재동",
+          "cortarNo": "1165010200",
+          "bounds": {
+            "leftLon": 127.029888,
+            "rightLon": 127.04988800000001,
+            "topLat": 37.480101,
+            "bottomLat": 37.460101
+          }
+        },
+        {
+          "dong_name": "염곡동",
+          "cortarNo": "1165011000",
+          "bounds": {
+            "leftLon": 127.0439,
+            "rightLon": 127.0639,
+            "topLat": 37.4732,
+            "bottomLat": 37.4532
+          }
+        },
+        {
+          "dong_name": "우면동",
+          "cortarNo": "1165010300",
+          "bounds": {
+            "leftLon": 127.01674399999999,
+            "rightLon": 127.036744,
+            "topLat": 37.481581999999996,
+            "bottomLat": 37.461582
+          }
+        },
+        {
+          "dong_name": "원지동",
+          "cortarNo": "1165010400",
+          "bounds": {
+            "leftLon": 127.0376,
+            "rightLon": 127.05760000000001,
+            "topLat": 37.4552,
+            "bottomLat": 37.4352
+          }
+        },
+        {
+          "dong_name": "잠원동",
+          "cortarNo": "1165010600",
+          "bounds": {
+            "leftLon": 127.00421899999999,
+            "rightLon": 127.024219,
+            "topLat": 37.524951,
+            "bottomLat": 37.504951000000005
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "성동구",
+      "district_code": "1120000000",
+      "dongs": [
+        {
+          "dong_name": "금호동1가",
+          "cortarNo": "1120010900",
+          "bounds": {
+            "leftLon": 127.0163,
+            "rightLon": 127.03630000000001,
+            "topLat": 37.562999999999995,
+            "bottomLat": 37.543
+          }
+        },
+        {
+          "dong_name": "금호동2가",
+          "cortarNo": "1120011000",
+          "bounds": {
+            "leftLon": 127.00885,
+            "rightLon": 127.02885,
+            "topLat": 37.563807999999995,
+            "bottomLat": 37.543808
+          }
+        },
+        {
+          "dong_name": "금호동3가",
+          "cortarNo": "1120011100",
+          "bounds": {
+            "leftLon": 127.0093,
+            "rightLon": 127.0293,
+            "topLat": 37.559799999999996,
+            "bottomLat": 37.5398
+          }
+        },
+        {
+          "dong_name": "금호동4가",
+          "cortarNo": "1120011200",
+          "bounds": {
+            "leftLon": 127.01294899999999,
+            "rightLon": 127.032949,
+            "topLat": 37.555181,
+            "bottomLat": 37.535181
+          }
+        },
+        {
+          "dong_name": "도선동",
+          "cortarNo": "1120010400",
+          "bounds": {
+            "leftLon": 127.024374,
+            "rightLon": 127.044374,
+            "topLat": 37.573015999999996,
+            "bottomLat": 37.553016
+          }
+        },
+        {
+          "dong_name": "마장동",
+          "cortarNo": "1120010500",
+          "bounds": {
+            "leftLon": 127.035388,
+            "rightLon": 127.05538800000001,
+            "topLat": 37.576325,
+            "bottomLat": 37.556325
+          }
+        },
+        {
+          "dong_name": "사근동",
+          "cortarNo": "1120010600",
+          "bounds": {
+            "leftLon": 127.03587499999999,
+            "rightLon": 127.055875,
+            "topLat": 37.571217,
+            "bottomLat": 37.551217
+          }
+        },
+        {
+          "dong_name": "상왕십리동",
+          "cortarNo": "1120010100",
+          "bounds": {
+            "leftLon": 127.01469999999999,
+            "rightLon": 127.0347,
+            "topLat": 37.578275,
+            "bottomLat": 37.558275
+          }
+        },
+        {
+          "dong_name": "성수동1가",
+          "cortarNo": "1120011400",
+          "bounds": {
+            "leftLon": 127.031425,
+            "rightLon": 127.05142500000001,
+            "topLat": 37.553225,
+            "bottomLat": 37.533225
+          }
+        },
+        {
+          "dong_name": "성수동2가",
+          "cortarNo": "1120011500",
+          "bounds": {
+            "leftLon": 127.046888,
+            "rightLon": 127.066888,
+            "topLat": 37.549817,
+            "bottomLat": 37.529817
+          }
+        },
+        {
+          "dong_name": "송정동",
+          "cortarNo": "1120011800",
+          "bounds": {
+            "leftLon": 127.05959999999999,
+            "rightLon": 127.0796,
+            "topLat": 37.564522,
+            "bottomLat": 37.544522
+          }
+        },
+        {
+          "dong_name": "옥수동",
+          "cortarNo": "1120011300",
+          "bounds": {
+            "leftLon": 127.006,
+            "rightLon": 127.02600000000001,
+            "topLat": 37.551899999999996,
+            "bottomLat": 37.5319
+          }
+        },
+        {
+          "dong_name": "용답동",
+          "cortarNo": "1120012200",
+          "bounds": {
+            "leftLon": 127.045552,
+            "rightLon": 127.06555200000001,
+            "topLat": 37.574062,
+            "bottomLat": 37.554062
+          }
+        },
+        {
+          "dong_name": "응봉동",
+          "cortarNo": "1120010800",
+          "bounds": {
+            "leftLon": 127.023563,
+            "rightLon": 127.043563,
+            "topLat": 37.563283,
+            "bottomLat": 37.543283
+          }
+        },
+        {
+          "dong_name": "하왕십리동",
+          "cortarNo": "1120010200",
+          "bounds": {
+            "leftLon": 127.018675,
+            "rightLon": 127.03867500000001,
+            "topLat": 37.574158,
+            "bottomLat": 37.554158
+          }
+        },
+        {
+          "dong_name": "행당동",
+          "cortarNo": "1120010700",
+          "bounds": {
+            "leftLon": 127.0248,
+            "rightLon": 127.04480000000001,
+            "topLat": 37.568999999999996,
+            "bottomLat": 37.549
+          }
+        },
+        {
+          "dong_name": "홍익동",
+          "cortarNo": "1120010300",
+          "bounds": {
+            "leftLon": 127.021975,
+            "rightLon": 127.04197500000001,
+            "topLat": 37.57695,
+            "bottomLat": 37.55695
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "성북구",
+      "district_code": "1129000000",
+      "dongs": [
+        {
+          "dong_name": "길음동",
+          "cortarNo": "1129013400",
+          "bounds": {
+            "leftLon": 127.0128,
+            "rightLon": 127.03280000000001,
+            "topLat": 37.618331999999995,
+            "bottomLat": 37.598332
+          }
+        },
+        {
+          "dong_name": "돈암동",
+          "cortarNo": "1129010300",
+          "bounds": {
+            "leftLon": 127.0107,
+            "rightLon": 127.03070000000001,
+            "topLat": 37.6074,
+            "bottomLat": 37.5874
+          }
+        },
+        {
+          "dong_name": "동선동1가",
+          "cortarNo": "1129011600",
+          "bounds": {
+            "leftLon": 127.0084,
+            "rightLon": 127.0284,
+            "topLat": 37.602306999999996,
+            "bottomLat": 37.582307
+          }
+        },
+        {
+          "dong_name": "동선동2가",
+          "cortarNo": "1129011700",
+          "bounds": {
+            "leftLon": 127.00953799999999,
+            "rightLon": 127.029538,
+            "topLat": 37.600249,
+            "bottomLat": 37.580249
+          }
+        },
+        {
+          "dong_name": "동선동3가",
+          "cortarNo": "1129011800",
+          "bounds": {
+            "leftLon": 127.010538,
+            "rightLon": 127.030538,
+            "topLat": 37.603899,
+            "bottomLat": 37.583899
+          }
+        },
+        {
+          "dong_name": "동선동4가",
+          "cortarNo": "1129011900",
+          "bounds": {
+            "leftLon": 127.008781,
+            "rightLon": 127.02878100000001,
+            "topLat": 37.605109,
+            "bottomLat": 37.585109
+          }
+        },
+        {
+          "dong_name": "동선동5가",
+          "cortarNo": "1129012000",
+          "bounds": {
+            "leftLon": 127.00659999999999,
+            "rightLon": 127.0266,
+            "topLat": 37.6062,
+            "bottomLat": 37.586200000000005
+          }
+        },
+        {
+          "dong_name": "동소문동1가",
+          "cortarNo": "1129010400",
+          "bounds": {
+            "leftLon": 126.997163,
+            "rightLon": 127.01716300000001,
+            "topLat": 37.600198999999996,
+            "bottomLat": 37.580199
+          }
+        },
+        {
+          "dong_name": "동소문동2가",
+          "cortarNo": "1129010500",
+          "bounds": {
+            "leftLon": 126.99808,
+            "rightLon": 127.01808000000001,
+            "topLat": 37.598794,
+            "bottomLat": 37.578794
+          }
+        },
+        {
+          "dong_name": "동소문동3가",
+          "cortarNo": "1129010600",
+          "bounds": {
+            "leftLon": 127.001567,
+            "rightLon": 127.021567,
+            "topLat": 37.600370999999996,
+            "bottomLat": 37.580371
+          }
+        },
+        {
+          "dong_name": "동소문동4가",
+          "cortarNo": "1129010700",
+          "bounds": {
+            "leftLon": 127.000553,
+            "rightLon": 127.020553,
+            "topLat": 37.601845999999995,
+            "bottomLat": 37.581846
+          }
+        },
+        {
+          "dong_name": "동소문동5가",
+          "cortarNo": "1129010800",
+          "bounds": {
+            "leftLon": 127.005017,
+            "rightLon": 127.025017,
+            "topLat": 37.60149,
+            "bottomLat": 37.58149
+          }
+        },
+        {
+          "dong_name": "동소문동6가",
+          "cortarNo": "1129010900",
+          "bounds": {
+            "leftLon": 127.004213,
+            "rightLon": 127.024213,
+            "topLat": 37.60359,
+            "bottomLat": 37.58359
+          }
+        },
+        {
+          "dong_name": "동소문동7가",
+          "cortarNo": "1129011000",
+          "bounds": {
+            "leftLon": 127.0042,
+            "rightLon": 127.02420000000001,
+            "topLat": 37.6064,
+            "bottomLat": 37.586400000000005
+          }
+        },
+        {
+          "dong_name": "보문동1가",
+          "cortarNo": "1129013000",
+          "bounds": {
+            "leftLon": 127.009558,
+            "rightLon": 127.02955800000001,
+            "topLat": 37.596477,
+            "bottomLat": 37.576477000000004
+          }
+        },
+        {
+          "dong_name": "보문동2가",
+          "cortarNo": "1129013100",
+          "bounds": {
+            "leftLon": 127.008186,
+            "rightLon": 127.028186,
+            "topLat": 37.595828,
+            "bottomLat": 37.575828
+          }
+        },
+        {
+          "dong_name": "보문동3가",
+          "cortarNo": "1129013200",
+          "bounds": {
+            "leftLon": 127.00581299999999,
+            "rightLon": 127.025813,
+            "topLat": 37.593874,
+            "bottomLat": 37.573874
+          }
+        },
+        {
+          "dong_name": "보문동4가",
+          "cortarNo": "1129012600",
+          "bounds": {
+            "leftLon": 127.011332,
+            "rightLon": 127.031332,
+            "topLat": 37.592881999999996,
+            "bottomLat": 37.572882
+          }
+        },
+        {
+          "dong_name": "보문동5가",
+          "cortarNo": "1129012700",
+          "bounds": {
+            "leftLon": 127.01010699999999,
+            "rightLon": 127.030107,
+            "topLat": 37.592588,
+            "bottomLat": 37.572588
+          }
+        },
+        {
+          "dong_name": "보문동6가",
+          "cortarNo": "1129012800",
+          "bounds": {
+            "leftLon": 127.008825,
+            "rightLon": 127.02882500000001,
+            "topLat": 37.590475,
+            "bottomLat": 37.570475
+          }
+        },
+        {
+          "dong_name": "보문동7가",
+          "cortarNo": "1129012900",
+          "bounds": {
+            "leftLon": 127.012225,
+            "rightLon": 127.03222500000001,
+            "topLat": 37.589732999999995,
+            "bottomLat": 37.569733
+          }
+        },
+        {
+          "dong_name": "삼선동1가",
+          "cortarNo": "1129011100",
+          "bounds": {
+            "leftLon": 126.9982,
+            "rightLon": 127.01820000000001,
+            "topLat": 37.5945,
+            "bottomLat": 37.5745
+          }
+        },
+        {
+          "dong_name": "삼선동2가",
+          "cortarNo": "1129011200",
+          "bounds": {
+            "leftLon": 127.00139999999999,
+            "rightLon": 127.0214,
+            "topLat": 37.594,
+            "bottomLat": 37.574000000000005
+          }
+        },
+        {
+          "dong_name": "삼선동3가",
+          "cortarNo": "1129011300",
+          "bounds": {
+            "leftLon": 127.003,
+            "rightLon": 127.02300000000001,
+            "topLat": 37.596557,
+            "bottomLat": 37.576557
+          }
+        },
+        {
+          "dong_name": "삼선동4가",
+          "cortarNo": "1129011400",
+          "bounds": {
+            "leftLon": 127.00330199999999,
+            "rightLon": 127.023302,
+            "topLat": 37.599796999999995,
+            "bottomLat": 37.579797
+          }
+        },
+        {
+          "dong_name": "삼선동5가",
+          "cortarNo": "1129011500",
+          "bounds": {
+            "leftLon": 127.0058,
+            "rightLon": 127.0258,
+            "topLat": 37.5985,
+            "bottomLat": 37.578500000000005
+          }
+        },
+        {
+          "dong_name": "상월곡동",
+          "cortarNo": "1129013700",
+          "bounds": {
+            "leftLon": 127.038125,
+            "rightLon": 127.058125,
+            "topLat": 37.615756999999995,
+            "bottomLat": 37.595757
+          }
+        },
+        {
+          "dong_name": "석관동",
+          "cortarNo": "1129013900",
+          "bounds": {
+            "leftLon": 127.05109999999999,
+            "rightLon": 127.0711,
+            "topLat": 37.617999999999995,
+            "bottomLat": 37.598
+          }
+        },
+        {
+          "dong_name": "성북동",
+          "cortarNo": "1129010100",
+          "bounds": {
+            "leftLon": 126.98219999999999,
+            "rightLon": 127.0022,
+            "topLat": 37.606899999999996,
+            "bottomLat": 37.5869
+          }
+        },
+        {
+          "dong_name": "성북동1가",
+          "cortarNo": "1129010200",
+          "bounds": {
+            "leftLon": 126.9938,
+            "rightLon": 127.0138,
+            "topLat": 37.599399999999996,
+            "bottomLat": 37.5794
+          }
+        },
+        {
+          "dong_name": "안암동1가",
+          "cortarNo": "1129012100",
+          "bounds": {
+            "leftLon": 127.012239,
+            "rightLon": 127.032239,
+            "topLat": 37.598695,
+            "bottomLat": 37.578695
+          }
+        },
+        {
+          "dong_name": "안암동2가",
+          "cortarNo": "1129012200",
+          "bounds": {
+            "leftLon": 127.01299999999999,
+            "rightLon": 127.033,
+            "topLat": 37.596731999999996,
+            "bottomLat": 37.576732
+          }
+        },
+        {
+          "dong_name": "안암동3가",
+          "cortarNo": "1129012300",
+          "bounds": {
+            "leftLon": 127.0131,
+            "rightLon": 127.0331,
+            "topLat": 37.593882,
+            "bottomLat": 37.573882000000005
+          }
+        },
+        {
+          "dong_name": "안암동4가",
+          "cortarNo": "1129012400",
+          "bounds": {
+            "leftLon": 127.014663,
+            "rightLon": 127.03466300000001,
+            "topLat": 37.590392,
+            "bottomLat": 37.570392000000005
+          }
+        },
+        {
+          "dong_name": "안암동5가",
+          "cortarNo": "1129012500",
+          "bounds": {
+            "leftLon": 127.02005,
+            "rightLon": 127.04005000000001,
+            "topLat": 37.598814999999995,
+            "bottomLat": 37.578815
+          }
+        },
+        {
+          "dong_name": "장위동",
+          "cortarNo": "1129013800",
+          "bounds": {
+            "leftLon": 127.0401,
+            "rightLon": 127.0601,
+            "topLat": 37.625699999999995,
+            "bottomLat": 37.6057
+          }
+        },
+        {
+          "dong_name": "정릉동",
+          "cortarNo": "1129013300",
+          "bounds": {
+            "leftLon": 126.9874,
+            "rightLon": 127.0074,
+            "topLat": 37.6269,
+            "bottomLat": 37.6069
+          }
+        },
+        {
+          "dong_name": "종암동",
+          "cortarNo": "1129013500",
+          "bounds": {
+            "leftLon": 127.02329999999999,
+            "rightLon": 127.0433,
+            "topLat": 37.6066,
+            "bottomLat": 37.586600000000004
+          }
+        },
+        {
+          "dong_name": "하월곡동",
+          "cortarNo": "1129013600",
+          "bounds": {
+            "leftLon": 127.0287,
+            "rightLon": 127.04870000000001,
+            "topLat": 37.614407,
+            "bottomLat": 37.594407000000004
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "송파구",
+      "district_code": "1171000000",
+      "dongs": [
+        {
+          "dong_name": "가락동",
+          "cortarNo": "1171010700",
+          "bounds": {
+            "leftLon": 127.1086,
+            "rightLon": 127.1286,
+            "topLat": 37.505300999999996,
+            "bottomLat": 37.485301
+          }
+        },
+        {
+          "dong_name": "거여동",
+          "cortarNo": "1171011300",
+          "bounds": {
+            "leftLon": 127.137175,
+            "rightLon": 127.15717500000001,
+            "topLat": 37.499351,
+            "bottomLat": 37.479351
+          }
+        },
+        {
+          "dong_name": "마천동",
+          "cortarNo": "1171011400",
+          "bounds": {
+            "leftLon": 127.143625,
+            "rightLon": 127.16362500000001,
+            "topLat": 37.507459999999995,
+            "bottomLat": 37.48746
+          }
+        },
+        {
+          "dong_name": "문정동",
+          "cortarNo": "1171010800",
+          "bounds": {
+            "leftLon": 127.1121,
+            "rightLon": 127.13210000000001,
+            "topLat": 37.4954,
+            "bottomLat": 37.4754
+          }
+        },
+        {
+          "dong_name": "방이동",
+          "cortarNo": "1171011100",
+          "bounds": {
+            "leftLon": 127.11299899999999,
+            "rightLon": 127.132999,
+            "topLat": 37.525059999999996,
+            "bottomLat": 37.50506
+          }
+        },
+        {
+          "dong_name": "삼전동",
+          "cortarNo": "1171010600",
+          "bounds": {
+            "leftLon": 127.08251299999999,
+            "rightLon": 127.102513,
+            "topLat": 37.512716999999995,
+            "bottomLat": 37.492717
+          }
+        },
+        {
+          "dong_name": "석촌동",
+          "cortarNo": "1171010500",
+          "bounds": {
+            "leftLon": 127.0937,
+            "rightLon": 127.11370000000001,
+            "topLat": 37.513591999999996,
+            "bottomLat": 37.493592
+          }
+        },
+        {
+          "dong_name": "송파동",
+          "cortarNo": "1171010400",
+          "bounds": {
+            "leftLon": 127.10464999999999,
+            "rightLon": 127.12465,
+            "topLat": 37.514983,
+            "bottomLat": 37.494983000000005
+          }
+        },
+        {
+          "dong_name": "신천동",
+          "cortarNo": "1171010200",
+          "bounds": {
+            "leftLon": 127.091844,
+            "rightLon": 127.111844,
+            "topLat": 37.527425,
+            "bottomLat": 37.507425000000005
+          }
+        },
+        {
+          "dong_name": "오금동",
+          "cortarNo": "1171011200",
+          "bounds": {
+            "leftLon": 127.124595,
+            "rightLon": 127.14459500000001,
+            "topLat": 37.514773999999996,
+            "bottomLat": 37.494774
+          }
+        },
+        {
+          "dong_name": "잠실동",
+          "cortarNo": "1171010100",
+          "bounds": {
+            "leftLon": 127.07509999999999,
+            "rightLon": 127.0951,
+            "topLat": 37.5211,
+            "bottomLat": 37.5011
+          }
+        },
+        {
+          "dong_name": "장지동",
+          "cortarNo": "1171010900",
+          "bounds": {
+            "leftLon": 127.12585899999999,
+            "rightLon": 127.145859,
+            "topLat": 37.488842,
+            "bottomLat": 37.468842
+          }
+        },
+        {
+          "dong_name": "풍납동",
+          "cortarNo": "1171010300",
+          "bounds": {
+            "leftLon": 127.10485,
+            "rightLon": 127.12485000000001,
+            "topLat": 37.543267,
+            "bottomLat": 37.523267000000004
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "양천구",
+      "district_code": "1147000000",
+      "dongs": [
+        {
+          "dong_name": "목동",
+          "cortarNo": "1147010200",
+          "bounds": {
+            "leftLon": 126.8659,
+            "rightLon": 126.8859,
+            "topLat": 37.5466,
+            "bottomLat": 37.5266
+          }
+        },
+        {
+          "dong_name": "신월동",
+          "cortarNo": "1147010300",
+          "bounds": {
+            "leftLon": 126.82419999999999,
+            "rightLon": 126.8442,
+            "topLat": 37.537925,
+            "bottomLat": 37.517925000000005
+          }
+        },
+        {
+          "dong_name": "신정동",
+          "cortarNo": "1147010100",
+          "bounds": {
+            "leftLon": 126.8532,
+            "rightLon": 126.87320000000001,
+            "topLat": 37.526433,
+            "bottomLat": 37.506433
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "영등포구",
+      "district_code": "1156000000",
+      "dongs": [
+        {
+          "dong_name": "당산동",
+          "cortarNo": "1156011700",
+          "bounds": {
+            "leftLon": 126.89649999999999,
+            "rightLon": 126.9165,
+            "topLat": 37.5447,
+            "bottomLat": 37.5247
+          }
+        },
+        {
+          "dong_name": "당산동1가",
+          "cortarNo": "1156011100",
+          "bounds": {
+            "leftLon": 126.8885,
+            "rightLon": 126.9085,
+            "topLat": 37.5316,
+            "bottomLat": 37.5116
+          }
+        },
+        {
+          "dong_name": "당산동2가",
+          "cortarNo": "1156011200",
+          "bounds": {
+            "leftLon": 126.8836,
+            "rightLon": 126.90360000000001,
+            "topLat": 37.5325,
+            "bottomLat": 37.5125
+          }
+        },
+        {
+          "dong_name": "당산동3가",
+          "cortarNo": "1156011300",
+          "bounds": {
+            "leftLon": 126.88709999999999,
+            "rightLon": 126.9071,
+            "topLat": 37.5361,
+            "bottomLat": 37.5161
+          }
+        },
+        {
+          "dong_name": "당산동4가",
+          "cortarNo": "1156011400",
+          "bounds": {
+            "leftLon": 126.8891,
+            "rightLon": 126.90910000000001,
+            "topLat": 37.539,
+            "bottomLat": 37.519000000000005
+          }
+        },
+        {
+          "dong_name": "당산동5가",
+          "cortarNo": "1156011500",
+          "bounds": {
+            "leftLon": 126.89089999999999,
+            "rightLon": 126.9109,
+            "topLat": 37.5423,
+            "bottomLat": 37.5223
+          }
+        },
+        {
+          "dong_name": "당산동6가",
+          "cortarNo": "1156011600",
+          "bounds": {
+            "leftLon": 126.8924,
+            "rightLon": 126.9124,
+            "topLat": 37.544999999999995,
+            "bottomLat": 37.525
+          }
+        },
+        {
+          "dong_name": "대림동",
+          "cortarNo": "1156013300",
+          "bounds": {
+            "leftLon": 126.8911,
+            "rightLon": 126.9111,
+            "topLat": 37.506699999999995,
+            "bottomLat": 37.4867
+          }
+        },
+        {
+          "dong_name": "도림동",
+          "cortarNo": "1156011800",
+          "bounds": {
+            "leftLon": 126.8894,
+            "rightLon": 126.9094,
+            "topLat": 37.5184,
+            "bottomLat": 37.498400000000004
+          }
+        },
+        {
+          "dong_name": "문래동1가",
+          "cortarNo": "1156011900",
+          "bounds": {
+            "leftLon": 126.887857,
+            "rightLon": 126.907857,
+            "topLat": 37.521847,
+            "bottomLat": 37.501847000000005
+          }
+        },
+        {
+          "dong_name": "문래동2가",
+          "cortarNo": "1156012000",
+          "bounds": {
+            "leftLon": 126.88289999999999,
+            "rightLon": 126.9029,
+            "topLat": 37.5226,
+            "bottomLat": 37.5026
+          }
+        },
+        {
+          "dong_name": "문래동3가",
+          "cortarNo": "1156012100",
+          "bounds": {
+            "leftLon": 126.88533799999999,
+            "rightLon": 126.905338,
+            "topLat": 37.527007999999995,
+            "bottomLat": 37.507008
+          }
+        },
+        {
+          "dong_name": "문래동4가",
+          "cortarNo": "1156012200",
+          "bounds": {
+            "leftLon": 126.879875,
+            "rightLon": 126.89987500000001,
+            "topLat": 37.52455,
+            "bottomLat": 37.50455
+          }
+        },
+        {
+          "dong_name": "문래동5가",
+          "cortarNo": "1156012300",
+          "bounds": {
+            "leftLon": 126.8749,
+            "rightLon": 126.8949,
+            "topLat": 37.5261,
+            "bottomLat": 37.5061
+          }
+        },
+        {
+          "dong_name": "문래동6가",
+          "cortarNo": "1156012400",
+          "bounds": {
+            "leftLon": 126.8745,
+            "rightLon": 126.89450000000001,
+            "topLat": 37.5301,
+            "bottomLat": 37.5101
+          }
+        },
+        {
+          "dong_name": "신길동",
+          "cortarNo": "1156013200",
+          "bounds": {
+            "leftLon": 126.90153699999999,
+            "rightLon": 126.921537,
+            "topLat": 37.515933,
+            "bottomLat": 37.495933
+          }
+        },
+        {
+          "dong_name": "양평동",
+          "cortarNo": "1156013400",
+          "bounds": {
+            "leftLon": 126.875165,
+            "rightLon": 126.895165,
+            "topLat": 37.542584999999995,
+            "bottomLat": 37.522585
+          }
+        },
+        {
+          "dong_name": "양평동1가",
+          "cortarNo": "1156012500",
+          "bounds": {
+            "leftLon": 126.87859999999999,
+            "rightLon": 126.8986,
+            "topLat": 37.5332,
+            "bottomLat": 37.513200000000005
+          }
+        },
+        {
+          "dong_name": "양평동2가",
+          "cortarNo": "1156012600",
+          "bounds": {
+            "leftLon": 126.87356299999999,
+            "rightLon": 126.893563,
+            "topLat": 37.533066999999996,
+            "bottomLat": 37.513067
+          }
+        },
+        {
+          "dong_name": "양평동3가",
+          "cortarNo": "1156012700",
+          "bounds": {
+            "leftLon": 126.8818,
+            "rightLon": 126.90180000000001,
+            "topLat": 37.5396,
+            "bottomLat": 37.519600000000004
+          }
+        },
+        {
+          "dong_name": "양평동4가",
+          "cortarNo": "1156012800",
+          "bounds": {
+            "leftLon": 126.88605,
+            "rightLon": 126.90605000000001,
+            "topLat": 37.54635,
+            "bottomLat": 37.52635
+          }
+        },
+        {
+          "dong_name": "양평동5가",
+          "cortarNo": "1156012900",
+          "bounds": {
+            "leftLon": 126.8825,
+            "rightLon": 126.9025,
+            "topLat": 37.549,
+            "bottomLat": 37.529
+          }
+        },
+        {
+          "dong_name": "양평동6가",
+          "cortarNo": "1156013000",
+          "bounds": {
+            "leftLon": 126.87983799999999,
+            "rightLon": 126.899838,
+            "topLat": 37.551883,
+            "bottomLat": 37.531883
+          }
+        },
+        {
+          "dong_name": "양화동",
+          "cortarNo": "1156013100",
+          "bounds": {
+            "leftLon": 126.8783,
+            "rightLon": 126.8983,
+            "topLat": 37.5588,
+            "bottomLat": 37.5388
+          }
+        },
+        {
+          "dong_name": "여의도동",
+          "cortarNo": "1156011000",
+          "bounds": {
+            "leftLon": 126.921083,
+            "rightLon": 126.941083,
+            "topLat": 37.531389999999995,
+            "bottomLat": 37.51139
+          }
+        },
+        {
+          "dong_name": "영등포동",
+          "cortarNo": "1156010100",
+          "bounds": {
+            "leftLon": 126.89609999999999,
+            "rightLon": 126.9161,
+            "topLat": 37.523399999999995,
+            "bottomLat": 37.5034
+          }
+        },
+        {
+          "dong_name": "영등포동1가",
+          "cortarNo": "1156010200",
+          "bounds": {
+            "leftLon": 126.902625,
+            "rightLon": 126.92262500000001,
+            "topLat": 37.527702999999995,
+            "bottomLat": 37.507703
+          }
+        },
+        {
+          "dong_name": "영등포동2가",
+          "cortarNo": "1156010300",
+          "bounds": {
+            "leftLon": 126.90169999999999,
+            "rightLon": 126.9217,
+            "topLat": 37.5308,
+            "bottomLat": 37.5108
+          }
+        },
+        {
+          "dong_name": "영등포동3가",
+          "cortarNo": "1156010400",
+          "bounds": {
+            "leftLon": 126.89819999999999,
+            "rightLon": 126.9182,
+            "topLat": 37.528,
+            "bottomLat": 37.508
+          }
+        },
+        {
+          "dong_name": "영등포동4가",
+          "cortarNo": "1156010500",
+          "bounds": {
+            "leftLon": 126.893625,
+            "rightLon": 126.91362500000001,
+            "topLat": 37.528,
+            "bottomLat": 37.508
+          }
+        },
+        {
+          "dong_name": "영등포동5가",
+          "cortarNo": "1156010600",
+          "bounds": {
+            "leftLon": 126.89659999999999,
+            "rightLon": 126.9166,
+            "topLat": 37.531099999999995,
+            "bottomLat": 37.5111
+          }
+        },
+        {
+          "dong_name": "영등포동6가",
+          "cortarNo": "1156010700",
+          "bounds": {
+            "leftLon": 126.8932,
+            "rightLon": 126.9132,
+            "topLat": 37.5316,
+            "bottomLat": 37.5116
+          }
+        },
+        {
+          "dong_name": "영등포동7가",
+          "cortarNo": "1156010800",
+          "bounds": {
+            "leftLon": 126.89699999999999,
+            "rightLon": 126.917,
+            "topLat": 37.5342,
+            "bottomLat": 37.5142
+          }
+        },
+        {
+          "dong_name": "영등포동8가",
+          "cortarNo": "1156010900",
+          "bounds": {
+            "leftLon": 126.89529999999999,
+            "rightLon": 126.9153,
+            "topLat": 37.5389,
+            "bottomLat": 37.5189
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "용산구",
+      "district_code": "1117000000",
+      "dongs": [
+        {
+          "dong_name": "갈월동",
+          "cortarNo": "1117010400",
+          "bounds": {
+            "leftLon": 126.9619,
+            "rightLon": 126.98190000000001,
+            "topLat": 37.552499999999995,
+            "bottomLat": 37.5325
+          }
+        },
+        {
+          "dong_name": "남영동",
+          "cortarNo": "1117010500",
+          "bounds": {
+            "leftLon": 126.96477499999999,
+            "rightLon": 126.984775,
+            "topLat": 37.555741999999995,
+            "bottomLat": 37.535742
+          }
+        },
+        {
+          "dong_name": "도원동",
+          "cortarNo": "1117012000",
+          "bounds": {
+            "leftLon": 126.9461,
+            "rightLon": 126.96610000000001,
+            "topLat": 37.5488,
+            "bottomLat": 37.528800000000004
+          }
+        },
+        {
+          "dong_name": "동빙고동",
+          "cortarNo": "1117013200",
+          "bounds": {
+            "leftLon": 126.9857,
+            "rightLon": 127.0057,
+            "topLat": 37.533699999999996,
+            "bottomLat": 37.5137
+          }
+        },
+        {
+          "dong_name": "동자동",
+          "cortarNo": "1117010700",
+          "bounds": {
+            "leftLon": 126.9627,
+            "rightLon": 126.98270000000001,
+            "topLat": 37.561699999999995,
+            "bottomLat": 37.5417
+          }
+        },
+        {
+          "dong_name": "문배동",
+          "cortarNo": "1117012200",
+          "bounds": {
+            "leftLon": 126.959088,
+            "rightLon": 126.979088,
+            "topLat": 37.547,
+            "bottomLat": 37.527
+          }
+        },
+        {
+          "dong_name": "보광동",
+          "cortarNo": "1117013600",
+          "bounds": {
+            "leftLon": 126.990175,
+            "rightLon": 127.010175,
+            "topLat": 37.536342,
+            "bottomLat": 37.516342
+          }
+        },
+        {
+          "dong_name": "산천동",
+          "cortarNo": "1117011500",
+          "bounds": {
+            "leftLon": 126.9413,
+            "rightLon": 126.96130000000001,
+            "topLat": 37.5453,
+            "bottomLat": 37.5253
+          }
+        },
+        {
+          "dong_name": "서계동",
+          "cortarNo": "1117010800",
+          "bounds": {
+            "leftLon": 126.95639999999999,
+            "rightLon": 126.9764,
+            "topLat": 37.5625,
+            "bottomLat": 37.542500000000004
+          }
+        },
+        {
+          "dong_name": "서빙고동",
+          "cortarNo": "1117013300",
+          "bounds": {
+            "leftLon": 126.984663,
+            "rightLon": 127.00466300000001,
+            "topLat": 37.530457999999996,
+            "bottomLat": 37.510458
+          }
+        },
+        {
+          "dong_name": "신계동",
+          "cortarNo": "1117012300",
+          "bounds": {
+            "leftLon": 126.9567,
+            "rightLon": 126.97670000000001,
+            "topLat": 37.5458,
+            "bottomLat": 37.525800000000004
+          }
+        },
+        {
+          "dong_name": "신창동",
+          "cortarNo": "1117011400",
+          "bounds": {
+            "leftLon": 126.9447,
+            "rightLon": 126.96470000000001,
+            "topLat": 37.5458,
+            "bottomLat": 37.525800000000004
+          }
+        },
+        {
+          "dong_name": "용문동",
+          "cortarNo": "1117012100",
+          "bounds": {
+            "leftLon": 126.95032499999999,
+            "rightLon": 126.970325,
+            "topLat": 37.547511,
+            "bottomLat": 37.527511000000004
+          }
+        },
+        {
+          "dong_name": "용산동1가",
+          "cortarNo": "1117010600",
+          "bounds": {
+            "leftLon": 126.967,
+            "rightLon": 126.98700000000001,
+            "topLat": 37.5501,
+            "bottomLat": 37.530100000000004
+          }
+        },
+        {
+          "dong_name": "용산동2가",
+          "cortarNo": "1117010200",
+          "bounds": {
+            "leftLon": 126.97404999999999,
+            "rightLon": 126.99405,
+            "topLat": 37.552949999999996,
+            "bottomLat": 37.53295
+          }
+        },
+        {
+          "dong_name": "용산동3가",
+          "cortarNo": "1117012600",
+          "bounds": {
+            "leftLon": 126.96679999999999,
+            "rightLon": 126.9868,
+            "topLat": 37.541999999999994,
+            "bottomLat": 37.522
+          }
+        },
+        {
+          "dong_name": "용산동4가",
+          "cortarNo": "1117010300",
+          "bounds": {
+            "leftLon": 126.9754,
+            "rightLon": 126.9954,
+            "topLat": 37.5406,
+            "bottomLat": 37.5206
+          }
+        },
+        {
+          "dong_name": "용산동5가",
+          "cortarNo": "1117012700",
+          "bounds": {
+            "leftLon": 126.9647,
+            "rightLon": 126.9847,
+            "topLat": 37.5357,
+            "bottomLat": 37.5157
+          }
+        },
+        {
+          "dong_name": "용산동6가",
+          "cortarNo": "1117013500",
+          "bounds": {
+            "leftLon": 126.97399999999999,
+            "rightLon": 126.994,
+            "topLat": 37.5269,
+            "bottomLat": 37.5069
+          }
+        },
+        {
+          "dong_name": "원효로1가",
+          "cortarNo": "1117011200",
+          "bounds": {
+            "leftLon": 126.95729999999999,
+            "rightLon": 126.9773,
+            "topLat": 37.5498,
+            "bottomLat": 37.5298
+          }
+        },
+        {
+          "dong_name": "원효로2가",
+          "cortarNo": "1117011300",
+          "bounds": {
+            "leftLon": 126.95326299999999,
+            "rightLon": 126.973263,
+            "topLat": 37.546732999999996,
+            "bottomLat": 37.526733
+          }
+        },
+        {
+          "dong_name": "원효로3가",
+          "cortarNo": "1117011700",
+          "bounds": {
+            "leftLon": 126.9481,
+            "rightLon": 126.9681,
+            "topLat": 37.544399999999996,
+            "bottomLat": 37.5244
+          }
+        },
+        {
+          "dong_name": "원효로4가",
+          "cortarNo": "1117011800",
+          "bounds": {
+            "leftLon": 126.9404,
+            "rightLon": 126.9604,
+            "topLat": 37.5428,
+            "bottomLat": 37.522800000000004
+          }
+        },
+        {
+          "dong_name": "이촌동",
+          "cortarNo": "1117012900",
+          "bounds": {
+            "leftLon": 126.9562,
+            "rightLon": 126.9762,
+            "topLat": 37.5287,
+            "bottomLat": 37.508700000000005
+          }
+        },
+        {
+          "dong_name": "이태원동",
+          "cortarNo": "1117013000",
+          "bounds": {
+            "leftLon": 126.98129999999999,
+            "rightLon": 127.0013,
+            "topLat": 37.548899999999996,
+            "bottomLat": 37.5289
+          }
+        },
+        {
+          "dong_name": "주성동",
+          "cortarNo": "1117013400",
+          "bounds": {
+            "leftLon": 126.990225,
+            "rightLon": 127.010225,
+            "topLat": 37.5329,
+            "bottomLat": 37.5129
+          }
+        },
+        {
+          "dong_name": "청암동",
+          "cortarNo": "1117011600",
+          "bounds": {
+            "leftLon": 126.93682899999999,
+            "rightLon": 126.956829,
+            "topLat": 37.544227,
+            "bottomLat": 37.524227
+          }
+        },
+        {
+          "dong_name": "청파동1가",
+          "cortarNo": "1117010900",
+          "bounds": {
+            "leftLon": 126.95739999999999,
+            "rightLon": 126.9774,
+            "topLat": 37.5588,
+            "bottomLat": 37.5388
+          }
+        },
+        {
+          "dong_name": "청파동2가",
+          "cortarNo": "1117011000",
+          "bounds": {
+            "leftLon": 126.9567,
+            "rightLon": 126.97670000000001,
+            "topLat": 37.5562,
+            "bottomLat": 37.5362
+          }
+        },
+        {
+          "dong_name": "청파동3가",
+          "cortarNo": "1117011100",
+          "bounds": {
+            "leftLon": 126.9568,
+            "rightLon": 126.97680000000001,
+            "topLat": 37.5532,
+            "bottomLat": 37.5332
+          }
+        },
+        {
+          "dong_name": "한강로1가",
+          "cortarNo": "1117012400",
+          "bounds": {
+            "leftLon": 126.963488,
+            "rightLon": 126.98348800000001,
+            "topLat": 37.5462,
+            "bottomLat": 37.5262
+          }
+        },
+        {
+          "dong_name": "한강로2가",
+          "cortarNo": "1117012500",
+          "bounds": {
+            "leftLon": 126.9593,
+            "rightLon": 126.97930000000001,
+            "topLat": 37.5413,
+            "bottomLat": 37.521300000000004
+          }
+        },
+        {
+          "dong_name": "한강로3가",
+          "cortarNo": "1117012800",
+          "bounds": {
+            "leftLon": 126.9502,
+            "rightLon": 126.9702,
+            "topLat": 37.5378,
+            "bottomLat": 37.5178
+          }
+        },
+        {
+          "dong_name": "한남동",
+          "cortarNo": "1117013100",
+          "bounds": {
+            "leftLon": 126.9961,
+            "rightLon": 127.01610000000001,
+            "topLat": 37.5475,
+            "bottomLat": 37.5275
+          }
+        },
+        {
+          "dong_name": "효창동",
+          "cortarNo": "1117011900",
+          "bounds": {
+            "leftLon": 126.951325,
+            "rightLon": 126.97132500000001,
+            "topLat": 37.551683,
+            "bottomLat": 37.531683
+          }
+        },
+        {
+          "dong_name": "후암동",
+          "cortarNo": "1117010100",
+          "bounds": {
+            "leftLon": 126.96813399999999,
+            "rightLon": 126.988134,
+            "topLat": 37.558637999999995,
+            "bottomLat": 37.538638
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "은평구",
+      "district_code": "1138000000",
+      "dongs": [
+        {
+          "dong_name": "갈현동",
+          "cortarNo": "1138010400",
+          "bounds": {
+            "leftLon": 126.902925,
+            "rightLon": 126.922925,
+            "topLat": 37.630973999999995,
+            "bottomLat": 37.610974
+          }
+        },
+        {
+          "dong_name": "구산동",
+          "cortarNo": "1138010500",
+          "bounds": {
+            "leftLon": 126.90038899999999,
+            "rightLon": 126.920389,
+            "topLat": 37.621745999999995,
+            "bottomLat": 37.601746
+          }
+        },
+        {
+          "dong_name": "녹번동",
+          "cortarNo": "1138010200",
+          "bounds": {
+            "leftLon": 126.92474999999999,
+            "rightLon": 126.94475,
+            "topLat": 37.61273,
+            "bottomLat": 37.59273
+          }
+        },
+        {
+          "dong_name": "대조동",
+          "cortarNo": "1138010600",
+          "bounds": {
+            "leftLon": 126.91081299999999,
+            "rightLon": 126.930813,
+            "topLat": 37.624165,
+            "bottomLat": 37.604165
+          }
+        },
+        {
+          "dong_name": "불광동",
+          "cortarNo": "1138010300",
+          "bounds": {
+            "leftLon": 126.9254,
+            "rightLon": 126.9454,
+            "topLat": 37.6292,
+            "bottomLat": 37.6092
+          }
+        },
+        {
+          "dong_name": "수색동",
+          "cortarNo": "1138010100",
+          "bounds": {
+            "leftLon": 126.887541,
+            "rightLon": 126.90754100000001,
+            "topLat": 37.594139999999996,
+            "bottomLat": 37.57414
+          }
+        },
+        {
+          "dong_name": "신사동",
+          "cortarNo": "1138010900",
+          "bounds": {
+            "leftLon": 126.89829999999999,
+            "rightLon": 126.9183,
+            "topLat": 37.605999999999995,
+            "bottomLat": 37.586
+          }
+        },
+        {
+          "dong_name": "역촌동",
+          "cortarNo": "1138010800",
+          "bounds": {
+            "leftLon": 126.9048,
+            "rightLon": 126.9248,
+            "topLat": 37.614999999999995,
+            "bottomLat": 37.595
+          }
+        },
+        {
+          "dong_name": "응암동",
+          "cortarNo": "1138010700",
+          "bounds": {
+            "leftLon": 126.91149999999999,
+            "rightLon": 126.9315,
+            "topLat": 37.602599999999995,
+            "bottomLat": 37.5826
+          }
+        },
+        {
+          "dong_name": "증산동",
+          "cortarNo": "1138011000",
+          "bounds": {
+            "leftLon": 126.89703999999999,
+            "rightLon": 126.91704,
+            "topLat": 37.594305999999996,
+            "bottomLat": 37.574306
+          }
+        },
+        {
+          "dong_name": "진관동",
+          "cortarNo": "1138011400",
+          "bounds": {
+            "leftLon": 126.90894999999999,
+            "rightLon": 126.92895,
+            "topLat": 37.648627,
+            "bottomLat": 37.628627
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "종로구",
+      "district_code": "1111000000",
+      "dongs": [
+        {
+          "dong_name": "가회동",
+          "cortarNo": "1111014600",
+          "bounds": {
+            "leftLon": 126.974525,
+            "rightLon": 126.99452500000001,
+            "topLat": 37.592583,
+            "bottomLat": 37.572583
+          }
+        },
+        {
+          "dong_name": "견지동",
+          "cortarNo": "1111012900",
+          "bounds": {
+            "leftLon": 126.973046,
+            "rightLon": 126.993046,
+            "topLat": 37.583714,
+            "bottomLat": 37.563714000000004
+          }
+        },
+        {
+          "dong_name": "경운동",
+          "cortarNo": "1111013400",
+          "bounds": {
+            "leftLon": 126.97595,
+            "rightLon": 126.99595000000001,
+            "topLat": 37.585066999999995,
+            "bottomLat": 37.565067
+          }
+        },
+        {
+          "dong_name": "계동",
+          "cortarNo": "1111014800",
+          "bounds": {
+            "leftLon": 126.97699999999999,
+            "rightLon": 126.997,
+            "topLat": 37.590399999999995,
+            "bottomLat": 37.5704
+          }
+        },
+        {
+          "dong_name": "공평동",
+          "cortarNo": "1111012700",
+          "bounds": {
+            "leftLon": 126.97279999999999,
+            "rightLon": 126.9928,
+            "topLat": 37.5811,
+            "bottomLat": 37.5611
+          }
+        },
+        {
+          "dong_name": "관수동",
+          "cortarNo": "1111015500",
+          "bounds": {
+            "leftLon": 126.9806,
+            "rightLon": 127.0006,
+            "topLat": 37.5791,
+            "bottomLat": 37.5591
+          }
+        },
+        {
+          "dong_name": "관철동",
+          "cortarNo": "1111013500",
+          "bounds": {
+            "leftLon": 126.97585699999999,
+            "rightLon": 126.995857,
+            "topLat": 37.579176,
+            "bottomLat": 37.559176
+          }
+        },
+        {
+          "dong_name": "관훈동",
+          "cortarNo": "1111012800",
+          "bounds": {
+            "leftLon": 126.97465,
+            "rightLon": 126.99465000000001,
+            "topLat": 37.583917,
+            "bottomLat": 37.563917000000004
+          }
+        },
+        {
+          "dong_name": "교남동",
+          "cortarNo": "1111017600",
+          "bounds": {
+            "leftLon": 126.95199799999999,
+            "rightLon": 126.971998,
+            "topLat": 37.581866999999995,
+            "bottomLat": 37.561867
+          }
+        },
+        {
+          "dong_name": "교북동",
+          "cortarNo": "1111018000",
+          "bounds": {
+            "leftLon": 126.951257,
+            "rightLon": 126.97125700000001,
+            "topLat": 37.581407,
+            "bottomLat": 37.561407
+          }
+        },
+        {
+          "dong_name": "구기동",
+          "cortarNo": "1111018200",
+          "bounds": {
+            "leftLon": 126.9474,
+            "rightLon": 126.96740000000001,
+            "topLat": 37.6279,
+            "bottomLat": 37.6079
+          }
+        },
+        {
+          "dong_name": "궁정동",
+          "cortarNo": "1111010300",
+          "bounds": {
+            "leftLon": 126.96235899999999,
+            "rightLon": 126.982359,
+            "topLat": 37.594885999999995,
+            "bottomLat": 37.574886
+          }
+        },
+        {
+          "dong_name": "권농동",
+          "cortarNo": "1111013100",
+          "bounds": {
+            "leftLon": 126.98170499999999,
+            "rightLon": 127.001705,
+            "topLat": 37.586087,
+            "bottomLat": 37.566087
+          }
+        },
+        {
+          "dong_name": "낙원동",
+          "cortarNo": "1111013700",
+          "bounds": {
+            "leftLon": 126.9785,
+            "rightLon": 126.9985,
+            "topLat": 37.582499999999996,
+            "bottomLat": 37.5625
+          }
+        },
+        {
+          "dong_name": "내수동",
+          "cortarNo": "1111011800",
+          "bounds": {
+            "leftLon": 126.96199999999999,
+            "rightLon": 126.982,
+            "topLat": 37.5833,
+            "bottomLat": 37.563300000000005
+          }
+        },
+        {
+          "dong_name": "내자동",
+          "cortarNo": "1111011400",
+          "bounds": {
+            "leftLon": 126.96159999999999,
+            "rightLon": 126.9816,
+            "topLat": 37.5854,
+            "bottomLat": 37.565400000000004
+          }
+        },
+        {
+          "dong_name": "누상동",
+          "cortarNo": "1111010900",
+          "bounds": {
+            "leftLon": 126.9523,
+            "rightLon": 126.9723,
+            "topLat": 37.590399999999995,
+            "bottomLat": 37.5704
+          }
+        },
+        {
+          "dong_name": "누하동",
+          "cortarNo": "1111011000",
+          "bounds": {
+            "leftLon": 126.958175,
+            "rightLon": 126.97817500000001,
+            "topLat": 37.589183,
+            "bottomLat": 37.569183
+          }
+        },
+        {
+          "dong_name": "당주동",
+          "cortarNo": "1111011700",
+          "bounds": {
+            "leftLon": 126.96377799999999,
+            "rightLon": 126.983778,
+            "topLat": 37.581558,
+            "bottomLat": 37.561558000000005
+          }
+        },
+        {
+          "dong_name": "도렴동",
+          "cortarNo": "1111011600",
+          "bounds": {
+            "leftLon": 126.96463,
+            "rightLon": 126.98463000000001,
+            "topLat": 37.582704,
+            "bottomLat": 37.562704000000004
+          }
+        },
+        {
+          "dong_name": "돈의동",
+          "cortarNo": "1111015300",
+          "bounds": {
+            "leftLon": 126.980594,
+            "rightLon": 127.000594,
+            "topLat": 37.582011,
+            "bottomLat": 37.562011000000005
+          }
+        },
+        {
+          "dong_name": "동숭동",
+          "cortarNo": "1111016800",
+          "bounds": {
+            "leftLon": 126.99499999999999,
+            "rightLon": 127.015,
+            "topLat": 37.5913,
+            "bottomLat": 37.5713
+          }
+        },
+        {
+          "dong_name": "명륜1가",
+          "cortarNo": "1111017000",
+          "bounds": {
+            "leftLon": 126.9875,
+            "rightLon": 127.00750000000001,
+            "topLat": 37.5991,
+            "bottomLat": 37.579100000000004
+          }
+        },
+        {
+          "dong_name": "명륜2가",
+          "cortarNo": "1111017100",
+          "bounds": {
+            "leftLon": 126.9888,
+            "rightLon": 127.00880000000001,
+            "topLat": 37.5946,
+            "bottomLat": 37.574600000000004
+          }
+        },
+        {
+          "dong_name": "명륜3가",
+          "cortarNo": "1111017300",
+          "bounds": {
+            "leftLon": 126.9831,
+            "rightLon": 127.0031,
+            "topLat": 37.5975,
+            "bottomLat": 37.5775
+          }
+        },
+        {
+          "dong_name": "명륜4가",
+          "cortarNo": "1111017200",
+          "bounds": {
+            "leftLon": 126.98979999999999,
+            "rightLon": 127.0098,
+            "topLat": 37.592141999999996,
+            "bottomLat": 37.572142
+          }
+        },
+        {
+          "dong_name": "묘동",
+          "cortarNo": "1111015100",
+          "bounds": {
+            "leftLon": 126.981792,
+            "rightLon": 127.00179200000001,
+            "topLat": 37.582530999999996,
+            "bottomLat": 37.562531
+          }
+        },
+        {
+          "dong_name": "무악동",
+          "cortarNo": "1111018700",
+          "bounds": {
+            "leftLon": 126.948098,
+            "rightLon": 126.96809800000001,
+            "topLat": 37.586008,
+            "bottomLat": 37.566008000000004
+          }
+        },
+        {
+          "dong_name": "봉익동",
+          "cortarNo": "1111015200",
+          "bounds": {
+            "leftLon": 126.982965,
+            "rightLon": 127.002965,
+            "topLat": 37.582353,
+            "bottomLat": 37.562353
+          }
+        },
+        {
+          "dong_name": "부암동",
+          "cortarNo": "1111018400",
+          "bounds": {
+            "leftLon": 126.95404699999999,
+            "rightLon": 126.974047,
+            "topLat": 37.60244,
+            "bottomLat": 37.582440000000005
+          }
+        },
+        {
+          "dong_name": "사간동",
+          "cortarNo": "1111014400",
+          "bounds": {
+            "leftLon": 126.970529,
+            "rightLon": 126.99052900000001,
+            "topLat": 37.587215,
+            "bottomLat": 37.567215000000004
+          }
+        },
+        {
+          "dong_name": "사직동",
+          "cortarNo": "1111011500",
+          "bounds": {
+            "leftLon": 126.955777,
+            "rightLon": 126.97577700000001,
+            "topLat": 37.585363,
+            "bottomLat": 37.565363000000005
+          }
+        },
+        {
+          "dong_name": "삼청동",
+          "cortarNo": "1111014000",
+          "bounds": {
+            "leftLon": 126.9717,
+            "rightLon": 126.99170000000001,
+            "topLat": 37.6,
+            "bottomLat": 37.580000000000005
+          }
+        },
+        {
+          "dong_name": "서린동",
+          "cortarNo": "1111012300",
+          "bounds": {
+            "leftLon": 126.97026,
+            "rightLon": 126.99026,
+            "topLat": 37.579482,
+            "bottomLat": 37.559482
+          }
+        },
+        {
+          "dong_name": "세종로",
+          "cortarNo": "1111011900",
+          "bounds": {
+            "leftLon": 126.96679999999999,
+            "rightLon": 126.9868,
+            "topLat": 37.5895,
+            "bottomLat": 37.569500000000005
+          }
+        },
+        {
+          "dong_name": "소격동",
+          "cortarNo": "1111014200",
+          "bounds": {
+            "leftLon": 126.97077499999999,
+            "rightLon": 126.990775,
+            "topLat": 37.5895,
+            "bottomLat": 37.569500000000005
+          }
+        },
+        {
+          "dong_name": "송월동",
+          "cortarNo": "1111017800",
+          "bounds": {
+            "leftLon": 126.955259,
+            "rightLon": 126.97525900000001,
+            "topLat": 37.580158999999995,
+            "bottomLat": 37.560159
+          }
+        },
+        {
+          "dong_name": "송현동",
+          "cortarNo": "1111014500",
+          "bounds": {
+            "leftLon": 126.9717,
+            "rightLon": 126.99170000000001,
+            "topLat": 37.5868,
+            "bottomLat": 37.5668
+          }
+        },
+        {
+          "dong_name": "수송동",
+          "cortarNo": "1111012400",
+          "bounds": {
+            "leftLon": 126.97059999999999,
+            "rightLon": 126.9906,
+            "topLat": 37.5837,
+            "bottomLat": 37.563700000000004
+          }
+        },
+        {
+          "dong_name": "숭인동",
+          "cortarNo": "1111017500",
+          "bounds": {
+            "leftLon": 127.0093,
+            "rightLon": 127.0293,
+            "topLat": 37.5862,
+            "bottomLat": 37.5662
+          }
+        },
+        {
+          "dong_name": "신교동",
+          "cortarNo": "1111010200",
+          "bounds": {
+            "leftLon": 126.95779999999999,
+            "rightLon": 126.9778,
+            "topLat": 37.5945,
+            "bottomLat": 37.5745
+          }
+        },
+        {
+          "dong_name": "신문로1가",
+          "cortarNo": "1111012000",
+          "bounds": {
+            "leftLon": 126.96402499999999,
+            "rightLon": 126.984025,
+            "topLat": 37.580352999999995,
+            "bottomLat": 37.560353
+          }
+        },
+        {
+          "dong_name": "신문로2가",
+          "cortarNo": "1111012100",
+          "bounds": {
+            "leftLon": 126.95881299999999,
+            "rightLon": 126.978813,
+            "topLat": 37.580791999999995,
+            "bottomLat": 37.560792
+          }
+        },
+        {
+          "dong_name": "신영동",
+          "cortarNo": "1111018600",
+          "bounds": {
+            "leftLon": 126.9521,
+            "rightLon": 126.97210000000001,
+            "topLat": 37.612939999999995,
+            "bottomLat": 37.59294
+          }
+        },
+        {
+          "dong_name": "안국동",
+          "cortarNo": "1111014100",
+          "bounds": {
+            "leftLon": 126.9729,
+            "rightLon": 126.9929,
+            "topLat": 37.5873,
+            "bottomLat": 37.5673
+          }
+        },
+        {
+          "dong_name": "연건동",
+          "cortarNo": "1111016600",
+          "bounds": {
+            "leftLon": 126.98949999999999,
+            "rightLon": 127.0095,
+            "topLat": 37.5886,
+            "bottomLat": 37.5686
+          }
+        },
+        {
+          "dong_name": "연지동",
+          "cortarNo": "1111016000",
+          "bounds": {
+            "leftLon": 126.9902,
+            "rightLon": 127.01020000000001,
+            "topLat": 37.5837,
+            "bottomLat": 37.563700000000004
+          }
+        },
+        {
+          "dong_name": "예지동",
+          "cortarNo": "1111015800",
+          "bounds": {
+            "leftLon": 126.98840899999999,
+            "rightLon": 127.008409,
+            "topLat": 37.579487,
+            "bottomLat": 37.559487000000004
+          }
+        },
+        {
+          "dong_name": "옥인동",
+          "cortarNo": "1111011100",
+          "bounds": {
+            "leftLon": 126.9525,
+            "rightLon": 126.97250000000001,
+            "topLat": 37.593599999999995,
+            "bottomLat": 37.5736
+          }
+        },
+        {
+          "dong_name": "와룡동",
+          "cortarNo": "1111013000",
+          "bounds": {
+            "leftLon": 126.98299999999999,
+            "rightLon": 127.003,
+            "topLat": 37.592,
+            "bottomLat": 37.572
+          }
+        },
+        {
+          "dong_name": "운니동",
+          "cortarNo": "1111013200",
+          "bounds": {
+            "leftLon": 126.97829999999999,
+            "rightLon": 126.9983,
+            "topLat": 37.5864,
+            "bottomLat": 37.5664
+          }
+        },
+        {
+          "dong_name": "원남동",
+          "cortarNo": "1111015900",
+          "bounds": {
+            "leftLon": 126.9875,
+            "rightLon": 127.00750000000001,
+            "topLat": 37.585499999999996,
+            "bottomLat": 37.5655
+          }
+        },
+        {
+          "dong_name": "원서동",
+          "cortarNo": "1111014900",
+          "bounds": {
+            "leftLon": 126.978034,
+            "rightLon": 126.998034,
+            "topLat": 37.594162,
+            "bottomLat": 37.574162
+          }
+        },
+        {
+          "dong_name": "이화동",
+          "cortarNo": "1111016500",
+          "bounds": {
+            "leftLon": 126.994338,
+            "rightLon": 127.01433800000001,
+            "topLat": 37.587008,
+            "bottomLat": 37.567008
+          }
+        },
+        {
+          "dong_name": "익선동",
+          "cortarNo": "1111013300",
+          "bounds": {
+            "leftLon": 126.9794,
+            "rightLon": 126.99940000000001,
+            "topLat": 37.584567,
+            "bottomLat": 37.564567000000004
+          }
+        },
+        {
+          "dong_name": "인사동",
+          "cortarNo": "1111013600",
+          "bounds": {
+            "leftLon": 126.976,
+            "rightLon": 126.99600000000001,
+            "topLat": 37.5817,
+            "bottomLat": 37.5617
+          }
+        },
+        {
+          "dong_name": "인의동",
+          "cortarNo": "1111015700",
+          "bounds": {
+            "leftLon": 126.9879,
+            "rightLon": 127.0079,
+            "topLat": 37.582499999999996,
+            "bottomLat": 37.5625
+          }
+        },
+        {
+          "dong_name": "장사동",
+          "cortarNo": "1111015400",
+          "bounds": {
+            "leftLon": 126.984201,
+            "rightLon": 127.00420100000001,
+            "topLat": 37.579215999999995,
+            "bottomLat": 37.559216
+          }
+        },
+        {
+          "dong_name": "재동",
+          "cortarNo": "1111014700",
+          "bounds": {
+            "leftLon": 126.97512499999999,
+            "rightLon": 126.995125,
+            "topLat": 37.5881,
+            "bottomLat": 37.5681
+          }
+        },
+        {
+          "dong_name": "적선동",
+          "cortarNo": "1111010700",
+          "bounds": {
+            "leftLon": 126.963889,
+            "rightLon": 126.983889,
+            "topLat": 37.585263999999995,
+            "bottomLat": 37.565264
+          }
+        },
+        {
+          "dong_name": "종로1가",
+          "cortarNo": "1111012600",
+          "bounds": {
+            "leftLon": 126.970286,
+            "rightLon": 126.99028600000001,
+            "topLat": 37.580673999999995,
+            "bottomLat": 37.560674
+          }
+        },
+        {
+          "dong_name": "종로2가",
+          "cortarNo": "1111013800",
+          "bounds": {
+            "leftLon": 126.97625599999999,
+            "rightLon": 126.996256,
+            "topLat": 37.580740999999996,
+            "bottomLat": 37.560741
+          }
+        },
+        {
+          "dong_name": "종로3가",
+          "cortarNo": "1111015600",
+          "bounds": {
+            "leftLon": 126.98234,
+            "rightLon": 127.00234,
+            "topLat": 37.580360999999996,
+            "bottomLat": 37.560361
+          }
+        },
+        {
+          "dong_name": "종로4가",
+          "cortarNo": "1111016100",
+          "bounds": {
+            "leftLon": 126.987927,
+            "rightLon": 127.00792700000001,
+            "topLat": 37.58067,
+            "bottomLat": 37.56067
+          }
+        },
+        {
+          "dong_name": "종로5가",
+          "cortarNo": "1111016300",
+          "bounds": {
+            "leftLon": 126.9936,
+            "rightLon": 127.01360000000001,
+            "topLat": 37.580633,
+            "bottomLat": 37.560633
+          }
+        },
+        {
+          "dong_name": "종로6가",
+          "cortarNo": "1111016400",
+          "bounds": {
+            "leftLon": 126.99759999999999,
+            "rightLon": 127.0176,
+            "topLat": 37.5819,
+            "bottomLat": 37.5619
+          }
+        },
+        {
+          "dong_name": "중학동",
+          "cortarNo": "1111012500",
+          "bounds": {
+            "leftLon": 126.969904,
+            "rightLon": 126.98990400000001,
+            "topLat": 37.585173999999995,
+            "bottomLat": 37.565174
+          }
+        },
+        {
+          "dong_name": "창성동",
+          "cortarNo": "1111010500",
+          "bounds": {
+            "leftLon": 126.96209999999999,
+            "rightLon": 126.9821,
+            "topLat": 37.590599999999995,
+            "bottomLat": 37.5706
+          }
+        },
+        {
+          "dong_name": "창신동",
+          "cortarNo": "1111017400",
+          "bounds": {
+            "leftLon": 127.00206299999999,
+            "rightLon": 127.022063,
+            "topLat": 37.5858,
+            "bottomLat": 37.5658
+          }
+        },
+        {
+          "dong_name": "청운동",
+          "cortarNo": "1111010100",
+          "bounds": {
+            "leftLon": 126.95846499999999,
+            "rightLon": 126.978465,
+            "topLat": 37.599008,
+            "bottomLat": 37.579008
+          }
+        },
+        {
+          "dong_name": "청진동",
+          "cortarNo": "1111012200",
+          "bounds": {
+            "leftLon": 126.97024599999999,
+            "rightLon": 126.990246,
+            "topLat": 37.581514999999996,
+            "bottomLat": 37.561515
+          }
+        },
+        {
+          "dong_name": "체부동",
+          "cortarNo": "1111011200",
+          "bounds": {
+            "leftLon": 126.96069999999999,
+            "rightLon": 126.9807,
+            "topLat": 37.588,
+            "bottomLat": 37.568000000000005
+          }
+        },
+        {
+          "dong_name": "충신동",
+          "cortarNo": "1111016700",
+          "bounds": {
+            "leftLon": 126.99612499999999,
+            "rightLon": 127.016125,
+            "topLat": 37.584841999999995,
+            "bottomLat": 37.564842
+          }
+        },
+        {
+          "dong_name": "통의동",
+          "cortarNo": "1111010600",
+          "bounds": {
+            "leftLon": 126.962638,
+            "rightLon": 126.98263800000001,
+            "topLat": 37.5884,
+            "bottomLat": 37.568400000000004
+          }
+        },
+        {
+          "dong_name": "통인동",
+          "cortarNo": "1111010800",
+          "bounds": {
+            "leftLon": 126.960016,
+            "rightLon": 126.980016,
+            "topLat": 37.589797,
+            "bottomLat": 37.569797
+          }
+        },
+        {
+          "dong_name": "팔판동",
+          "cortarNo": "1111013900",
+          "bounds": {
+            "leftLon": 126.9704,
+            "rightLon": 126.99040000000001,
+            "topLat": 37.592817,
+            "bottomLat": 37.572817
+          }
+        },
+        {
+          "dong_name": "평동",
+          "cortarNo": "1111017700",
+          "bounds": {
+            "leftLon": 126.9568,
+            "rightLon": 126.97680000000001,
+            "topLat": 37.577967,
+            "bottomLat": 37.557967000000005
+          }
+        },
+        {
+          "dong_name": "평창동",
+          "cortarNo": "1111018300",
+          "bounds": {
+            "leftLon": 126.95688399999999,
+            "rightLon": 126.976884,
+            "topLat": 37.615364,
+            "bottomLat": 37.595364000000004
+          }
+        },
+        {
+          "dong_name": "필운동",
+          "cortarNo": "1111011300",
+          "bounds": {
+            "leftLon": 126.95765499999999,
+            "rightLon": 126.977655,
+            "topLat": 37.586859,
+            "bottomLat": 37.566859
+          }
+        },
+        {
+          "dong_name": "행촌동",
+          "cortarNo": "1111018100",
+          "bounds": {
+            "leftLon": 126.9521,
+            "rightLon": 126.97210000000001,
+            "topLat": 37.583608,
+            "bottomLat": 37.563608
+          }
+        },
+        {
+          "dong_name": "혜화동",
+          "cortarNo": "1111016900",
+          "bounds": {
+            "leftLon": 126.99136899999999,
+            "rightLon": 127.011369,
+            "topLat": 37.593382999999996,
+            "bottomLat": 37.573383
+          }
+        },
+        {
+          "dong_name": "홍지동",
+          "cortarNo": "1111018500",
+          "bounds": {
+            "leftLon": 126.9464,
+            "rightLon": 126.96640000000001,
+            "topLat": 37.6106,
+            "bottomLat": 37.5906
+          }
+        },
+        {
+          "dong_name": "홍파동",
+          "cortarNo": "1111017900",
+          "bounds": {
+            "leftLon": 126.954104,
+            "rightLon": 126.97410400000001,
+            "topLat": 37.581137999999996,
+            "bottomLat": 37.561138
+          }
+        },
+        {
+          "dong_name": "화동",
+          "cortarNo": "1111014300",
+          "bounds": {
+            "leftLon": 126.97279999999999,
+            "rightLon": 126.9928,
+            "topLat": 37.590599999999995,
+            "bottomLat": 37.5706
+          }
+        },
+        {
+          "dong_name": "효자동",
+          "cortarNo": "1111010400",
+          "bounds": {
+            "leftLon": 126.96184799999999,
+            "rightLon": 126.981848,
+            "topLat": 37.592683,
+            "bottomLat": 37.572683000000005
+          }
+        },
+        {
+          "dong_name": "효제동",
+          "cortarNo": "1111016200",
+          "bounds": {
+            "leftLon": 126.99301299999999,
+            "rightLon": 127.013013,
+            "topLat": 37.583267,
+            "bottomLat": 37.563267
+          }
+        },
+        {
+          "dong_name": "훈정동",
+          "cortarNo": "1111015000",
+          "bounds": {
+            "leftLon": 126.98429999999999,
+            "rightLon": 127.0043,
+            "topLat": 37.584199999999996,
+            "bottomLat": 37.5642
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "중구",
+      "district_code": "1114000000",
+      "dongs": [
+        {
+          "dong_name": "광희동1가",
+          "cortarNo": "1114014500",
+          "bounds": {
+            "leftLon": 126.9951,
+            "rightLon": 127.0151,
+            "topLat": 37.574999999999996,
+            "bottomLat": 37.555
+          }
+        },
+        {
+          "dong_name": "광희동2가",
+          "cortarNo": "1114014600",
+          "bounds": {
+            "leftLon": 126.99839999999999,
+            "rightLon": 127.0184,
+            "topLat": 37.5741,
+            "bottomLat": 37.554100000000005
+          }
+        },
+        {
+          "dong_name": "남대문로1가",
+          "cortarNo": "1114010600",
+          "bounds": {
+            "leftLon": 126.973064,
+            "rightLon": 126.993064,
+            "topLat": 37.577574,
+            "bottomLat": 37.557574
+          }
+        },
+        {
+          "dong_name": "남대문로2가",
+          "cortarNo": "1114011500",
+          "bounds": {
+            "leftLon": 126.97198999999999,
+            "rightLon": 126.99199,
+            "topLat": 37.573843,
+            "bottomLat": 37.553843
+          }
+        },
+        {
+          "dong_name": "남대문로3가",
+          "cortarNo": "1114011600",
+          "bounds": {
+            "leftLon": 126.96938899999999,
+            "rightLon": 126.989389,
+            "topLat": 37.571647999999996,
+            "bottomLat": 37.551648
+          }
+        },
+        {
+          "dong_name": "남대문로4가",
+          "cortarNo": "1114011700",
+          "bounds": {
+            "leftLon": 126.96532499999999,
+            "rightLon": 126.985325,
+            "topLat": 37.570671,
+            "bottomLat": 37.550671
+          }
+        },
+        {
+          "dong_name": "남대문로5가",
+          "cortarNo": "1114011800",
+          "bounds": {
+            "leftLon": 126.9648,
+            "rightLon": 126.9848,
+            "topLat": 37.5663,
+            "bottomLat": 37.5463
+          }
+        },
+        {
+          "dong_name": "남산동1가",
+          "cortarNo": "1114012800",
+          "bounds": {
+            "leftLon": 126.97466899999999,
+            "rightLon": 126.994669,
+            "topLat": 37.569159,
+            "bottomLat": 37.549159
+          }
+        },
+        {
+          "dong_name": "남산동2가",
+          "cortarNo": "1114012900",
+          "bounds": {
+            "leftLon": 126.97579999999999,
+            "rightLon": 126.9958,
+            "topLat": 37.568332999999996,
+            "bottomLat": 37.548333
+          }
+        },
+        {
+          "dong_name": "남산동3가",
+          "cortarNo": "1114013000",
+          "bounds": {
+            "leftLon": 126.977333,
+            "rightLon": 126.99733300000001,
+            "topLat": 37.56998,
+            "bottomLat": 37.549980000000005
+          }
+        },
+        {
+          "dong_name": "남창동",
+          "cortarNo": "1114011200",
+          "bounds": {
+            "leftLon": 126.96743699999999,
+            "rightLon": 126.987437,
+            "topLat": 37.5681,
+            "bottomLat": 37.548100000000005
+          }
+        },
+        {
+          "dong_name": "남학동",
+          "cortarNo": "1114014000",
+          "bounds": {
+            "leftLon": 126.98085999999999,
+            "rightLon": 127.00086,
+            "topLat": 37.570504,
+            "bottomLat": 37.550504000000004
+          }
+        },
+        {
+          "dong_name": "다동",
+          "cortarNo": "1114010200",
+          "bounds": {
+            "leftLon": 126.970913,
+            "rightLon": 126.990913,
+            "topLat": 37.578133,
+            "bottomLat": 37.558133000000005
+          }
+        },
+        {
+          "dong_name": "만리동1가",
+          "cortarNo": "1114017300",
+          "bounds": {
+            "leftLon": 126.957263,
+            "rightLon": 126.97726300000001,
+            "topLat": 37.565917,
+            "bottomLat": 37.545917
+          }
+        },
+        {
+          "dong_name": "만리동2가",
+          "cortarNo": "1114017400",
+          "bounds": {
+            "leftLon": 126.954,
+            "rightLon": 126.974,
+            "topLat": 37.5644,
+            "bottomLat": 37.5444
+          }
+        },
+        {
+          "dong_name": "명동1가",
+          "cortarNo": "1114012600",
+          "bounds": {
+            "leftLon": 126.97442099999999,
+            "rightLon": 126.994421,
+            "topLat": 37.574431999999995,
+            "bottomLat": 37.554432
+          }
+        },
+        {
+          "dong_name": "명동2가",
+          "cortarNo": "1114012700",
+          "bounds": {
+            "leftLon": 126.975175,
+            "rightLon": 126.995175,
+            "topLat": 37.572666999999996,
+            "bottomLat": 37.552667
+          }
+        },
+        {
+          "dong_name": "무교동",
+          "cortarNo": "1114010100",
+          "bounds": {
+            "leftLon": 126.968823,
+            "rightLon": 126.98882300000001,
+            "topLat": 37.578041,
+            "bottomLat": 37.558041
+          }
+        },
+        {
+          "dong_name": "무학동",
+          "cortarNo": "1114016400",
+          "bounds": {
+            "leftLon": 127.005173,
+            "rightLon": 127.02517300000001,
+            "topLat": 37.574208999999996,
+            "bottomLat": 37.554209
+          }
+        },
+        {
+          "dong_name": "묵정동",
+          "cortarNo": "1114013600",
+          "bounds": {
+            "leftLon": 126.99052499999999,
+            "rightLon": 127.010525,
+            "topLat": 37.571307999999995,
+            "bottomLat": 37.551308
+          }
+        },
+        {
+          "dong_name": "방산동",
+          "cortarNo": "1114015300",
+          "bounds": {
+            "leftLon": 126.9932,
+            "rightLon": 127.01320000000001,
+            "topLat": 37.5787,
+            "bottomLat": 37.5587
+          }
+        },
+        {
+          "dong_name": "봉래동1가",
+          "cortarNo": "1114011900",
+          "bounds": {
+            "leftLon": 126.96291199999999,
+            "rightLon": 126.982912,
+            "topLat": 37.568889,
+            "bottomLat": 37.548889
+          }
+        },
+        {
+          "dong_name": "봉래동2가",
+          "cortarNo": "1114012000",
+          "bounds": {
+            "leftLon": 126.961,
+            "rightLon": 126.98100000000001,
+            "topLat": 37.5666,
+            "bottomLat": 37.546600000000005
+          }
+        },
+        {
+          "dong_name": "북창동",
+          "cortarNo": "1114011300",
+          "bounds": {
+            "leftLon": 126.9683,
+            "rightLon": 126.98830000000001,
+            "topLat": 37.5723,
+            "bottomLat": 37.5523
+          }
+        },
+        {
+          "dong_name": "산림동",
+          "cortarNo": "1114015700",
+          "bounds": {
+            "leftLon": 126.9857,
+            "rightLon": 127.0057,
+            "topLat": 37.5776,
+            "bottomLat": 37.5576
+          }
+        },
+        {
+          "dong_name": "삼각동",
+          "cortarNo": "1114010700",
+          "bounds": {
+            "leftLon": 126.974746,
+            "rightLon": 126.994746,
+            "topLat": 37.577906999999996,
+            "bottomLat": 37.557907
+          }
+        },
+        {
+          "dong_name": "서소문동",
+          "cortarNo": "1114016600",
+          "bounds": {
+            "leftLon": 126.963425,
+            "rightLon": 126.98342500000001,
+            "topLat": 37.573274999999995,
+            "bottomLat": 37.553275
+          }
+        },
+        {
+          "dong_name": "소공동",
+          "cortarNo": "1114011100",
+          "bounds": {
+            "leftLon": 126.96718399999999,
+            "rightLon": 126.987184,
+            "topLat": 37.572294,
+            "bottomLat": 37.552294
+          }
+        },
+        {
+          "dong_name": "수표동",
+          "cortarNo": "1114011000",
+          "bounds": {
+            "leftLon": 126.979225,
+            "rightLon": 126.99922500000001,
+            "topLat": 37.577317,
+            "bottomLat": 37.557317000000005
+          }
+        },
+        {
+          "dong_name": "수하동",
+          "cortarNo": "1114010800",
+          "bounds": {
+            "leftLon": 126.974593,
+            "rightLon": 126.99459300000001,
+            "topLat": 37.577394999999996,
+            "bottomLat": 37.557395
+          }
+        },
+        {
+          "dong_name": "순화동",
+          "cortarNo": "1114016800",
+          "bounds": {
+            "leftLon": 126.960438,
+            "rightLon": 126.980438,
+            "topLat": 37.572758,
+            "bottomLat": 37.552758000000004
+          }
+        },
+        {
+          "dong_name": "신당동",
+          "cortarNo": "1114016200",
+          "bounds": {
+            "leftLon": 127.00314999999999,
+            "rightLon": 127.02315,
+            "topLat": 37.567025,
+            "bottomLat": 37.547025000000005
+          }
+        },
+        {
+          "dong_name": "쌍림동",
+          "cortarNo": "1114014700",
+          "bounds": {
+            "leftLon": 126.99409999999999,
+            "rightLon": 127.0141,
+            "topLat": 37.5738,
+            "bottomLat": 37.5538
+          }
+        },
+        {
+          "dong_name": "예관동",
+          "cortarNo": "1114013500",
+          "bounds": {
+            "leftLon": 126.987989,
+            "rightLon": 127.00798900000001,
+            "topLat": 37.574062,
+            "bottomLat": 37.554062
+          }
+        },
+        {
+          "dong_name": "예장동",
+          "cortarNo": "1114014200",
+          "bounds": {
+            "leftLon": 126.9798,
+            "rightLon": 126.99980000000001,
+            "topLat": 37.5653,
+            "bottomLat": 37.545300000000005
+          }
+        },
+        {
+          "dong_name": "오장동",
+          "cortarNo": "1114015400",
+          "bounds": {
+            "leftLon": 126.990775,
+            "rightLon": 127.01077500000001,
+            "topLat": 37.574825,
+            "bottomLat": 37.554825
+          }
+        },
+        {
+          "dong_name": "을지로1가",
+          "cortarNo": "1114010400",
+          "bounds": {
+            "leftLon": 126.970523,
+            "rightLon": 126.99052300000001,
+            "topLat": 37.575882,
+            "bottomLat": 37.555882000000004
+          }
+        },
+        {
+          "dong_name": "을지로2가",
+          "cortarNo": "1114010500",
+          "bounds": {
+            "leftLon": 126.97563799999999,
+            "rightLon": 126.995638,
+            "topLat": 37.575849999999996,
+            "bottomLat": 37.55585
+          }
+        },
+        {
+          "dong_name": "을지로3가",
+          "cortarNo": "1114015500",
+          "bounds": {
+            "leftLon": 126.98235,
+            "rightLon": 127.00235,
+            "topLat": 37.576578,
+            "bottomLat": 37.556578
+          }
+        },
+        {
+          "dong_name": "을지로4가",
+          "cortarNo": "1114015000",
+          "bounds": {
+            "leftLon": 126.98679999999999,
+            "rightLon": 127.0068,
+            "topLat": 37.576299999999996,
+            "bottomLat": 37.5563
+          }
+        },
+        {
+          "dong_name": "을지로5가",
+          "cortarNo": "1114015100",
+          "bounds": {
+            "leftLon": 126.99256299999999,
+            "rightLon": 127.012563,
+            "topLat": 37.57665,
+            "bottomLat": 37.556650000000005
+          }
+        },
+        {
+          "dong_name": "을지로6가",
+          "cortarNo": "1114014800",
+          "bounds": {
+            "leftLon": 126.996938,
+            "rightLon": 127.01693800000001,
+            "topLat": 37.577717,
+            "bottomLat": 37.557717000000004
+          }
+        },
+        {
+          "dong_name": "을지로7가",
+          "cortarNo": "1114014900",
+          "bounds": {
+            "leftLon": 127.00043699999999,
+            "rightLon": 127.020437,
+            "topLat": 37.576325,
+            "bottomLat": 37.556325
+          }
+        },
+        {
+          "dong_name": "의주로1가",
+          "cortarNo": "1114016900",
+          "bounds": {
+            "leftLon": 126.95844299999999,
+            "rightLon": 126.978443,
+            "topLat": 37.573646,
+            "bottomLat": 37.553646
+          }
+        },
+        {
+          "dong_name": "의주로2가",
+          "cortarNo": "1114017200",
+          "bounds": {
+            "leftLon": 126.959464,
+            "rightLon": 126.97946400000001,
+            "topLat": 37.570645,
+            "bottomLat": 37.550645
+          }
+        },
+        {
+          "dong_name": "인현동1가",
+          "cortarNo": "1114016000",
+          "bounds": {
+            "leftLon": 126.9844,
+            "rightLon": 127.0044,
+            "topLat": 37.5746,
+            "bottomLat": 37.5546
+          }
+        },
+        {
+          "dong_name": "인현동2가",
+          "cortarNo": "1114013400",
+          "bounds": {
+            "leftLon": 126.986238,
+            "rightLon": 127.00623800000001,
+            "topLat": 37.574124999999995,
+            "bottomLat": 37.554125
+          }
+        },
+        {
+          "dong_name": "입정동",
+          "cortarNo": "1114015600",
+          "bounds": {
+            "leftLon": 126.982717,
+            "rightLon": 127.002717,
+            "topLat": 37.577708,
+            "bottomLat": 37.557708000000005
+          }
+        },
+        {
+          "dong_name": "장교동",
+          "cortarNo": "1114010900",
+          "bounds": {
+            "leftLon": 126.977007,
+            "rightLon": 126.99700700000001,
+            "topLat": 37.577462999999995,
+            "bottomLat": 37.557463
+          }
+        },
+        {
+          "dong_name": "장충동1가",
+          "cortarNo": "1114014300",
+          "bounds": {
+            "leftLon": 126.997688,
+            "rightLon": 127.017688,
+            "topLat": 37.570758,
+            "bottomLat": 37.550758
+          }
+        },
+        {
+          "dong_name": "장충동2가",
+          "cortarNo": "1114014400",
+          "bounds": {
+            "leftLon": 126.99109999999999,
+            "rightLon": 127.0111,
+            "topLat": 37.5652,
+            "bottomLat": 37.5452
+          }
+        },
+        {
+          "dong_name": "저동1가",
+          "cortarNo": "1114013100",
+          "bounds": {
+            "leftLon": 126.977841,
+            "rightLon": 126.99784100000001,
+            "topLat": 37.57423,
+            "bottomLat": 37.554230000000004
+          }
+        },
+        {
+          "dong_name": "저동2가",
+          "cortarNo": "1114016100",
+          "bounds": {
+            "leftLon": 126.97971299999999,
+            "rightLon": 126.999713,
+            "topLat": 37.5742,
+            "bottomLat": 37.5542
+          }
+        },
+        {
+          "dong_name": "정동",
+          "cortarNo": "1114016700",
+          "bounds": {
+            "leftLon": 126.962925,
+            "rightLon": 126.98292500000001,
+            "topLat": 37.5764,
+            "bottomLat": 37.556400000000004
+          }
+        },
+        {
+          "dong_name": "주교동",
+          "cortarNo": "1114015200",
+          "bounds": {
+            "leftLon": 126.98888799999999,
+            "rightLon": 127.008888,
+            "topLat": 37.578255,
+            "bottomLat": 37.558255
+          }
+        },
+        {
+          "dong_name": "주자동",
+          "cortarNo": "1114014100",
+          "bounds": {
+            "leftLon": 126.97934599999999,
+            "rightLon": 126.999346,
+            "topLat": 37.570631,
+            "bottomLat": 37.550631
+          }
+        },
+        {
+          "dong_name": "중림동",
+          "cortarNo": "1114017100",
+          "bounds": {
+            "leftLon": 126.954498,
+            "rightLon": 126.97449800000001,
+            "topLat": 37.564803,
+            "bottomLat": 37.544803
+          }
+        },
+        {
+          "dong_name": "초동",
+          "cortarNo": "1114015900",
+          "bounds": {
+            "leftLon": 126.98232499999999,
+            "rightLon": 127.002325,
+            "topLat": 37.57465,
+            "bottomLat": 37.55465
+          }
+        },
+        {
+          "dong_name": "충무로1가",
+          "cortarNo": "1114012400",
+          "bounds": {
+            "leftLon": 126.97228799999999,
+            "rightLon": 126.992288,
+            "topLat": 37.570924999999995,
+            "bottomLat": 37.550925
+          }
+        },
+        {
+          "dong_name": "충무로2가",
+          "cortarNo": "1114012500",
+          "bounds": {
+            "leftLon": 126.97630799999999,
+            "rightLon": 126.996308,
+            "topLat": 37.571461,
+            "bottomLat": 37.551461
+          }
+        },
+        {
+          "dong_name": "충무로3가",
+          "cortarNo": "1114015800",
+          "bounds": {
+            "leftLon": 126.981911,
+            "rightLon": 127.001911,
+            "topLat": 37.572227999999996,
+            "bottomLat": 37.552228
+          }
+        },
+        {
+          "dong_name": "충무로4가",
+          "cortarNo": "1114013200",
+          "bounds": {
+            "leftLon": 126.98559999999999,
+            "rightLon": 127.0056,
+            "topLat": 37.572199999999995,
+            "bottomLat": 37.5522
+          }
+        },
+        {
+          "dong_name": "충무로5가",
+          "cortarNo": "1114013300",
+          "bounds": {
+            "leftLon": 126.98954099999999,
+            "rightLon": 127.009541,
+            "topLat": 37.572561,
+            "bottomLat": 37.552561000000004
+          }
+        },
+        {
+          "dong_name": "충정로1가",
+          "cortarNo": "1114017000",
+          "bounds": {
+            "leftLon": 126.958041,
+            "rightLon": 126.978041,
+            "topLat": 37.576840999999995,
+            "bottomLat": 37.556841
+          }
+        },
+        {
+          "dong_name": "태평로1가",
+          "cortarNo": "1114010300",
+          "bounds": {
+            "leftLon": 126.96733599999999,
+            "rightLon": 126.987336,
+            "topLat": 37.577545,
+            "bottomLat": 37.557545000000005
+          }
+        },
+        {
+          "dong_name": "태평로2가",
+          "cortarNo": "1114011400",
+          "bounds": {
+            "leftLon": 126.96635699999999,
+            "rightLon": 126.986357,
+            "topLat": 37.573215,
+            "bottomLat": 37.553215
+          }
+        },
+        {
+          "dong_name": "필동1가",
+          "cortarNo": "1114013700",
+          "bounds": {
+            "leftLon": 126.9824,
+            "rightLon": 127.00240000000001,
+            "topLat": 37.570899999999995,
+            "bottomLat": 37.5509
+          }
+        },
+        {
+          "dong_name": "필동2가",
+          "cortarNo": "1114013800",
+          "bounds": {
+            "leftLon": 126.9844,
+            "rightLon": 127.0044,
+            "topLat": 37.568599999999996,
+            "bottomLat": 37.5486
+          }
+        },
+        {
+          "dong_name": "필동3가",
+          "cortarNo": "1114013900",
+          "bounds": {
+            "leftLon": 126.987326,
+            "rightLon": 127.007326,
+            "topLat": 37.567735,
+            "bottomLat": 37.547735
+          }
+        },
+        {
+          "dong_name": "황학동",
+          "cortarNo": "1114016500",
+          "bounds": {
+            "leftLon": 127.01124999999999,
+            "rightLon": 127.03125,
+            "topLat": 37.577366999999995,
+            "bottomLat": 37.557367
+          }
+        },
+        {
+          "dong_name": "회현동1가",
+          "cortarNo": "1114012100",
+          "bounds": {
+            "leftLon": 126.9713,
+            "rightLon": 126.99130000000001,
+            "topLat": 37.5672,
+            "bottomLat": 37.547200000000004
+          }
+        },
+        {
+          "dong_name": "회현동2가",
+          "cortarNo": "1114012200",
+          "bounds": {
+            "leftLon": 126.97271099999999,
+            "rightLon": 126.992711,
+            "topLat": 37.568497,
+            "bottomLat": 37.548497000000005
+          }
+        },
+        {
+          "dong_name": "회현동3가",
+          "cortarNo": "1114012300",
+          "bounds": {
+            "leftLon": 126.97404399999999,
+            "rightLon": 126.994044,
+            "topLat": 37.570039,
+            "bottomLat": 37.550039000000005
+          }
+        },
+        {
+          "dong_name": "흥인동",
+          "cortarNo": "1114016300",
+          "bounds": {
+            "leftLon": 127.006463,
+            "rightLon": 127.026463,
+            "topLat": 37.577675,
+            "bottomLat": 37.557675
+          }
+        }
+      ]
+    },
+    {
+      "district_name": "중랑구",
+      "district_code": "1126000000",
+      "dongs": [
+        {
+          "dong_name": "망우동",
+          "cortarNo": "1126010500",
+          "bounds": {
+            "leftLon": 127.09729999999999,
+            "rightLon": 127.1173,
+            "topLat": 37.610898999999996,
+            "bottomLat": 37.590899
+          }
+        },
+        {
+          "dong_name": "면목동",
+          "cortarNo": "1126010100",
+          "bounds": {
+            "leftLon": 127.0803,
+            "rightLon": 127.1003,
+            "topLat": 37.5918,
+            "bottomLat": 37.5718
+          }
+        },
+        {
+          "dong_name": "묵동",
+          "cortarNo": "1126010400",
+          "bounds": {
+            "leftLon": 127.068325,
+            "rightLon": 127.08832500000001,
+            "topLat": 37.622606999999995,
+            "bottomLat": 37.602607
+          }
+        },
+        {
+          "dong_name": "상봉동",
+          "cortarNo": "1126010200",
+          "bounds": {
+            "leftLon": 127.08087499999999,
+            "rightLon": 127.100875,
+            "topLat": 37.610282,
+            "bottomLat": 37.590282
+          }
+        },
+        {
+          "dong_name": "신내동",
+          "cortarNo": "1126010600",
+          "bounds": {
+            "leftLon": 127.0834,
+            "rightLon": 127.10340000000001,
+            "topLat": 37.6203,
+            "bottomLat": 37.600300000000004
+          }
+        },
+        {
+          "dong_name": "중화동",
+          "cortarNo": "1126010300",
+          "bounds": {
+            "leftLon": 127.0692,
+            "rightLon": 127.0892,
+            "topLat": 37.6104,
+            "bottomLat": 37.5904
           }
         }
       ]
