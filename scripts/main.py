@@ -26,7 +26,7 @@ def main() -> None:
     writer = CSVWriter(args.output)
     writer.write(results)
 
-    print(f"✓ {len(results)}개 데이터를 {args.output}에 저장했습니다.")
+    print(f"{len(results)}개 데이터를 {args.output}에 저장했습니다.")
 
 
 if __name__ == "__main__":
