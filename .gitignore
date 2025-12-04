@@ -4,18 +4,18 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-venv/
-.venv/
-*.egg-info/
-dist/
 build/
+dist/
+*.egg-info/
+.venv/
+venv/
 
-# Project specific
+# Output
 output/
-.pytest_cache/
-.coverage
-htmlcov/
+*.csv
+
+# Environment
+.env
 
 # IDE
 .vscode/
@@ -26,6 +26,14 @@ htmlcov/
 # OS
 .DS_Store
 
-# Scripts output
-screenshots/
-scripts/__pycache__/
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+
+# Ruff
+.ruff_cache/
