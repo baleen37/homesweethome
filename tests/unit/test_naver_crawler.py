@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -64,3 +65,49 @@ def test_parse_handles_empty_list(crawler_config: CrawlerConfig) -> None:
     results = crawler._parse_api_response({"totalCount": 0, "list": []})
 
     assert len(results) == 0
+
+
+def test_fetch_dong_data_calls_api_with_correct_url(crawler_config: CrawlerConfig) -> None:
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock page.evaluate
+    mock_page = Mock()
+    mock_page.evaluate.return_value = {
+        "totalCount": 1,
+        "list": [
+            {
+                "markerId": "123",
+                "complexName": "테스트단지",
+                "latitude": 37.5,
+                "longitude": 127.0,
+                "realEstateTypeName": "아파트",
+                "completionYearMonth": "202001",
+                "totalDongCount": 1,
+                "totalHouseholdCount": 100,
+                "floorAreaRatio": 200,
+                "minArea": "60",
+                "maxArea": "80",
+                "dealCount": 0,
+                "leaseCount": 0,
+                "totalArticleCount": 0,
+            }
+        ],
+    }
+    crawler.page = mock_page
+
+    dong = {
+        "cortarNo": "1168010100",
+        "dong_name": "삼성동",
+        "bounds": {
+            "leftLon": 127.05,
+            "rightLon": 127.07,
+            "topLat": 37.52,
+            "bottomLat": 37.50,
+        },
+    }
+
+    results = crawler._fetch_dong_data(dong)
+
+    assert len(results) == 1
+    assert results[0]["complex_name"] == "테스트단지"
+    mock_page.evaluate.assert_called_once()
