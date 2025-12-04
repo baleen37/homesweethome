@@ -15,19 +15,19 @@ class ConcreteCrawler(BaseCrawler):
         return [{"data": "test"}]
 
 
-def test_base_crawler_has_config():
+def test_base_crawler_has_config() -> None:
     config = CrawlerConfig()
     crawler = ConcreteCrawler(config)
     assert crawler.config == config
 
 
-def test_base_crawler_has_logger():
+def test_base_crawler_has_logger() -> None:
     config = CrawlerConfig()
     crawler = ConcreteCrawler(config)
     assert crawler.logger is not None
 
 
-def test_base_crawler_crawl_calls_methods():
+def test_base_crawler_crawl_calls_methods() -> None:
     config = CrawlerConfig()
     crawler = ConcreteCrawler(config)
 

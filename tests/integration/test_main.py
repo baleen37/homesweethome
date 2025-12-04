@@ -2,7 +2,7 @@ import subprocess
 from pathlib import Path
 
 
-def test_main_script_runs_successfully(tmp_path: Path):
+def test_main_script_runs_successfully(tmp_path: Path) -> None:
     output_file = tmp_path / "test_output.csv"
 
     result = subprocess.run(

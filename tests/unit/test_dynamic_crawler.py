@@ -1,4 +1,3 @@
-from typing import Any
 from unittest.mock import Mock, patch
 
 from crawler.config import CrawlerConfig
@@ -22,9 +21,7 @@ def test_dynamic_crawler_fetch_uses_playwright() -> None:
         html = crawler.fetch("https://example.com")
 
         mock_playwright.chromium.launch.assert_called_once_with(headless=True)
-        mock_page.goto.assert_called_once_with(
-            "https://example.com", timeout=30000
-        )
+        mock_page.goto.assert_called_once_with("https://example.com", timeout=30000)
         mock_page.wait_for_load_state.assert_called_once_with("networkidle")
         assert html == "<html><body>Dynamic Content</body></html>"
 

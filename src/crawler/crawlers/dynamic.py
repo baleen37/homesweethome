@@ -19,7 +19,7 @@ class DynamicCrawler(BaseCrawler):
             page = browser.new_page()
             page.goto(url, timeout=self.config.timeout * 1000)
             page.wait_for_load_state("networkidle")
-            html = page.content()
+            html: str = page.content()
             browser.close()
             return html
 
@@ -35,10 +35,12 @@ class DynamicCrawler(BaseCrawler):
             price_elem = item.select_one(".price")
 
             if title_elem and price_elem:
-                results.append({
-                    "title": title_elem.text.strip(),
-                    "price": price_elem.text.strip(),
-                })
+                results.append(
+                    {
+                        "title": title_elem.text.strip(),
+                        "price": price_elem.text.strip(),
+                    }
+                )
 
         self.logger.info("parsed_items", count=len(results))
         return results

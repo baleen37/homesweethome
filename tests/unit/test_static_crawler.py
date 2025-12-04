@@ -4,7 +4,7 @@ from crawler.config import CrawlerConfig
 from crawler.crawlers.static import StaticCrawler
 
 
-def test_static_crawler_fetch_returns_html():
+def test_static_crawler_fetch_returns_html() -> None:
     config = CrawlerConfig()
     crawler = StaticCrawler(config)
 
@@ -19,7 +19,7 @@ def test_static_crawler_fetch_returns_html():
         assert html == "<html><body>Test</body></html>"
 
 
-def test_static_crawler_parse_extracts_data():
+def test_static_crawler_parse_extracts_data() -> None:
     config = CrawlerConfig()
     crawler = StaticCrawler(config)
 

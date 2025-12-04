@@ -3,7 +3,7 @@ from pathlib import Path
 from crawler.writers.csv_writer import CSVWriter
 
 
-def test_csv_writer_creates_file(tmp_path: Path):
+def test_csv_writer_creates_file(tmp_path: Path) -> None:
     output_file = tmp_path / "test.csv"
     writer = CSVWriter(output_file)
     data = [{"name": "test", "value": 123}]
@@ -13,7 +13,7 @@ def test_csv_writer_creates_file(tmp_path: Path):
     assert output_file.exists()
 
 
-def test_csv_writer_writes_header_and_rows(tmp_path: Path):
+def test_csv_writer_writes_header_and_rows(tmp_path: Path) -> None:
     output_file = tmp_path / "test.csv"
     writer = CSVWriter(output_file)
     data = [{"name": "item1", "price": 100}, {"name": "item2", "price": 200}]
@@ -27,7 +27,7 @@ def test_csv_writer_writes_header_and_rows(tmp_path: Path):
     assert "item1,100" in lines[1]
 
 
-def test_csv_writer_creates_parent_directory(tmp_path: Path):
+def test_csv_writer_creates_parent_directory(tmp_path: Path) -> None:
     output_file = tmp_path / "subdir" / "nested" / "test.csv"
     writer = CSVWriter(output_file)
     data = [{"key": "value"}]
@@ -37,7 +37,7 @@ def test_csv_writer_creates_parent_directory(tmp_path: Path):
     assert output_file.exists()
 
 
-def test_csv_writer_handles_empty_data(tmp_path: Path):
+def test_csv_writer_handles_empty_data(tmp_path: Path) -> None:
     output_file = tmp_path / "test.csv"
     writer = CSVWriter(output_file)
 
@@ -46,7 +46,7 @@ def test_csv_writer_handles_empty_data(tmp_path: Path):
     assert not output_file.exists()
 
 
-def test_csv_writer_append_mode(tmp_path: Path):
+def test_csv_writer_append_mode(tmp_path: Path) -> None:
     output_file = tmp_path / "test.csv"
     writer = CSVWriter(output_file)
     data1 = [{"name": "item1", "value": 1}]
