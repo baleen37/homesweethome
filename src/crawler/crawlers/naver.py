@@ -2,26 +2,21 @@ import json
 from pathlib import Path
 from typing import Any
 
-from crawler.crawlers.base import BaseCrawler
+import structlog
+
+from crawler.config import CrawlerConfig
 from crawler.utils.checkpoint import CheckpointManager
 
 
-class NaverRealEstateCrawler(BaseCrawler):
-    def __init__(self, config: Any) -> None:
-        super().__init__(config)
+class NaverRealEstateCrawler:
+    def __init__(self, config: CrawlerConfig) -> None:
+        self.config = config
+        self.logger = structlog.get_logger()
         self.checkpoint_manager = CheckpointManager("output/checkpoint.json")
         self.districts_data = self._load_districts_data()
 
     def get_url(self) -> str:
         return "https://new.land.naver.com/complexes"
-
-    def fetch(self, url: str) -> str:
-        # 이 메서드는 사용하지 않지만 추상 메서드이므로 구현 필요
-        return ""
-
-    def parse(self, html: str) -> list[dict[str, Any]]:
-        # 이 메서드는 사용하지 않지만 추상 메서드이므로 구현 필요
-        return []
 
     def _load_districts_data(self) -> dict[str, Any]:
         data_path = Path(__file__).parent.parent / "data" / "seoul_districts.json"
