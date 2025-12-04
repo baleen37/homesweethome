@@ -19,10 +19,10 @@ uv run pre-commit install
 
 ```bash
 # 기본 사용
-python scripts/main.py
+uv run python scripts/main.py
 
 # 출력 파일 지정
-python scripts/main.py --output results/data.csv
+uv run python scripts/main.py --output results/data.csv
 ```
 
 ## 새 크롤러 추가
