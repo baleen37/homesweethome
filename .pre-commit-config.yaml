@@ -10,5 +10,5 @@ repos:
     rev: v1.10.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-requests, types-beautifulsoup4, python-dotenv, structlog, playwright, pytest]
+        additional_dependencies: [types-requests, types-beautifulsoup4, types-setuptools, python-dotenv, structlog, playwright, pytest]
         args: [--config-file=pyproject.toml]
