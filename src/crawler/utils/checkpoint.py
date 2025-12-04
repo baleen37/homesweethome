@@ -34,6 +34,11 @@ class CheckpointManager:
     def should_skip_dong(self, cortar_no: str) -> bool:
         return cortar_no in self.checkpoint.get("completed_dongs", [])
 
+    def add_completed_dong(self, cortar_no: str) -> None:
+        if cortar_no not in self.checkpoint.get("completed_dongs", []):
+            self.checkpoint.setdefault("completed_dongs", []).append(cortar_no)
+            self.save(self.checkpoint)
+
     def add_failed_dong(self, dong: dict[str, Any], error: str) -> None:
         self.checkpoint.setdefault("failed_dongs", []).append(
             {
@@ -43,3 +48,4 @@ class CheckpointManager:
                 "timestamp": datetime.now().isoformat(),
             }
         )
+        self.save(self.checkpoint)

@@ -80,3 +80,36 @@ def test_add_failed_dong_records_failure(temp_checkpoint_file: Path) -> None:
     assert len(manager.checkpoint["failed_dongs"]) == 1
     assert manager.checkpoint["failed_dongs"][0]["cortarNo"] == "1168010300"
     assert manager.checkpoint["failed_dongs"][0]["error"] == "API timeout"
+
+
+def test_add_completed_dong_adds_and_saves(temp_checkpoint_file: Path) -> None:
+    manager = CheckpointManager(str(temp_checkpoint_file))
+    manager.checkpoint = {
+        "completed_dongs": ["1168010100"],
+        "failed_dongs": [],
+    }
+
+    manager.add_completed_dong("1168010200")
+
+    assert len(manager.checkpoint["completed_dongs"]) == 2
+    assert "1168010200" in manager.checkpoint["completed_dongs"]
+
+    # 파일에 저장되었는지 확인
+    assert temp_checkpoint_file.exists()
+    with open(temp_checkpoint_file) as f:
+        saved = json.load(f)
+    assert "1168010200" in saved["completed_dongs"]
+
+
+def test_add_completed_dong_skips_duplicate(temp_checkpoint_file: Path) -> None:
+    manager = CheckpointManager(str(temp_checkpoint_file))
+    manager.checkpoint = {
+        "completed_dongs": ["1168010100"],
+        "failed_dongs": [],
+    }
+
+    manager.add_completed_dong("1168010100")
+
+    # 중복 추가되지 않음
+    assert len(manager.checkpoint["completed_dongs"]) == 1
+    assert manager.checkpoint["completed_dongs"] == ["1168010100"]
