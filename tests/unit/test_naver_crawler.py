@@ -188,3 +188,47 @@ def test_fetch_with_retry_records_failure_after_max_retries(
     assert len(results) == 0
     assert mock_page.evaluate.call_count == 3
     assert len(crawler.checkpoint_manager.checkpoint["failed_dongs"]) == 1
+
+
+def test_crawl_iterates_through_all_dongs(crawler_config: CrawlerConfig) -> None:
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock Playwright context
+    mock_browser = Mock()
+    mock_page = Mock()
+    mock_page.evaluate.return_value = {
+        "totalCount": 1,
+        "list": [
+            {
+                "markerId": "123",
+                "complexName": "단지1",
+                "latitude": 37.5,
+                "longitude": 127.0,
+                "realEstateTypeName": "아파트",
+                "completionYearMonth": "202001",
+                "totalDongCount": 1,
+                "totalHouseholdCount": 100,
+                "floorAreaRatio": 200,
+                "minArea": "60",
+                "maxArea": "80",
+                "dealCount": 0,
+                "leaseCount": 0,
+                "totalArticleCount": 0,
+            }
+        ],
+    }
+
+    with patch("crawler.crawlers.naver.sync_playwright") as mock_playwright:
+        mock_playwright.return_value.__enter__.return_value.chromium.launch.return_value = (
+            mock_browser
+        )
+        mock_browser.new_page.return_value = mock_page
+        mock_page.goto.return_value = None
+        mock_page.wait_for_load_state.return_value = None
+
+        with patch("time.sleep"):  # 테스트 속도 향상
+            results = crawler.crawl()
+
+    # 실제 seoul_districts.json에는 467개 동이 있으므로 467개 단지 크롤링 예상
+    assert len(results) == 467
+    assert mock_page.evaluate.call_count == 467

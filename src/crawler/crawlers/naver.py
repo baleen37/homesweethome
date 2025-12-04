@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
+from playwright.sync_api import sync_playwright
 
 from crawler.config import CrawlerConfig
 from crawler.utils.checkpoint import CheckpointManager
@@ -114,3 +115,64 @@ class NaverRealEstateCrawler:
                 self.checkpoint_manager.add_failed_dong(dong, str(e))
                 return []
         return []
+
+    def crawl(self) -> list[dict[str, Any]]:
+        """서울시 전체 구/동을 순회하며 크롤링"""
+        self.logger.info("crawling_start")
+
+        # 체크포인트 로드
+        checkpoint = self.checkpoint_manager.load()
+        if checkpoint:
+            self.logger.info("checkpoint_loaded", checkpoint=checkpoint["last_completed"])
+
+        all_results: list[dict[str, Any]] = []
+        url = self.get_url()
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=self.config.headless)
+            self.page = browser.new_page()
+            self.page.goto(url, timeout=self.config.timeout * 1000)
+            self.page.wait_for_load_state("networkidle")
+
+            self.logger.info("browser_ready")
+
+            total_dongs = sum(
+                len(district["dongs"]) for district in self.districts_data["districts"]
+            )
+            completed_count = 0
+
+            for district in self.districts_data["districts"]:
+                for dong in district["dongs"]:
+                    # 체크포인트에서 완료된 동 건너뛰기
+                    if self.checkpoint_manager.should_skip_dong(dong["cortarNo"]):
+                        self.logger.info("skipping_completed_dong", dong=dong["dong_name"])
+                        completed_count += 1
+                        continue
+
+                    self.logger.info(
+                        "crawling_dong",
+                        district=district["district_name"],
+                        dong=dong["dong_name"],
+                        progress=f"{completed_count}/{total_dongs}",
+                    )
+
+                    results = self._fetch_with_retry(dong)
+                    all_results.extend(results)
+
+                    # 체크포인트 업데이트
+                    self.checkpoint_manager.checkpoint["last_completed"] = {
+                        "district": district["district_name"],
+                        "dong": dong["dong_name"],
+                    }
+                    self.checkpoint_manager.checkpoint.setdefault("completed_dongs", []).append(
+                        dong["cortarNo"]
+                    )
+                    self.checkpoint_manager.checkpoint["total_complexes_crawled"] = len(all_results)
+                    self.checkpoint_manager.save(self.checkpoint_manager.checkpoint)
+
+                    completed_count += 1
+
+            browser.close()
+
+        self.logger.info("crawling_complete", total_complexes=len(all_results))
+        return all_results
