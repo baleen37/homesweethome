@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 import structlog
 
@@ -16,7 +17,7 @@ class BaseCrawler(ABC):
         pass
 
     @abstractmethod
-    def parse(self, html: str) -> list[dict]:
+    def parse(self, html: str) -> list[dict[str, Any]]:
         """HTML 파싱 - 사이트별 구현"""
         pass
 
@@ -25,7 +26,7 @@ class BaseCrawler(ABC):
         """크롤링할 URL 반환"""
         pass
 
-    def crawl(self) -> list[dict]:
+    def crawl(self) -> list[dict[str, Any]]:
         """크롤링 + 파싱"""
         url = self.get_url()
         html = self.fetch(url)
