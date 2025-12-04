@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -111,3 +111,80 @@ def test_fetch_dong_data_calls_api_with_correct_url(crawler_config: CrawlerConfi
     assert len(results) == 1
     assert results[0]["complex_name"] == "테스트단지"
     mock_page.evaluate.assert_called_once()
+
+
+def test_fetch_with_retry_retries_on_timeout(crawler_config: CrawlerConfig) -> None:
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    mock_page = Mock()
+    mock_page.evaluate.side_effect = [
+        TimeoutError("Timeout 1"),
+        TimeoutError("Timeout 2"),
+        {
+            "totalCount": 1,
+            "list": [
+                {
+                    "markerId": "123",
+                    "complexName": "성공",
+                    "latitude": 37.5,
+                    "longitude": 127.0,
+                    "realEstateTypeName": "아파트",
+                    "completionYearMonth": "202001",
+                    "totalDongCount": 1,
+                    "totalHouseholdCount": 100,
+                    "floorAreaRatio": 200,
+                    "minArea": "60",
+                    "maxArea": "80",
+                    "dealCount": 0,
+                    "leaseCount": 0,
+                    "totalArticleCount": 0,
+                }
+            ],
+        },
+    ]
+    crawler.page = mock_page
+
+    dong = {
+        "cortarNo": "1168010100",
+        "dong_name": "삼성동",
+        "bounds": {
+            "leftLon": 127.05,
+            "rightLon": 127.07,
+            "topLat": 37.52,
+            "bottomLat": 37.50,
+        },
+    }
+
+    with patch("time.sleep"):  # 테스트 속도를 위해 sleep mock
+        results = crawler._fetch_with_retry(dong)
+
+    assert len(results) == 1
+    assert mock_page.evaluate.call_count == 3
+
+
+def test_fetch_with_retry_records_failure_after_max_retries(
+    crawler_config: CrawlerConfig,
+) -> None:
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    mock_page = Mock()
+    mock_page.evaluate.side_effect = TimeoutError("Always timeout")
+    crawler.page = mock_page
+
+    dong = {
+        "cortarNo": "1168010100",
+        "dong_name": "삼성동",
+        "bounds": {
+            "leftLon": 127.05,
+            "rightLon": 127.07,
+            "topLat": 37.52,
+            "bottomLat": 37.50,
+        },
+    }
+
+    with patch("time.sleep"):
+        results = crawler._fetch_with_retry(dong, max_retries=3)
+
+    assert len(results) == 0
+    assert mock_page.evaluate.call_count == 3
+    assert len(crawler.checkpoint_manager.checkpoint["failed_dongs"]) == 1

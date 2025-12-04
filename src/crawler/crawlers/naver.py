@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -86,3 +87,30 @@ class NaverRealEstateCrawler:
 
         self.logger.info("parsed_complexes", count=len(results))
         return results
+
+    def _fetch_with_retry(self, dong: dict[str, Any], max_retries: int = 3) -> list[dict[str, Any]]:
+        for attempt in range(max_retries):
+            try:
+                data = self._fetch_dong_data(dong)
+                time.sleep(0.5)  # Rate limiting
+                return data
+            except TimeoutError:
+                self.logger.warning(
+                    "fetch_timeout",
+                    dong=dong.get("dong_name", ""),
+                    attempt=attempt + 1,
+                    max_retries=max_retries,
+                )
+                if attempt == max_retries - 1:
+                    self.checkpoint_manager.add_failed_dong(dong, "Timeout after retries")
+                    return []
+                time.sleep(2**attempt)  # 지수 백오프
+            except Exception as e:
+                self.logger.error(
+                    "fetch_error",
+                    dong=dong.get("dong_name", ""),
+                    error=str(e),
+                )
+                self.checkpoint_manager.add_failed_dong(dong, str(e))
+                return []
+        return []
