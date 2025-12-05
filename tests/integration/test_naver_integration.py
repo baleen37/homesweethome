@@ -298,16 +298,16 @@ def test_fetch_complex_detail(tmp_path: Path) -> None:
 
 
 @pytest.mark.integration
-def test_fetch_complex_listings(tmp_path: Path) -> None:
+def test_fetch_heliocity_listings(tmp_path: Path) -> None:
     """
-    fetch_complex_listings() 메서드 통합 테스트
+    헬리오시티 매물 목록 테스트 (기존 테스트 유지)
 
     이 테스트는:
     - 실제 브라우저를 실행합니다 (headless=True)
     - 헬리오시티의 매물 목록을 가져옵니다
     - 매매(A1), 전세(B1), 월세(B2) 모두 테스트합니다
 
-    실행: pytest tests/integration/test_naver_integration.py::test_fetch_complex_listings -v -s
+    실행: pytest tests/integration/test_naver_integration.py::test_fetch_heliocity_listings -v -s
     """
     # 헬리오시티 complex ID (실제 존재하는 단지)
     HELIO_CITY_ID = "112581"  # 헬리오시티 3단지
@@ -432,3 +432,162 @@ def test_fetch_complex_listings(tmp_path: Path) -> None:
         print("\n⚠️ 저장할 매물이 없습니다")
 
     print(f"\n✅ fetch_complex_listings() 테스트 완료!")
+
+
+@pytest.mark.integration
+def test_fetch_complex_listings(tmp_path: Path) -> None:
+    """
+    fetch_complex_listings() 메서드 통합 테스트
+
+    이 테스트는:
+    - 실제 브라우저를 실행합니다 (headless=True)
+    - 금천구에서 매물이 있는 단지를 찾아 테스트합니다
+    - fetch_complex_listings() 메서드의 응답을 검증합니다
+
+    실행: pytest tests/integration/test_naver_integration.py::test_fetch_complex_listings -v -s
+    """
+    # 체크포인트 초기화
+    checkpoint_path = Path("output/checkpoint.json")
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
+
+    # CrawlerConfig 설정 (headless=True)
+    config = CrawlerConfig(timeout=30, headless=True, output_dir=str(tmp_path))
+
+    # 크롤러 초기화
+    crawler = NaverRealEstateCrawler(config)
+
+    print("\n=== fetch_complex_listings() 테스트 시작 ===")
+
+    # 금천구만 선택하고 첫 번째 동만 사용
+    original_data = crawler.districts_data
+    test_district = None
+    for district in original_data["districts"]:
+        if district["district_name"] == "금천구":
+            test_district = district
+            break
+
+    assert test_district is not None, "금천구를 찾을 수 없습니다"
+
+    # 첫 번째 동만 설정
+    crawler.districts_data = {
+        "districts": [{
+            "district_name": test_district["district_name"],
+            "district_code": test_district["district_code"],
+            "dongs": [test_district["dongs"][0]]  # 첫 번째 동만
+        }]
+    }
+
+    print(f"\n테스트 동: {test_district['dongs'][0]['dong_name']}")
+
+    # 1. 크롤러 실행하여 단지 목록 가져오기
+    complexes_with_listings = None
+    complex_id_to_test = None
+    complex_name_to_test = None
+
+    try:
+        print("\n크롤링 실행 중...")
+        complexes = crawler.crawl()
+        assert len(complexes) > 0, "크롤링된 단지가 없습니다"
+        print(f"크롤링된 단지 수: {len(complexes)}")
+
+        # 매물이 있는 단지 찾기 (total_article_count > 0)
+        for complex in complexes:
+            if complex.get("total_article_count", 0) > 0:
+                complexes_with_listings = complex
+                complex_id_to_test = str(complex["complex_id"])
+                complex_name_to_test = complex["complex_name"]
+                break
+
+        if complexes_with_listings is None:
+            # 모든 단지에 매물이 없는 경우
+            print("\n⚠️ 모든 단지에 매물이 없습니다. 첫 번째 단지로 테스트합니다.")
+            complexes_with_listings = complexes[0]
+            complex_id_to_test = str(complexes[0]["complex_id"])
+            complex_name_to_test = complexes[0]["complex_name"]
+
+        # 여러 단지 정보 출력 (디버깅용)
+        print(f"\n=== 크롤링된 단지 목록 (처음 5개) ===")
+        for i, complex in enumerate(complexes[:5]):
+            print(f"{i+1}. {complex['complex_name']} (ID: {complex['complex_id']}) - "
+                  f"매물 {complex.get('total_article_count', 0)}개")
+
+        print(f"\n테스트 대상 단지: {complex_name_to_test}")
+        print(f"Complex ID: {complex_id_to_test}")
+        print(f"총 매물 수: {complexes_with_listings.get('total_article_count', 0)}")
+
+    except Exception as e:
+        print(f"\n❌ 단지 목록 크롤링 실패: {str(e)}")
+        if "rate" in str(e).lower() or "limit" in str(e).lower():
+            print("⚠️ 레이트 리밋에 걸렸을 수 있습니다. 잠시 후 다시 시도하세요.")
+        raise
+
+    # 2. 새 크롤러 인스턴스로 fetch_complex_listings() 테스트
+    print("\n새 크롤러 인스턴스 생성 중...")
+    crawler2 = NaverRealEstateCrawler(config)
+
+    try:
+        # fetch_complex_listings() 호출
+        print(f"\nfetch_complex_listings() 호출 중... (complex_id: {complex_id_to_test})")
+        listings = crawler2.fetch_complex_listings(complex_id_to_test)
+
+        # 응답 검증
+        assert listings is not None, "매물 목록을 가져오지 못했습니다"
+        assert isinstance(listings, list), "매물 목록이 리스트 형태가 아닙니다"
+
+        print(f"\n응답 받은 매물 수: {len(listings)}")
+
+        if len(listings) == 0:
+            print("\n⚠️ 이 단지에는 현재 매물이 없습니다. (정상적인 경우일 수 있음)")
+            print("✅ 빈 응답 처리 확인 - 테스트 통과")
+        else:
+            # 첫 번째 매물의 필드 검증
+            first_listing = listings[0]
+            print("\n=== 첫 번째 매물 정보 ===")
+            print(f"article_id: {first_listing.get('article_id', 'N/A')}")
+            print(f"floor: {first_listing.get('floor', 'N/A')}")
+            print(f"area: {first_listing.get('area', 'N/A')}")
+            print(f"price: {first_listing.get('price', 'N/A')}")
+            print(f"trade_type: {first_listing.get('trade_type', 'N/A')}")
+
+            # 필수 필드 검증
+            required_fields = ["article_id", "floor", "area", "price"]
+            missing_fields = []
+
+            for field in required_fields:
+                if field not in first_listing:
+                    missing_fields.append(field)
+                elif not first_listing[field]:
+                    missing_fields.append(f"{field} (empty)")
+
+            assert len(missing_fields) == 0, f"필수 필드 누락: {', '.join(missing_fields)}"
+
+            # 샘플 매물 데이터 출력 (디버깅용)
+            print("\n=== 샘플 매물 데이터 (상세) ===")
+            for key, value in first_listing.items():
+                print(f"{key}: {value}")
+
+            print(f"\n✅ fetch_complex_listings() 테스트 성공!")
+            print(f"   - {len(listings)}개 매물 확인")
+            print(f"   - 필수 필드 모두 존재")
+
+    except Exception as e:
+        print(f"\n❌ 테스트 실패: {str(e)}")
+        if "rate" in str(e).lower() or "limit" in str(e).lower():
+            print("⚠️ 레이트 리밋에 걸렸을 수 있습니다. 잠시 후 다시 시도하세요.")
+        elif "result" in str(e) and len(e.args) > 0 and isinstance(e.args[0], dict):
+            # API 응답 에러 분석
+            error_detail = e.args[0]
+            print(f"API 응답: {error_detail}")
+        raise
+
+    finally:
+        # 브라우저 정리
+        try:
+            if hasattr(crawler2, 'page'):
+                crawler2.page.close()
+            if hasattr(crawler2, 'browser'):
+                crawler2.browser.close()
+            print("\n브라우저 리소스 정리 완료")
+        except Exception as cleanup_error:
+            print(f"\n브라우저 정리 중 오류 (무시 가능): {cleanup_error}")
