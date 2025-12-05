@@ -686,3 +686,207 @@ def test_fetch_complex_listings(tmp_path: Path) -> None:
             print("\n브라우저 리소스 정리 완료")
         except Exception as cleanup_error:
             print(f"\n브라우저 정리 중 오류 (무시 가능): {cleanup_error}")
+
+
+@pytest.mark.integration
+def test_crawl_full_pipeline(tmp_path: Path) -> None:
+    """
+    전체 파이프라인 통합 테스트 (Level 4)
+
+    이 테스트는:
+    - 단지 목록 크롤링
+    - 단지 상세 정보 조회
+    - 매물 목록 조회
+    - 데이터 집계 및 CSV 저장
+    - 전체 풀 파이프라인 검증
+
+    실행: pytest tests/integration/test_naver_integration.py::test_crawl_full_pipeline -v -s
+    """
+    import time
+
+    # 체크포인트 초기화
+    checkpoint_path = Path("output/checkpoint.json")
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
+
+    # CrawlerConfig 생성 (headless=True)
+    config = CrawlerConfig(timeout=30, headless=True, output_dir=str(tmp_path))
+
+    # NaverRealEstateCrawler 초기화
+    crawler = NaverRealEstateCrawler(config)
+
+    # 금천구만 선택하고 첫 번째 동만 사용
+    original_data = crawler.districts_data
+    test_district = None
+    for district in original_data["districts"]:
+        if district["district_name"] == "금천구":
+            test_district = district
+            break
+
+    assert test_district is not None, "금천구를 찾을 수 없습니다"
+    assert len(test_district["dongs"]) >= 1, "금천구에 동이 없습니다"
+
+    # districts_data를 금천구의 첫 번째 동만으로 수정
+    crawler.districts_data = {
+        "districts": [{
+            "district_name": test_district["district_name"],
+            "district_code": test_district["district_code"],
+            "dongs": [test_district["dongs"][0]]  # 첫 번째 동만
+        }]
+    }
+
+    print(f"\n=== 전체 파이프라인 테스트 시작 ===")
+    print(f"테스트 대상: {test_district['district_name']} {test_district['dongs'][0]['dong_name']}")
+
+    # 1. 기본 크롤링 실행
+    print("\n1. 단지 목록 크롤링 중...")
+    try:
+        complexes = crawler.crawl()
+        assert len(complexes) > 0, "크롤링된 단지가 없습니다"
+        print(f"   - 크롤링된 단지 수: {len(complexes)}")
+    except Exception as e:
+        print(f"   - ❌ 단지 목록 크롤링 실패: {str(e)}")
+        raise
+
+    # 테스트할 단지 수를 3개로 제한
+    test_complexes = complexes[:3]
+    print(f"   - 테스트할 단지 수: {len(test_complexes)} (처음 3개만)")
+
+    # 2. 각 단지에 대해 상세 정보와 매물 정보 조회
+    enriched_complexes = []
+    success_count = 0
+
+    for i, complex in enumerate(test_complexes, 1):
+        complex_id = str(complex["complex_id"])
+        complex_name = complex["complex_name"]
+
+        print(f"\n2.{i} 단지 처리 중: {complex_name} (ID: {complex_id})")
+
+        # 상세 정보 조회
+        try:
+            print(f"   - 상세 정보 조회 중...")
+            detail = crawler.fetch_complex_detail(complex_id)
+
+            if detail and "error" not in detail:
+                # 상세 정보로 단지 데이터 업데이트
+                complex.update(detail)
+                print(f"   - ✅ 상세 정보 조회 성공")
+            else:
+                print(f"   - ⚠️ 상세 정보 없음 또는 에러: {detail.get('error', 'N/A') if detail else 'No response'}")
+
+        except Exception as e:
+            print(f"   - ❌ 상세 정보 조회 실패: {str(e)}")
+            # 계속 진행
+
+        # 잠시 대기 (레이트 리밋 방지)
+        time.sleep(0.5)
+
+        # 매물 정보 조회
+        listings = []
+        try:
+            print(f"   - 매물 목록 조회 중...")
+            listings = crawler.fetch_complex_listings(complex_id, "A1")  # 매매만 조회
+
+            if listings:
+                # 매물 데이터 집계
+                prices = []
+                for listing in listings:
+                    price_str = listing.get("price", "0")
+                    # 가격에서 쉼표와 "만" 등 제거하고 숫자로 변환
+                    try:
+                        price_num = int(price_str.replace(",", "").replace("만", ""))
+                        prices.append(price_num)
+                    except:
+                        pass
+
+                if prices:
+                    complex["avg_listing_price"] = sum(prices) / len(prices)
+                    complex["min_listing_price"] = min(prices)
+                    complex["max_listing_price"] = max(prices)
+
+                complex["active_listings_count"] = len(listings)
+                print(f"   - ✅ 매물 {len(listings)}개 조회 성공")
+                if prices:
+                    print(f"   - 가격 범위: {min(prices):,} ~ {max(prices):,} (평균: {int(sum(prices)/len(prices)):,})")
+            else:
+                complex["active_listings_count"] = 0
+                print(f"   - ⚠️ 매물 없음")
+
+        except Exception as e:
+            print(f"   - ❌ 매물 목록 조회 실패: {str(e)}")
+            complex["active_listings_count"] = 0
+            # 계속 진행
+
+        # 처리된 단지 추가
+        enriched_complexes.append(complex)
+        success_count += 1
+
+        # 잠시 대기 (레이트 리밋 방지)
+        time.sleep(0.5)
+
+    print(f"\n=== 처리 결과 ===")
+    print(f"성공 처리한 단지: {success_count}/{len(test_complexes)}")
+
+    # 3. CSV 저장
+    print("\n3. CSV 저장 중...")
+    output_path = tmp_path / "test_full_pipeline.csv"
+    writer = CSVWriter(output_path)
+    writer.write(enriched_complexes)
+
+    assert output_path.exists(), "CSV 파일이 생성되지 않았습니다"
+    assert output_path.stat().st_size > 0, "CSV 파일이 비어있습니다"
+
+    # 4. CSV 내용 검증
+    with open(output_path, encoding="utf-8") as f:
+        lines = f.readlines()
+        assert len(lines) > 1, "CSV에 데이터가 없습니다 (헤더만 존재)"
+
+        header = lines[0].strip()
+        print(f"\n   - CSV 라인 수: {len(lines)} (헤더 포함)")
+
+        # 기본 필드 확인
+        basic_fields = ["complex_id", "complex_name", "real_estate_type"]
+        for field in basic_fields:
+            assert field in header, f"CSV 헤더에 필수 필드 '{field}'가 없습니다"
+
+        # 확장 필드 확인 (상세 정보)
+        enriched_fields = ["road_address", "jibun_address", "complex_name", "building_type",
+                          "total_household_count", "completion_date", "maintenance_cost"]
+        found_enriched_fields = [field for field in enriched_fields if field in header]
+        print(f"   - 발견된 확장 필드: {len(found_enriched_fields)}개")
+
+        # 매물 집계 필드 확인
+        listing_fields = ["avg_listing_price", "min_listing_price", "max_listing_price", "active_listings_count"]
+        found_listing_fields = [field for field in listing_fields if field in header]
+        print(f"   - 발견된 매물 필드: {len(found_listing_fields)}개")
+
+        # 첫 번째 데이터 행 샘플 출력
+        if len(lines) > 1:
+            first_row = lines[1].strip()
+            print(f"\n   - 첫 번째 데이터 행 샘플:")
+            print(f"     {first_row[:100]}...")
+
+    # 5. 데이터 검증
+    print("\n5. 데이터 검증 중...")
+
+    # 모든 단지에 기본 필드가 있는지 확인
+    for complex in enriched_complexes:
+        assert "complex_id" in complex, f"단지에 complex_id가 없습니다"
+        assert "complex_name" in complex, f"단지에 complex_name이 없습니다"
+
+        # 매물 카운트 필드가 있는지 확인
+        assert "active_listings_count" in complex, f"단지에 active_listings_count가 없습니다"
+
+    # 집계된 데이터 확인
+    complexes_with_listings = [c for c in enriched_complexes if c.get("active_listings_count", 0) > 0]
+    if complexes_with_listings:
+        print(f"\n   - 매물이 있는 단지: {len(complexes_with_listings)}개")
+        for complex in complexes_with_listings[:3]:  # 처음 3개만 출력
+            print(f"     - {complex['complex_name']}: {complex['active_listings_count']}개 매물")
+
+    print(f"\n✅ test_crawl_full_pipeline 테스트 통과!")
+    print(f"   - 크롤링된 단지: {len(enriched_complexes)}개")
+    print(f"   - 저장된 CSV: {output_path}")
+    print(f"   - 확장 필드: {len(found_enriched_fields)}개")
+    print(f"   - 매물 필드: {len(found_listing_fields)}개")
+    print(f"   - 총 데이터 라인: {len(lines)}개")
