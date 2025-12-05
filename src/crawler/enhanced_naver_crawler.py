@@ -8,6 +8,7 @@ import json
 import time
 from pathlib import Path
 from typing import Any, Optional
+from uuid import uuid4
 
 import structlog
 from playwright.sync_api import sync_playwright
