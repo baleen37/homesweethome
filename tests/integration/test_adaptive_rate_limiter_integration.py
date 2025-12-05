@@ -15,7 +15,8 @@ class TestAdaptiveRateLimiterIntegration:
         limiter = AdaptiveRateLimiter()
 
         with patch('time.sleep') as mock_sleep, \
-             patch('time.time', return_value=0):  # Mock time to be constant
+             patch('time.time', return_value=0), \
+             patch('crawler.rate_limiter.logger.info'):  # Mock structlog to avoid interference
             # Simulate 15 successful API calls
             for _ in range(15):
                 # Each API call starts with waiting
@@ -27,76 +28,89 @@ class TestAdaptiveRateLimiterIntegration:
             # Check sleep calls
             sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
 
+            # We should have exactly 15 sleep calls
+            assert len(sleep_calls) == 15, f"Expected 15 sleep calls, got {len(sleep_calls)}"
+
             # First 10 calls should be 2.5 seconds each
             assert sleep_calls[:10] == [2.5] * 10
 
             # After 10 successes, delay should reduce to 2.25 (10% less)
             assert sleep_calls[10] == 2.25
-            assert sleep_calls[11:] == [2.25] * 5
+            assert sleep_calls[11:] == [2.25] * 4  # Adjusted expectation
 
     def test_api_call_simulation_with_429_errors(self):
         """Test rate limiter behavior with HTTP 429 errors."""
         limiter = AdaptiveRateLimiter()
 
         with patch('time.sleep') as mock_sleep, \
-             patch('time.time', return_value=0):
-            # Start with some successes
-            for _ in range(5):
+             patch('crawler.rate_limiter.logger.info'):  # Mock structlog
+            with patch('time.time', return_value=0):  # Mock time to be constant
+                # Start with some successes
+                for _ in range(5):
+                    limiter.wait()
+                    limiter.on_success()
+
+                # First sleep calls
+                assert mock_sleep.call_count == 5
+                for call in mock_sleep.call_args_list[:5]:
+                    assert call[0][0] == 2.5
+
+                # Now encounter 429 error
                 limiter.wait()
-                limiter.on_success()
+                limiter.on_rate_limit_error()
 
-            # First sleep calls
-            assert mock_sleep.call_count == 5
-            for call in mock_sleep.call_args_list:
-                assert call[0][0] == 2.5
+                # Next wait should be doubled (5 seconds)
+                limiter.wait()
+                # Check the 7th call (index 6) should be 5.0
+                assert mock_sleep.call_args_list[6][0][0] == 5.0
 
-            mock_sleep.reset_mock()
-
-            # Now encounter 429 error
-            limiter.wait()
-            limiter.on_rate_limit_error()
-
-            # Next wait should be doubled (5 seconds)
-            limiter.wait()
-            assert mock_sleep.call_args[0][0] == 5.0
-
-            # Another 429 error
-            limiter.on_rate_limit_error()
-            limiter.wait()
-            assert mock_sleep.call_args_list[1][0][0] == 10.0  # Max delay
+                # Another 429 error
+                limiter.on_rate_limit_error()
+                limiter.wait()
+                # Check the 8th call (index 7) should be 10.0
+                assert mock_sleep.call_args_list[7][0][0] == 10.0  # Max delay
 
     def test_mixed_scenario_with_recovery(self):
         """Test realistic mixed scenario with errors and recovery."""
         limiter = AdaptiveRateLimiter()
 
         with patch('time.sleep') as mock_sleep, \
-             patch('time.time', return_value=0):
-            # Phase 1: Initial successes
-            for _ in range(5):
+             patch('crawler.rate_limiter.logger.info'):  # Mock structlog
+            with patch('time.time', return_value=0):  # Mock time to be constant
+                # Phase 1: Initial successes
+                for _ in range(5):
+                    limiter.wait()
+                    limiter.on_success()
+                initial_calls = mock_sleep.call_count
+
+                # Phase 2: Hit rate limit
                 limiter.wait()
-                limiter.on_success()
-            initial_calls = mock_sleep.call_count
+                limiter.on_rate_limit_error()
 
-            # Phase 2: Hit rate limit
-            limiter.wait()
-            limiter.on_rate_limit_error()
+                # Phase 3: Retry with exponential backoff
+                retry_delay = limiter.get_retry_delay(0)
+                assert retry_delay == 2
+                # Check we have 6 calls total (5 initial + 1 after rate limit)
+                assert mock_sleep.call_count == 6
+                # The 6th call (index 5) should still be 2.5 (before rate limit takes effect)
+                assert mock_sleep.call_args_list[5][0][0] == 2.5
 
-            # Phase 3: Retry with exponential backoff
-            retry_delay = limiter.get_retry_delay(0)
-            assert retry_delay == 2
-            mock_sleep.assert_called_with(2.5 * 2)  # Doubled delay
-
-            mock_sleep.reset_mock()
-
-            # Phase 4: Recover and continue with successes
-            # Need 10 consecutive successes to reduce delay
-            for _ in range(10):
+                # Next wait should be doubled (5 seconds) - 7th call
                 limiter.wait()
-                limiter.on_success()
+                assert mock_sleep.call_args_list[6][0][0] == 5.0
 
-            # After recovery and 10 successes, delay should reduce
-            # from 5.0 to 4.5 (10% reduction)
-            assert mock_sleep.call_args_list[-1][0][0] == 4.5
+                # Phase 4: Recover and continue with successes
+                # Need 10 consecutive successes to reduce delay
+                for _ in range(10):
+                    limiter.wait()
+                    limiter.on_success()
+
+                # After recovery and 10 successes, delay should reduce
+                # from 5.0 to 4.5 (10% reduction)
+                # The 10th success reduced the delay, but the 10th wait()
+                # call used the old delay. One more wait() should use 4.5
+                limiter.wait()
+                assert mock_sleep.call_args_list[-1][0][0] == 4.5
 
     def test_edge_case_max_delay_reached(self):
         """Test behavior when max delay is reached."""
@@ -135,7 +149,8 @@ class TestAdaptiveRateLimiterIntegration:
         limiter = AdaptiveRateLimiter()
 
         with patch('time.sleep'), \
-             patch('time.time', return_value=0):
+             patch('time.time', return_value=0), \
+             patch('crawler.rate_limiter.logger.info'):  # Mock structlog
             # Build up some state
             for _ in range(15):
                 limiter.wait()
@@ -143,7 +158,8 @@ class TestAdaptiveRateLimiterIntegration:
 
             limiter.on_rate_limit_error()
 
-            assert limiter.current_delay == 5.0  # Doubled from initial
+            # After 15 successes, delay reduced to 2.25, then doubled to 4.5
+            assert limiter.current_delay == 4.5  # Doubled from 2.25, not 5.0
             assert limiter._last_wait_time is not None
 
             # Reset
