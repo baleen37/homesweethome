@@ -1,0 +1,56 @@
+{
+  "isSuccess": true,
+  "result": {
+    "list": [
+      {
+        "tradeDate": "2025-11-14",
+        "tradeYear": "2025",
+        "floor": 21,
+        "dealPrice": 1700000000,
+        "deposit": 0,
+        "monthlyRent": 0,
+        "isDelete": false,
+        "tradeCategory": "중개거래",
+        "propertyType": "NORMAL",
+        "isRenew": false
+      },
+      {
+        "tradeDate": "2025-10-20",
+        "tradeYear": "2025",
+        "floor": 15,
+        "dealPrice": 1650000000,
+        "deposit": 0,
+        "monthlyRent": 0,
+        "isDelete": false,
+        "tradeCategory": "중개거래",
+        "propertyType": "NORMAL",
+        "isRenew": false
+      },
+      {
+        "tradeDate": "2025-09-10",
+        "tradeYear": "2025",
+        "floor": 8,
+        "dealPrice": 0,
+        "deposit": 800000000,
+        "monthlyRent": 0,
+        "isDelete": false,
+        "tradeCategory": "중개거래",
+        "propertyType": "NORMAL",
+        "isRenew": false
+      },
+      {
+        "tradeDate": "2025-08-05",
+        "tradeYear": "2025",
+        "floor": 12,
+        "dealPrice": 0,
+        "deposit": 100000000,
+        "monthlyRent": 2000000,
+        "isDelete": false,
+        "tradeCategory": "중개거래",
+        "propertyType": "NORMAL",
+        "isRenew": false
+      }
+    ],
+    "hasNextPage": true
+  }
+}

@@ -486,3 +486,276 @@ def test_parse_complex_listings_extracts_all_fields(crawler_config: CrawlerConfi
     assert listing["is_contract_renewal"] == "N"
     assert listing["short_term_rental_available"] == "N"
     assert listing["special_provision"] == "특약사항 없음"
+
+
+# Tests for fetch_transaction_history method
+
+
+def test_fetch_transaction_history_single_page(crawler_config: CrawlerConfig) -> None:
+    """단일 페이지 거래내역 조회 테스트"""
+    from pathlib import Path
+
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Load test fixture for last page (hasNextPage: false)
+    fixture_path = Path(__file__).parent.parent / "fixtures" / "naver_transaction_response_last_page.json"
+    with open(fixture_path) as f:
+        mock_response = json.load(f)
+
+    # Mock page
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+    mock_page.evaluate.return_value = mock_response
+
+    crawler.page = mock_page
+
+    # Mock rate limiter
+    with patch.object(crawler.rate_limiter, 'wait'):
+        with patch.object(crawler.rate_limiter, 'on_success'):
+            # Call the method
+            transactions = crawler.fetch_transaction_history(
+                complex_id="111515",
+                pyeong_type_number=1,
+                trade_type="A1"
+            )
+
+    # Verify results - should only have 1 transaction from the last page fixture
+    assert len(transactions) == 1
+    assert transactions[0]["tradeDate"] == "2023-12-01"
+    assert transactions[0]["dealPrice"] == 1550000000
+
+    # Verify API call
+    expected_url_contains = [
+        "complexNumber=111515",
+        "pyeongTypeNumber=1",
+        "tradeType=A1",
+        "page=1",
+        "size=20"
+    ]
+    call_args = mock_page.evaluate.call_args[0][1]
+    for expected_part in expected_url_contains:
+        assert expected_part in call_args
+
+
+def test_fetch_transaction_history_pagination(crawler_config: CrawlerConfig) -> None:
+    """페이지네이션 처리 테스트"""
+    from pathlib import Path
+
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Load test fixtures
+    first_page_fixture = Path(__file__).parent.parent / "fixtures" / "naver_transaction_response.json"
+    last_page_fixture = Path(__file__).parent.parent / "fixtures" / "naver_transaction_response_last_page.json"
+
+    with open(first_page_fixture) as f:
+        first_page_response = json.load(f)
+    with open(last_page_fixture) as f:
+        last_page_response = json.load(f)
+
+    # Mock page
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+    # First call returns hasNextPage=true, second call returns hasNextPage=false
+    mock_page.evaluate.side_effect = [first_page_response, last_page_response]
+
+    crawler.page = mock_page
+
+    # Mock rate limiter
+    with patch.object(crawler.rate_limiter, 'wait'):
+        with patch.object(crawler.rate_limiter, 'on_success'):
+            # Call the method
+            transactions = crawler.fetch_transaction_history(
+                complex_id="111515",
+                pyeong_type_number=1,
+                trade_type="A1"
+            )
+
+    # Verify results from both pages
+    assert len(transactions) == 5  # 4 from first page + 1 from last page
+    assert mock_page.evaluate.call_count == 2
+
+    # Verify the correct transactions were retrieved
+    assert transactions[0]["tradeDate"] == "2025-11-14"  # From first page
+    assert transactions[4]["tradeDate"] == "2023-12-01"  # From second page
+
+    # Verify second page call
+    second_call_args = mock_page.evaluate.call_args_list[1][0][1]
+    assert "page=2" in second_call_args
+
+
+def test_fetch_transaction_history_rate_limit_error(crawler_config: CrawlerConfig) -> None:
+    """Rate limit 에러 처리 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock page
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+    # First call throws 429 error, second call succeeds
+    mock_page.evaluate.side_effect = [
+        Exception("HTTP 429: Too Many Requests"),
+        {"isSuccess": True, "result": {"list": [], "hasNextPage": False}}
+    ]
+
+    crawler.page = mock_page
+
+    # Mock rate limiter and sleep
+    with patch.object(crawler.rate_limiter, 'wait') as mock_wait:
+        with patch.object(crawler.rate_limiter, 'on_success') as mock_success:
+            with patch.object(crawler.rate_limiter, 'on_rate_limit_error') as mock_429:
+                with patch('time.sleep') as mock_sleep:
+                    # Call the method
+                    transactions = crawler.fetch_transaction_history(
+                        complex_id="111515",
+                        pyeong_type_number=1,
+                        trade_type="A1"
+                    )
+
+    # Verify rate limiter was called on error
+    mock_429.assert_called_once()
+    mock_sleep.assert_called()  # Should sleep for retry delay
+    assert len(transactions) == 0  # Empty result from successful retry
+
+
+def test_parse_transaction_normalizes_data(crawler_config: CrawlerConfig) -> None:
+    """거래내역 데이터 정규화 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Test data
+    raw_transaction = {
+        "tradeDate": "2025-11-14",
+        "tradeYear": "2025",
+        "floor": 21,
+        "dealPrice": 1700000000,
+        "deposit": 0,
+        "monthlyRent": 0,
+        "isDelete": False,
+        "tradeCategory": "중개거래",
+        "propertyType": "NORMAL",
+        "isRenew": False
+    }
+
+    # Call parse method
+    parsed = crawler._parse_transaction(
+        raw_transaction=raw_transaction,
+        complex_id="111515",
+        complex_name="헬리오시티",
+        pyeong_type_number=1,
+        pyeong_name="84A",
+        trade_type="A1"
+    )
+
+    # Verify normalized data
+    assert parsed["complex_id"] == "111515"
+    assert parsed["complex_name"] == "헬리오시티"
+    assert parsed["pyeong_type_number"] == 1
+    assert parsed["pyeong_name"] == "84A"
+    assert parsed["trade_type"] == "A1"
+    assert parsed["trade_type_name"] == "매매"
+    assert parsed["trade_date"] == "2025-11-14"
+    assert parsed["trade_year"] == "2025"
+    assert parsed["floor"] == 21
+    assert parsed["deal_price"] == 1700000000
+    assert parsed["deposit"] == 0
+    assert parsed["monthly_rent"] == 0
+    assert parsed["trade_category"] == "중개거래"
+    assert parsed["is_delete"] is False
+    assert parsed["is_renew"] is False
+
+
+def test_parse_transaction_jeonse_wolse(crawler_config: CrawlerConfig) -> None:
+    """전세/월세 거래내역 정규화 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Test 전세
+    jeonse_raw = {
+        "tradeDate": "2025-10-20",
+        "tradeYear": "2025",
+        "floor": 15,
+        "dealPrice": 0,
+        "deposit": 800000000,
+        "monthlyRent": 0,
+        "isDelete": False,
+        "tradeCategory": "중개거래",
+        "isRenew": False
+    }
+
+    parsed = crawler._parse_transaction(
+        raw_transaction=jeonse_raw,
+        complex_id="111515",
+        complex_name="헬리오시티",
+        pyeong_type_number=1,
+        pyeong_name="84A",
+        trade_type="B1"
+    )
+
+    assert parsed["trade_type_name"] == "전세"
+    assert parsed["deposit"] == 800000000
+    assert parsed["monthly_rent"] == 0
+
+    # Test 월세
+    wolse_raw = {
+        "tradeDate": "2025-09-10",
+        "tradeYear": "2025",
+        "floor": 12,
+        "dealPrice": 0,
+        "deposit": 100000000,
+        "monthlyRent": 2000000,
+        "isDelete": False,
+        "tradeCategory": "중개거래",
+        "isRenew": False
+    }
+
+    parsed = crawler._parse_transaction(
+        raw_transaction=wolse_raw,
+        complex_id="111515",
+        complex_name="헬리오시티",
+        pyeong_type_number=1,
+        pyeong_name="84A",
+        trade_type="B2"
+    )
+
+    assert parsed["trade_type_name"] == "월세"
+    assert parsed["deposit"] == 100000000
+    assert parsed["monthly_rent"] == 2000000
+
+
+def test_fetch_transaction_history_all_trade_types(crawler_config: CrawlerConfig) -> None:
+    """모든 거래 유형(매매/전세/월세) 조회 테스트"""
+    from pathlib import Path
+
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Load test fixture for last page (hasNextPage: false)
+    fixture_path = Path(__file__).parent.parent / "fixtures" / "naver_transaction_response_last_page.json"
+    with open(fixture_path) as f:
+        mock_response = json.load(f)
+
+    # Mock page
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+    mock_page.evaluate.return_value = mock_response
+
+    crawler.page = mock_page
+
+    # Mock rate limiter
+    with patch.object(crawler.rate_limiter, 'wait'):
+        with patch.object(crawler.rate_limiter, 'on_success'):
+            # Test all trade types
+            for trade_type in ["A1", "B1", "B2"]:
+                transactions = crawler.fetch_transaction_history(
+                    complex_id="111515",
+                    pyeong_type_number=1,
+                    trade_type=trade_type
+                )
+
+                # Should get some transactions
+                assert isinstance(transactions, list)
+                assert len(transactions) == 1  # From the last page fixture
+
+                # Verify correct trade type in URL
+                call_args = mock_page.evaluate.call_args[0][1]
+                assert f"tradeType={trade_type}" in call_args

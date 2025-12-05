@@ -7,6 +7,7 @@ import structlog
 from playwright.sync_api import sync_playwright
 
 from crawler.config import CrawlerConfig
+from crawler.rate_limiter import AdaptiveRateLimiter
 from crawler.utils.checkpoint import CheckpointManager
 
 
@@ -17,6 +18,7 @@ class NaverRealEstateCrawler:
         self.checkpoint_manager = CheckpointManager("output/checkpoint.json")
         self.districts_data = self._load_districts_data()
         self.page: Any = None  # Playwright page object
+        self.rate_limiter = AdaptiveRateLimiter()  # Initialize rate limiter
 
     def get_url(self) -> str:
         return "https://new.land.naver.com/complexes"
@@ -440,6 +442,263 @@ class NaverRealEstateCrawler:
         )
 
         return all_listings
+
+    def fetch_transaction_history(
+        self,
+        complex_id: str,
+        pyeong_type_number: int,
+        trade_type: str,  # "A1", "B1", "B2"
+    ) -> list[dict[str, Any]]:
+        """
+        특정 단지의 특정 평형에 대한 전체 거래내역 조회
+
+        페이지네이션 방식 사용:
+        - page=1부터 시작
+        - hasNextPage=false가 될 때까지 반복
+        - Rate limiter 적용하여 API 호출
+
+        Args:
+            complex_id: 단지 ID
+            pyeong_type_number: 평형 타입 번호
+            trade_type: 거래 유형 ("A1", "B1", "B2")
+
+        Returns:
+            거래내역 리스트 (전체 페이지 합친 결과)
+        """
+        self.logger.info(
+            "fetching_transaction_history",
+            complex_id=complex_id,
+            pyeong_type_number=pyeong_type_number,
+            trade_type=trade_type,
+        )
+
+        # 페이지가 없으면 새로 생성
+        if not self.page:
+            browser = sync_playwright().start()
+            self.page = browser.chromium.launch(headless=self.config.headless).new_page()
+            self.page.goto("https://fin.land.naver.com/complexes")
+            self.page.wait_for_load_state("networkidle")
+            time.sleep(2)
+
+        # 먼저 단지 페이지에 접속하여 세션 확보
+        self.page.goto(f"https://fin.land.naver.com/complexes/{complex_id}")
+        self.page.wait_for_load_state("networkidle")
+        time.sleep(2)
+
+        all_transactions = []
+        page = 1
+        max_pages = 100  # 안전장치
+
+        while page <= max_pages:
+            # Rate limiter 적용
+            self.rate_limiter.wait()
+
+            # API URL 생성
+            api_url = (
+                f"https://fin.land.naver.com/front-api/v1/complex/pyeong/realPrice?"
+                f"complexNumber={complex_id}&"
+                f"pyeongTypeNumber={pyeong_type_number}&"
+                f"tradeType={trade_type}&"
+                f"page={page}&"
+                f"size=20"
+            )
+
+            self.logger.info(
+                "fetching_transaction_page",
+                complex_id=complex_id,
+                pyeong_type_number=pyeong_type_number,
+                trade_type=trade_type,
+                page=page,
+            )
+
+            try:
+                # 브라우저 컨텍스트에서 API 호출
+                response = self.page.evaluate(
+                    """
+                    async (url) => {
+                        try {
+                            const response = await fetch(url, {
+                                method: 'GET',
+                                headers: {
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Accept-Language': 'ko-KR,ko;q=0.9',
+                                }
+                            });
+
+                            if (!response.ok) {
+                                const errorText = await response.text();
+                                throw new Error(`HTTP ${response.status}: ${errorText}`);
+                            }
+
+                            return await response.json();
+                        } catch (error) {
+                            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                                throw new Error('Network error: Failed to fetch');
+                            }
+                            throw error;
+                        }
+                    }
+                    """,
+                    api_url,
+                )
+
+                # 성공 시 rate limiter 업데이트
+                self.rate_limiter.on_success()
+
+                # 데이터 추출
+                if response.get("isSuccess"):
+                    result = response.get("result", {})
+                    transactions = result.get("list", [])
+                    all_transactions.extend(transactions)
+
+                    self.logger.info(
+                        "transaction_page_fetched",
+                        page=page,
+                        transactions_count=len(transactions),
+                        total_so_far=len(all_transactions),
+                    )
+
+                    # 다음 페이지 확인
+                    if not result.get("hasNextPage", False):
+                        self.logger.info(
+                            "reached_last_page",
+                            last_page=page,
+                            total_transactions=len(all_transactions),
+                        )
+                        break
+
+                    page += 1
+                else:
+                    self.logger.error(
+                        "api_response_error",
+                        complex_id=complex_id,
+                        trade_type=trade_type,
+                        response=response,
+                    )
+                    break
+
+            except Exception as e:
+                error_msg = str(e)
+                if "429" in error_msg:
+                    self.logger.warning(
+                        "rate_limit_error",
+                        complex_id=complex_id,
+                        trade_type=trade_type,
+                        page=page,
+                        error=error_msg,
+                    )
+                    self.rate_limiter.on_rate_limit_error()
+
+                    # 지수 백오프 재시도
+                    for attempt in range(3):
+                        wait_time = self.rate_limiter.get_retry_delay(attempt)
+                        self.logger.info(
+                            "retrying_after_rate_limit",
+                            attempt=attempt + 1,
+                            wait_time=wait_time,
+                        )
+                        time.sleep(wait_time)
+
+                        try:
+                            response = self.page.evaluate(
+                                """
+                                async (url) => {
+                                    const response = await fetch(url);
+                                    return await response.json();
+                                }
+                                """,
+                                api_url,
+                            )
+
+                            # 성공 시 rate limiter 업데이트
+                            self.rate_limiter.on_success()
+
+                            # 데이터 처리
+                            if response.get("isSuccess"):
+                                result = response.get("result", {})
+                                transactions = result.get("list", [])
+                                all_transactions.extend(transactions)
+
+                                if not result.get("hasNextPage", False):
+                                    break
+
+                                page += 1
+                                break  # 재시도 성공, 기본 루프로 복귀
+                            else:
+                                continue  # 재시도 필요
+
+                        except Exception:
+                            if attempt == 2:  # 마지막 재시도 실패
+                                self.logger.error(
+                                    "rate_limit_retry_failed",
+                                    complex_id=complex_id,
+                                    trade_type=trade_type,
+                                    page=page,
+                                    max_attempts=3,
+                                )
+                                # 3회 실패 시 해당 항목 건너뛰고 계속 진행
+                                return all_transactions
+                    else:
+                        continue  # 모든 재시도 실패, 다음 페이지 시도
+
+                else:
+                    # 기타 에러 처리
+                    self.logger.error(
+                        "fetch_transaction_error",
+                        complex_id=complex_id,
+                        trade_type=trade_type,
+                        page=page,
+                        error=error_msg,
+                    )
+                    self.rate_limiter.on_error()
+                    break  # 기타 에러는 즉시 중단
+
+        self.logger.info(
+            "transaction_history_fetched",
+            complex_id=complex_id,
+            pyeong_type_number=pyeong_type_number,
+            trade_type=trade_type,
+            total_transactions=len(all_transactions),
+            pages_fetched=page - 1,
+        )
+
+        return all_transactions
+
+    def _parse_transaction(
+        self,
+        raw_transaction: dict[str, Any],
+        complex_id: str,
+        complex_name: str,
+        pyeong_type_number: int,
+        pyeong_name: str,
+        trade_type: str
+    ) -> dict[str, Any]:
+        """거래내역 원본 데이터를 CSV 저장용으로 정규화"""
+
+        # 거래 유형명 매핑
+        trade_type_names = {
+            "A1": "매매",
+            "B1": "전세",
+            "B2": "월세"
+        }
+
+        return {
+            "complex_id": complex_id,
+            "complex_name": complex_name,
+            "pyeong_type_number": pyeong_type_number,
+            "pyeong_name": pyeong_name,
+            "trade_type": trade_type,
+            "trade_type_name": trade_type_names.get(trade_type, ""),
+            "trade_date": raw_transaction.get("tradeDate", ""),
+            "trade_year": raw_transaction.get("tradeYear", ""),
+            "floor": raw_transaction.get("floor", 0),
+            "deal_price": raw_transaction.get("dealPrice", 0),
+            "deposit": raw_transaction.get("deposit", 0),
+            "monthly_rent": raw_transaction.get("monthlyRent", 0),
+            "trade_category": raw_transaction.get("tradeCategory", ""),
+            "is_delete": raw_transaction.get("isDelete", False),
+            "is_renew": raw_transaction.get("isRenew", False),
+        }
 
     def _parse_complex_listings(self, response: dict[str, Any]) -> list[dict[str, Any]]:
         """
