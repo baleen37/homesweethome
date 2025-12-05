@@ -9,6 +9,7 @@ from playwright.sync_api import sync_playwright
 from crawler.config import CrawlerConfig
 from crawler.rate_limiter import AdaptiveRateLimiter
 from crawler.utils.checkpoint import CheckpointManager
+from crawler.coordinator import CrawlCoordinator
 
 
 class NaverRealEstateCrawler:
@@ -448,6 +449,8 @@ class NaverRealEstateCrawler:
         complex_id: str,
         pyeong_type_number: int,
         trade_type: str,  # "A1", "B1", "B2"
+        complex_name: str = "",
+        pyeong_name: str = "",
     ) -> list[dict[str, Any]]:
         """
         특정 단지의 특정 평형에 대한 전체 거래내역 조회
@@ -456,14 +459,17 @@ class NaverRealEstateCrawler:
         - page=1부터 시작
         - hasNextPage=false가 될 때까지 반복
         - Rate limiter 적용하여 API 호출
+        - 데이터 유효성 검증 및 파싱 포함
 
         Args:
             complex_id: 단지 ID
             pyeong_type_number: 평형 타입 번호
             trade_type: 거래 유형 ("A1", "B1", "B2")
+            complex_name: 단지명 (선택적)
+            pyeong_name: 평형명 (선택적)
 
         Returns:
-            거래내역 리스트 (전체 페이지 합친 결과)
+            정규화된 거래내역 리스트 (전체 페이지 합친 결과)
         """
         self.logger.info(
             "fetching_transaction_history",
@@ -545,16 +551,33 @@ class NaverRealEstateCrawler:
                 # 성공 시 rate limiter 업데이트
                 self.rate_limiter.on_success()
 
-                # 데이터 추출
+                # 데이터 추출 및 유효성 검증
                 if response.get("isSuccess"):
                     result = response.get("result", {})
-                    transactions = result.get("list", [])
-                    all_transactions.extend(transactions)
+                    raw_transactions = result.get("list", [])
+
+                    # 유효한 거래만 필터링하고 파싱
+                    valid_transactions = []
+                    for raw_txn in raw_transactions:
+                        if self._validate_transaction(raw_txn):
+                            # 파싱된 거래내역 추가
+                            parsed_txn = self._parse_transaction(
+                                raw_txn,
+                                complex_id,
+                                complex_name,
+                                pyeong_type_number,
+                                pyeong_name,
+                                trade_type
+                            )
+                            valid_transactions.append(parsed_txn)
+
+                    all_transactions.extend(valid_transactions)
 
                     self.logger.info(
                         "transaction_page_fetched",
                         page=page,
-                        transactions_count=len(transactions),
+                        raw_transactions_count=len(raw_transactions),
+                        valid_transactions_count=len(valid_transactions),
                         total_so_far=len(all_transactions),
                     )
 
@@ -616,8 +639,23 @@ class NaverRealEstateCrawler:
                             # 데이터 처리
                             if response.get("isSuccess"):
                                 result = response.get("result", {})
-                                transactions = result.get("list", [])
-                                all_transactions.extend(transactions)
+                                raw_transactions = result.get("list", [])
+
+                                # 유효한 거래만 필터링하고 파싱
+                                valid_transactions = []
+                                for raw_txn in raw_transactions:
+                                    if self._validate_transaction(raw_txn):
+                                        parsed_txn = self._parse_transaction(
+                                            raw_txn,
+                                            complex_id,
+                                            complex_name,
+                                            pyeong_type_number,
+                                            pyeong_name,
+                                            trade_type
+                                        )
+                                        valid_transactions.append(parsed_txn)
+
+                                all_transactions.extend(valid_transactions)
 
                                 if not result.get("hasNextPage", False):
                                     break
@@ -663,6 +701,24 @@ class NaverRealEstateCrawler:
         )
 
         return all_transactions
+
+    def _validate_transaction(self, transaction: dict[str, Any]) -> bool:
+        """거래내역 데이터 유효성 검증"""
+        # 삭제된 거래는 제외
+        if transaction.get("isDelete", False):
+            return False
+
+        # 필수 필드 확인
+        required_fields = ["tradeDate", "floor"]
+        for field in required_fields:
+            if field not in transaction or transaction[field] is None:
+                return False
+
+        # 거래 날짜가 비어있으면 제외
+        if not transaction.get("tradeDate", "").strip():
+            return False
+
+        return True
 
     def _parse_transaction(
         self,
@@ -772,17 +828,28 @@ class NaverRealEstateCrawler:
 
         return listings
 
-    def crawl(self) -> list[dict[str, Any]]:
-        """서울시 전체 구/동을 순회하며 크롤링"""
-        self.logger.info("crawling_start")
+    def crawl(self) -> dict[str, Any]:
+        """서울시 전체 구/동을 순회하며 크롤링 (거래내역 포함)"""
+        self.logger.info("crawling_start_with_transactions")
 
-        # 체크포인트 로드
-        checkpoint = self.checkpoint_manager.load()
-        last_dong = checkpoint.get("last_dong") if checkpoint else None
-        if last_dong:
-            self.logger.info("checkpoint_loaded", last_dong=last_dong)
+        # CrawlCoordinator 초기화
+        output_dir = Path("output")
+        coordinator = CrawlCoordinator(
+            output_dir=output_dir,
+            checkpoint_path=output_dir / "checkpoint.json"
+        )
 
-        all_results: list[dict[str, Any]] = []
+        # Rate limiter 상태 복원
+        checkpoint = coordinator.checkpoint_manager.checkpoint
+        if checkpoint.get("rate_limiter_state"):
+            coordinator.checkpoint_manager.restore_rate_limiter_state(self.rate_limiter)
+            self.logger.info(
+                "rate_limiter_state_restored",
+                delay=self.rate_limiter.current_delay
+            )
+
+        # 준비: 모든 동의 단지 정보 수집
+        dong_complexes = []
         url = self.get_url()
 
         with sync_playwright() as p:
@@ -790,48 +857,92 @@ class NaverRealEstateCrawler:
             self.page = browser.new_page()
             self.page.goto(url, timeout=self.config.timeout * 1000)
             self.page.wait_for_load_state("networkidle")
-
             self.logger.info("browser_ready")
 
-            total_dongs = sum(
-                len(district["dongs"]) for district in self.districts_data["districts"]
-            )
-            completed_count = 0
-
-            # 체크포인트에서부터 시작하기 위한 플래그
-            should_start_crawling = last_dong is None
-
+            # 모든 동에 대한 단지 정보 수집
             for district in self.districts_data["districts"]:
                 for dong in district["dongs"]:
-                    # last_dong을 찾을 때까지 건너뛰기
-                    if not should_start_crawling:
-                        if dong["cortarNo"] == last_dong:
-                            should_start_crawling = True
-                            self.logger.info("resuming_from_checkpoint", dong=dong["dong_name"])
-                            # 마지막으로 처리한 동은 다시 처리하지 않고 건너뛰기
-                            completed_count += 1
-                            continue
-                        else:
-                            self.logger.info("skipping_dong", dong=dong["dong_name"])
-                            completed_count += 1
+                    # 체크포인트에서부터 시작
+                    if coordinator.checkpoint_manager.should_skip_dong(dong["cortarNo"]):
+                        # 마지막으로 처리된 동까지는 건너뛰기
+                        if checkpoint.get("last_dong") and dong["cortarNo"] != checkpoint["last_dong"]:
                             continue
 
                     self.logger.info(
-                        "crawling_dong",
+                        "collecting_complexes_for_dong",
                         district=district["district_name"],
                         dong=dong["dong_name"],
-                        progress=f"{completed_count}/{total_dongs}",
                     )
 
-                    results = self._fetch_with_retry(dong)
-                    all_results.extend(results)
+                    complexes = self._fetch_with_retry(dong)
+                    dong_complexes.append({
+                        "dong_code": dong["cortarNo"],
+                        "dong_name": dong["dong_name"],
+                        "complexes": complexes
+                    })
 
-                    # 체크포인트 저장 - 마지막으로 완료한 동만 기록
-                    self.checkpoint_manager.save(dong["cortarNo"])
+            # 브라우저는 계속 열어두기 (거래내역 조회에 필요)
+            # 단, 진행 상황을 위해 페이지는 다시 초기화
+            self.page.goto("https://fin.land.naver.com/complexes")
+            self.page.wait_for_load_state("networkidle")
 
-                    completed_count += 1
+            # CrawlCoordinator를 사용한 크롤링 실행
+            results = coordinator.crawl_multiple_dongs(
+                dong_complexes=dong_complexes,
+                fetch_complex_detail=self.fetch_complex_detail,
+                fetch_transaction_history=self._fetch_transaction_history_with_details,
+                resume=True
+            )
+
+            # 최종 체크포인트 저장에 rate limiter 상태 포함
+            coordinator.checkpoint_manager.save(
+                rate_limiter=self.rate_limiter
+            )
 
             browser.close()
 
-        self.logger.info("crawling_complete", total_complexes=len(all_results))
-        return all_results
+        self.logger.info(
+            "crawling_complete_with_transactions",
+            dongs_processed=results["dongs_processed"],
+            complexes_processed=results["total_complexes_processed"],
+            transactions_collected=results["total_transactions_collected"],
+            duration_seconds=results["duration_seconds"]
+        )
+
+        return results
+
+    def _fetch_transaction_history_with_details(
+        self,
+        complex_id: str,
+        pyeong_type_number: int,
+        trade_type: str
+    ) -> list[dict[str, Any]]:
+        """단지 상세 정보가 포함된 거래내역 조회 (CrawlCoordinator용)"""
+        # 단지 상세 정보에서 단지명과 평형명 추출
+        # 먼저 캐시된 상세 정보가 있는지 확인
+        complex_detail = getattr(self, '_detail_cache', {}).get(complex_id)
+
+        if not complex_detail:
+            # 캐시가 없으면 조회
+            complex_detail = self.fetch_complex_detail(complex_id)
+            if not hasattr(self, '_detail_cache'):
+                self._detail_cache = {}
+            self._detail_cache[complex_id] = complex_detail
+
+        complex_name = complex_detail.get("complex_name", "")
+
+        # 평형명 찾기
+        pyeong_name = ""
+        pyeong_types = complex_detail.get("pyeong_types", [])
+        for pyeong in pyeong_types:
+            if pyeong.get("pyeong_type_number") == pyeong_type_number:
+                pyeong_name = pyeong.get("pyeong_name", "")
+                break
+
+        return self.fetch_transaction_history(
+            complex_id=complex_id,
+            pyeong_type_number=pyeong_type_number,
+            trade_type=trade_type,
+            complex_name=complex_name,
+            pyeong_name=pyeong_name
+        )
