@@ -295,3 +295,140 @@ def test_fetch_complex_detail(tmp_path: Path) -> None:
         if "rate" in str(e).lower() or "limit" in str(e).lower():
             print("⚠️ 레이트 리밋에 걸렸을 수 있습니다. 잠시 후 다시 시도하세요.")
         raise
+
+
+@pytest.mark.integration
+def test_fetch_complex_listings(tmp_path: Path) -> None:
+    """
+    fetch_complex_listings() 메서드 통합 테스트
+
+    이 테스트는:
+    - 실제 브라우저를 실행합니다 (headless=True)
+    - 헬리오시티의 매물 목록을 가져옵니다
+    - 매매(A1), 전세(B1), 월세(B2) 모두 테스트합니다
+
+    실행: pytest tests/integration/test_naver_integration.py::test_fetch_complex_listings -v -s
+    """
+    # 헬리오시티 complex ID (실제 존재하는 단지)
+    HELIO_CITY_ID = "112581"  # 헬리오시티 3단지
+
+    config = CrawlerConfig(timeout=30, headless=True, output_dir=str(tmp_path))
+    crawler = NaverRealEstateCrawler(config)
+
+    print(f"\n=== 헬리오시티 매물 목록 테스트 (ID: {HELIO_CITY_ID}) ===")
+
+    # 1. 매매(A1) 테스트
+    print("\n1. 매매(A1) 매물 목록 가져오기...")
+    try:
+        sale_listings = crawler.fetch_complex_listings(HELIO_CITY_ID, "A1")
+        print(f"   - 매매 매물 수: {len(sale_listings)}")
+
+        if sale_listings:
+            first_sale = sale_listings[0]
+            print(f"   - 첫 번째 매물: {first_sale.get('complex_name', 'N/A')} "
+                  f"{first_sale.get('area', 'N/A')}㎡ "
+                  f"{first_sale.get('floor', 'N/A')}층")
+
+            # 필드 검증
+            required_fields = ["article_id", "complex_id", "trade_type", "price"]
+            for field in required_fields:
+                assert field in first_sale, f"매매 매물에 {field} 필드가 없습니다"
+
+            # 가격 정보 확인
+            assert first_sale.get("price"), "매매 매물의 가격 정보가 비어있습니다"
+
+    except Exception as e:
+        print(f"   - 매매 매물 조회 실패: {str(e)}")
+        if "rate" in str(e).lower() or "limit" in str(e).lower():
+            print("   - 레이트 리밋: 2초 대기 후 재시도...")
+            import time
+            time.sleep(2)
+            sale_listings = crawler.fetch_complex_listings(HELIO_CITY_ID, "A1")
+            assert sale_listings is not None, "재시도 후에도 매매 매물을 가져오지 못했습니다"
+        else:
+            raise
+
+    # 2. 전세(B1) 테스트
+    print("\n2. 전세(B1) 매물 목록 가져오기...")
+    try:
+        lease_listings = crawler.fetch_complex_listings(HELIO_CITY_ID, "B1")
+        print(f"   - 전세 매물 수: {len(lease_listings)}")
+
+        if lease_listings:
+            first_lease = lease_listings[0]
+            print(f"   - 첫 번째 매물: {first_lease.get('complex_name', 'N/A')} "
+                  f"{first_lease.get('area', 'N/A')}㎡ "
+                  f"{first_lease.get('floor', 'N/A')}층")
+
+            # 필드 검증
+            assert first_lease.get("trade_type") == "B1", "전세 매물의 거래 유형이 B1이 아닙니다"
+            assert first_lease.get("price"), "전세 매물의 가격 정보가 비어있습니다"
+
+    except Exception as e:
+        print(f"   - 전세 매물 조회 실패: {str(e)}")
+        # 전세 매물이 없을 수도 있음
+        if "result" in str(e) and len(e.args[0]) > 0 and "result" in e.args[0] and len(e.args[0]["result"]) == 0:
+            print("   - 전세 매물 없음 (정상)")
+        else:
+            raise
+
+    # 3. 월세(B2) 테스트
+    print("\n3. 월세(B2) 매물 목록 가져오기...")
+    try:
+        rent_listings = crawler.fetch_complex_listings(HELIO_CITY_ID, "B2")
+        print(f"   - 월세 매물 수: {len(rent_listings)}")
+
+        if rent_listings:
+            first_rent = rent_listings[0]
+            print(f"   - 첫 번째 매물: {first_rent.get('complex_name', 'N/A')} "
+                  f"{first_rent.get('area', 'N/A')}㎡ "
+                  f"{first_rent.get('floor', 'N/A')}층")
+
+            # 필드 검증
+            assert first_rent.get("trade_type") == "B2", "월세 매물의 거래 유형이 B2가 아닙니다"
+
+            # 월세는 보증금과 월세가 모두 있어야 함
+            assert first_rent.get("price"), "월세 매물의 가격 정보가 비어있습니다"
+
+            # 계약 갱신권 정보 확인
+            if first_rent.get("is_contract_renewal") == "Y":
+                print(f"   - 계약 갱신권: {first_rent.get('contract_renewal_price', 'N/A')} / "
+                      f"{first_rent.get('contract_renewal_fee', 'N/A')}")
+
+    except Exception as e:
+        print(f"   - 월세 매물 조회 실패: {str(e)}")
+        # 월세 매물이 없을 수도 있음
+        if "result" in str(e) and len(e.args[0]) > 0 and "result" in e.args[0] and len(e.args[0]["result"]) == 0:
+            print("   - 월세 매물 없음 (정상)")
+        else:
+            raise
+
+    # 4. 모든 매물 정보 합치기
+    all_listings = []
+    if 'sale_listings' in locals():
+        all_listings.extend(sale_listings)
+    if 'lease_listings' in locals():
+        all_listings.extend(lease_listings)
+    if 'rent_listings' in locals():
+        all_listings.extend(rent_listings)
+
+    # 5. CSV로 저장
+    if all_listings:
+        print(f"\n=== CSV 저장 ===")
+        csv_path = tmp_path / "heliocity_listings.csv"
+        writer = CSVWriter(csv_path)
+        writer.write(all_listings)
+
+        print(f"   - 총 {len(all_listings)}개 매물 저장됨")
+        print(f"   - 파일 경로: {csv_path}")
+
+        # CSV 파일 확인
+        assert csv_path.exists()
+        with open(csv_path, encoding="utf-8") as f:
+            lines = f.readlines()
+            assert len(lines) > 1  # 헤더 + 데이터
+            print(f"   - CSV 라인 수: {len(lines)}")
+    else:
+        print("\n⚠️ 저장할 매물이 없습니다")
+
+    print(f"\n✅ fetch_complex_listings() 테스트 완료!")

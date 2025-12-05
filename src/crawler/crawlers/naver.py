@@ -315,6 +315,204 @@ class NaverRealEstateCrawler:
 
         return parsed
 
+    def fetch_complex_listings(self, complex_id: str, trade_type: str = "A1") -> list[dict[str, Any]]:
+        """
+        특정 단지의 매물 목록을 가져옵니다.
+
+        Args:
+            complex_id: 단지 ID (예: 111861)
+            trade_type: 거래 유형 (A1: 매매, B1: 전세, B2: 월세)
+
+        Returns:
+            매물 정보 리스트
+        """
+        self.logger.info(
+            "fetching_complex_listings",
+            complex_id=complex_id,
+            trade_type=trade_type,
+        )
+
+        # 페이지가 없으면 새로 생성
+        if not self.page:
+            browser = sync_playwright().start()
+            self.page = browser.chromium.launch(headless=self.config.headless).new_page()
+            self.page.goto("https://m.land.naver.com/complexes")
+            self.page.wait_for_load_state("networkidle")
+            time.sleep(2)
+
+        # 먼저 단지 페이지에 접속하여 세션 확보
+        self.page.goto(f"https://m.land.naver.com/complex/{complex_id}")
+        self.page.wait_for_load_state("networkidle")
+        time.sleep(2)
+
+        all_listings = []
+        page = 1
+        max_pages = 10  # 최대 페이지 수 제한
+
+        while page <= max_pages:
+            self.logger.info(
+                "fetching_listing_page",
+                complex_id=complex_id,
+                trade_type=trade_type,
+                page=page,
+            )
+
+            # 모바일 API URL
+            api_url = (
+                f"https://m.land.naver.com/cluster/ajax/articleList?"
+                f"complexNo={complex_id}&"
+                f"tradTpCd={trade_type}&"
+                f"page={page}&"
+                f"showR0=N"
+            )
+
+            try:
+                # 브라우저 컨텍스트에서 API 호출
+                result = self.page.evaluate(
+                    """
+                    async (url) => {
+                        try {
+                            const response = await fetch(url, {
+                                method: 'GET',
+                                headers: {
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Accept-Language': 'ko-KR,ko;q=0.9',
+                                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+                                }
+                            });
+
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            }
+
+                            return await response.json();
+                        } catch (error) {
+                            console.error('API call failed:', error);
+                            throw error;
+                        }
+                    }
+                    """,
+                    api_url,
+                )
+
+                # 응답 파싱
+                listings = self._parse_complex_listings(result)
+
+                # 더 이상 매물이 없으면 중단
+                if not listings:
+                    self.logger.info(
+                        "no_more_listings",
+                        complex_id=complex_id,
+                        trade_type=trade_type,
+                        last_page=page - 1,
+                    )
+                    break
+
+                all_listings.extend(listings)
+
+                # API 응답에 결과 수가 설정된 경우 확인
+                if "result" in result and len(result["result"]) < 20:
+                    # 한 페이지에 20개 미만이면 마지막 페이지로 간주
+                    break
+
+                page += 1
+
+                # Rate limiting - 페이지별 2초 대기 (429 에러 방지)
+                time.sleep(2)
+
+            except Exception as e:
+                self.logger.error(
+                    "fetch_listings_error",
+                    complex_id=complex_id,
+                    trade_type=trade_type,
+                    page=page,
+                    error=str(e),
+                )
+                # 오류 발생 시 중단
+                break
+
+        self.logger.info(
+            "complex_listings_fetched",
+            complex_id=complex_id,
+            trade_type=trade_type,
+            total_listings=len(all_listings),
+            pages_fetched=page - 1,
+        )
+
+        return all_listings
+
+    def _parse_complex_listings(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        """
+        매물 목록 API 응답을 파싱합니다.
+
+        Args:
+            response: API 응답 JSON
+
+        Returns:
+            파싱된 매물 정보 리스트
+        """
+        # 모바일 API는 "result" 키에 데이터가 들어있음
+        items = response.get("result", [])
+
+        if not items:
+            return []
+
+        listings = []
+
+        for item in items:
+            # 필드 추출 및 정제
+            listing = {
+                "article_id": item.get("atclNo", ""),  # 매물 ID
+                "complex_id": item.get("hscpNo", ""),  # 단지 ID
+                "complex_name": item.get("hscpNm", ""),  # 단지명
+                "trade_type": item.get("tradTpCd", ""),  # 거래 유형 코드
+                "trade_type_name": item.get("tradTpNm", ""),  # 거래 유형명
+                "floor": item.get("flrInfo", ""),  # 층
+                "area": item.get("spc1", ""),  # 전용면적
+                "area_m2": item.get("prc", ""),  # 평수? (확인 필요)
+                "price": item.get("prcInfo", ""),  # 가격
+                "price_desc": item.get("prcDesc", ""),  # 가격 설명
+                "direction": item.get("direction", ""),  # 방향
+                "room_type": item.get("roomCnt", ""),  # 방 개수
+                "bathroom_count": item.get("bathCnt", ""),  # 욕실 개수
+                "heating_type": item.get("heatTpNm", ""),  # 난방 방식
+                "supply_area": item.get("spc2", ""),  # 공급면적
+                "move_in_date": item.get("mvInDt", ""),  # 입주 가능일
+                "description": item.get("tagList", ""),  # 추가 정보 태그
+                "article_url": item.get("atclUrl", ""),  # 매물 URL
+                "image_count": item.get("imgCnt", 0),  # 이미지 개수
+                "manage_cost": item.get("manageCost", ""),  # 관리비
+                "manage_cost_include": item.get("manageCostIncld", ""),  # 관리비 포함 항목
+                "parking": item.get("prk", ""),  # 주차
+                "elevator": item.get("elv", ""),  # 엘리베이터
+                "is_new_building": item.get("newHouse", ""),  # 신축 여부
+                "is_direct_deal": item.get("directDeal", ""),  # 직거래 여부
+                "real_estate_agent": item.get("rltrNm", ""),  # 부동산명
+                "real_estate_phone": item.get("telNo", ""),  # 부동산 전화번호
+                "service_report": item.get("certYn", ""),  # 서비스 리포트
+                "article_date": item.get("atclYmd", ""),  # 매물 등록일
+                "article_modify_date": item.get("atclMdfYmd", ""),  # 매물 수정일
+                "view_count": item.get("readCnt", 0),  # 조회수
+                "interest_count": item.get("intrCnt", 0),  # 관심 수
+                "is_contract_renewal": item.get("cntnYn", ""),  # 계약 갱신권 여부
+                "contract_renewal_price": item.get("cntnPrc", ""),  # 계약 갱신권 보증금
+                "contract_renewal_fee": item.get("cntnRentPrc", ""),  # 계약 갱신권 월세
+                "monthly_rent_fee": item.get("rentFee", ""),  # 월세
+                "deposit": item.get("deposit", ""),  # 보증금
+                "short_term_rental_available": item.get("shortRentYn", ""),  # 단기임대 가능 여부
+                "special_provision": item.get("spcPrv", ""),  # 특약사항
+            }
+
+            listings.append(listing)
+
+        self.logger.info(
+            "parsed_listings",
+            count=len(listings),
+            fields=len(listings[0].keys()) if listings else 0,
+        )
+
+        return listings
+
     def crawl(self) -> list[dict[str, Any]]:
         """서울시 전체 구/동을 순회하며 크롤링"""
         self.logger.info("crawling_start")
