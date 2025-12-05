@@ -231,8 +231,8 @@ def test_real_crawl_with_checkpoint(tmp_path: Path) -> None:
     assert checkpoint_path.exists(), "체크포인트 파일이 생성되지 않았습니다"
     with open(checkpoint_path, encoding="utf-8") as f:
         checkpoint = json.load(f)
-        assert len(checkpoint["completed_dongs"]) == 1
-        print(f"체크포인트 저장됨: {checkpoint['completed_dongs']}")
+        assert checkpoint["last_dong"] == test_district["dongs"][0]["cortarNo"]
+        print(f"체크포인트 저장됨: last_dong={checkpoint['last_dong']}")
 
     # === 두 번째 크롤링: 전체 3개 동 (1개는 skip되어야 함) ===
     crawler2 = NaverRealEstateCrawler(config)
@@ -244,14 +244,17 @@ def test_real_crawl_with_checkpoint(tmp_path: Path) -> None:
     # 체크포인트 업데이트 검증
     with open(checkpoint_path, encoding="utf-8") as f:
         checkpoint_final = json.load(f)
-        assert len(checkpoint_final["completed_dongs"]) == 3
-        print(f"최종 체크포인트: {checkpoint_final['completed_dongs']}")
+        # 마지막 동이 마지막으로 완료된 동인지 확인
+        assert checkpoint_final["last_dong"] == test_district["dongs"][-1]["cortarNo"]
+        print(f"최종 체크포인트: last_dong={checkpoint_final['last_dong']}")
 
     # 중복 크롤링 없이 전체 결과 확인
     assert len(results1) > 0, "첫 번째 크롤링 결과가 비어있습니다"
     assert len(results2) > 0, "두 번째 크롤링 결과가 비어있습니다"
 
-    print(f"\n총 크롤링된 단지 수: {len(results1) + len(results2)}")
+    # 두 번째 크롤링에서는 첫 번째 동을 건너뛰고 나머지 2개 동만 크롤링해야 함
+    # 따라서 총 결과 수는 첫 번째 크롤링 결과 + 두 번째 크롤링 결과가 되어야 함
+    print(f"\n총 크롤링된 단지 수: 첫 번째 {len(results1)}개 + 두 번째 {len(results2)}개 = {len(results1) + len(results2)}개")
 
 
 @pytest.mark.integration
@@ -695,8 +698,8 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
 
     이 테스트는:
     - 단지 목록 크롤링
-    - 단지 상세 정보 조회
-    - 매물 목록 조회
+    - 단지 상세 정보 조회 (1개 단지만)
+    - 매물 목록 조회 (1개 단지만)
     - 데이터 집계 및 CSV 저장
     - 전체 풀 파이프라인 검증
 
@@ -748,84 +751,97 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
         print(f"   - ❌ 단지 목록 크롤링 실패: {str(e)}")
         raise
 
-    # 테스트할 단지 수를 3개로 제한
-    test_complexes = complexes[:3]
-    print(f"   - 테스트할 단지 수: {len(test_complexes)} (처음 3개만)")
+    # 테스트할 단지 수를 1개로 제한 (레이트 리밋 방지)
+    test_complex = complexes[0]
+    print(f"   - 테스트할 단지: {test_complex['complex_name']} (ID: {test_complex['complex_id']})")
 
-    # 2. 각 단지에 대해 상세 정보와 매물 정보 조회
-    enriched_complexes = []
-    success_count = 0
+    # 2. 첫 번째 단지에 대해서만 상세 정보와 매물 정보 조회
+    enriched_complexes = [test_complex.copy()]  # 복사본 사용
 
-    for i, complex in enumerate(test_complexes, 1):
-        complex_id = str(complex["complex_id"])
-        complex_name = complex["complex_name"]
+    complex_id = str(test_complex["complex_id"])
+    complex_name = test_complex["complex_name"]
 
-        print(f"\n2.{i} 단지 처리 중: {complex_name} (ID: {complex_id})")
+    print(f"\n2. 단지 상세 정보 및 매물 조회 중: {complex_name}")
 
-        # 상세 정보 조회
+    # 상세 정보 조회 (성공했을 경우에만)
+    try:
+        print(f"   - 상세 정보 조회 중...")
+
+        # 새 크롤러 인스턴스 사용
+        detail_crawler = NaverRealEstateCrawler(config)
+        detail = detail_crawler.fetch_complex_detail(complex_id)
+
+        if detail and "error" not in detail:
+            # 상세 정보로 단지 데이터 업데이트
+            enriched_complexes[0].update(detail)
+            print(f"   - ✅ 상세 정보 조회 성공")
+        else:
+            print(f"   - ⚠️ 상세 정보 없음 또는 에러")
+
+        # 브라우저 정리
         try:
-            print(f"   - 상세 정보 조회 중...")
-            detail = crawler.fetch_complex_detail(complex_id)
+            if hasattr(detail_crawler, 'page'):
+                detail_crawler.page.close()
+            if hasattr(detail_crawler, 'browser'):
+                detail_crawler.browser.close()
+        except:
+            pass
 
-            if detail and "error" not in detail:
-                # 상세 정보로 단지 데이터 업데이트
-                complex.update(detail)
-                print(f"   - ✅ 상세 정보 조회 성공")
-            else:
-                print(f"   - ⚠️ 상세 정보 없음 또는 에러: {detail.get('error', 'N/A') if detail else 'No response'}")
+    except Exception as e:
+        print(f"   - ❌ 상세 정보 조회 실패: {str(e)}")
 
-        except Exception as e:
-            print(f"   - ❌ 상세 정보 조회 실패: {str(e)}")
-            # 계속 진행
+    # 잠시 대기 (레이트 리밋 방지)
+    time.sleep(1)
 
-        # 잠시 대기 (레이트 리밋 방지)
-        time.sleep(0.5)
+    # 매물 정보 조회 (성공했을 경우에만)
+    try:
+        print(f"   - 매물 목록 조회 중...")
 
-        # 매물 정보 조회
-        listings = []
+        # 새 크롤러 인스턴스 사용
+        listings_crawler = NaverRealEstateCrawler(config)
+        listings = listings_crawler.fetch_complex_listings(complex_id, "A1")  # 매매만 조회
+
+        if listings:
+            # 매물 데이터 집계
+            prices = []
+            for listing in listings:
+                price_str = listing.get("price", "0")
+                # 가격에서 쉼표와 "만" 등 제거하고 숫자로 변환
+                try:
+                    # "만"으로 끝나는 경우 변환 (예: 5만 -> 50000)
+                    if "만" in price_str:
+                        price_num = int(float(price_str.replace("만", "").replace(",", "")) * 10000)
+                    else:
+                        price_num = int(price_str.replace(",", ""))
+                    prices.append(price_num)
+                except:
+                    pass
+
+            if prices:
+                enriched_complexes[0]["avg_listing_price"] = sum(prices) / len(prices)
+                enriched_complexes[0]["min_listing_price"] = min(prices)
+                enriched_complexes[0]["max_listing_price"] = max(prices)
+
+            enriched_complexes[0]["active_listings_count"] = len(listings)
+            print(f"   - ✅ 매물 {len(listings)}개 조회 성공")
+            if prices:
+                print(f"   - 가격 범위: {min(prices):,} ~ {max(prices):,} (평균: {int(sum(prices)/len(prices)):,})")
+        else:
+            enriched_complexes[0]["active_listings_count"] = 0
+            print(f"   - ⚠️ 매물 없음")
+
+        # 브라우저 정리
         try:
-            print(f"   - 매물 목록 조회 중...")
-            listings = crawler.fetch_complex_listings(complex_id, "A1")  # 매매만 조회
+            if hasattr(listings_crawler, 'page'):
+                listings_crawler.page.close()
+            if hasattr(listings_crawler, 'browser'):
+                listings_crawler.browser.close()
+        except:
+            pass
 
-            if listings:
-                # 매물 데이터 집계
-                prices = []
-                for listing in listings:
-                    price_str = listing.get("price", "0")
-                    # 가격에서 쉼표와 "만" 등 제거하고 숫자로 변환
-                    try:
-                        price_num = int(price_str.replace(",", "").replace("만", ""))
-                        prices.append(price_num)
-                    except:
-                        pass
-
-                if prices:
-                    complex["avg_listing_price"] = sum(prices) / len(prices)
-                    complex["min_listing_price"] = min(prices)
-                    complex["max_listing_price"] = max(prices)
-
-                complex["active_listings_count"] = len(listings)
-                print(f"   - ✅ 매물 {len(listings)}개 조회 성공")
-                if prices:
-                    print(f"   - 가격 범위: {min(prices):,} ~ {max(prices):,} (평균: {int(sum(prices)/len(prices)):,})")
-            else:
-                complex["active_listings_count"] = 0
-                print(f"   - ⚠️ 매물 없음")
-
-        except Exception as e:
-            print(f"   - ❌ 매물 목록 조회 실패: {str(e)}")
-            complex["active_listings_count"] = 0
-            # 계속 진행
-
-        # 처리된 단지 추가
-        enriched_complexes.append(complex)
-        success_count += 1
-
-        # 잠시 대기 (레이트 리밋 방지)
-        time.sleep(0.5)
-
-    print(f"\n=== 처리 결과 ===")
-    print(f"성공 처리한 단지: {success_count}/{len(test_complexes)}")
+    except Exception as e:
+        print(f"   - ❌ 매물 목록 조회 실패: {str(e)}")
+        enriched_complexes[0]["active_listings_count"] = 0
 
     # 3. CSV 저장
     print("\n3. CSV 저장 중...")
@@ -851,7 +867,8 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
 
         # 확장 필드 확인 (상세 정보)
         enriched_fields = ["road_address", "jibun_address", "complex_name", "building_type",
-                          "total_household_count", "completion_date", "maintenance_cost"]
+                          "total_household_count", "completion_date", "maintenance_cost",
+                          "fetched_at"]
         found_enriched_fields = [field for field in enriched_fields if field in header]
         print(f"   - 발견된 확장 필드: {len(found_enriched_fields)}개")
 
@@ -873,16 +890,13 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
     for complex in enriched_complexes:
         assert "complex_id" in complex, f"단지에 complex_id가 없습니다"
         assert "complex_name" in complex, f"단지에 complex_name이 없습니다"
-
         # 매물 카운트 필드가 있는지 확인
         assert "active_listings_count" in complex, f"단지에 active_listings_count가 없습니다"
 
     # 집계된 데이터 확인
-    complexes_with_listings = [c for c in enriched_complexes if c.get("active_listings_count", 0) > 0]
-    if complexes_with_listings:
-        print(f"\n   - 매물이 있는 단지: {len(complexes_with_listings)}개")
-        for complex in complexes_with_listings[:3]:  # 처음 3개만 출력
-            print(f"     - {complex['complex_name']}: {complex['active_listings_count']}개 매물")
+    if enriched_complexes[0].get("active_listings_count", 0) > 0:
+        print(f"\n   - 매물이 있는 단지: 1개")
+        print(f"     - {enriched_complexes[0]['complex_name']}: {enriched_complexes[0]['active_listings_count']}개 매물")
 
     print(f"\n✅ test_crawl_full_pipeline 테스트 통과!")
     print(f"   - 크롤링된 단지: {len(enriched_complexes)}개")

@@ -118,7 +118,7 @@ class NaverRealEstateCrawler:
                     max_retries=max_retries,
                 )
                 if attempt == max_retries - 1:
-                    self.checkpoint_manager.add_failed_dong(dong, "Timeout after retries")
+                    self.checkpoint_manager.add_failed_dong(dong["cortarNo"], "Timeout after retries")
                     return []
                 time.sleep(2**attempt)  # 지수 백오프
             except Exception as e:
@@ -127,7 +127,7 @@ class NaverRealEstateCrawler:
                     dong=dong.get("dong_name", ""),
                     error=str(e),
                 )
-                self.checkpoint_manager.add_failed_dong(dong, str(e))
+                self.checkpoint_manager.add_failed_dong(dong["cortarNo"], str(e))
                 return []
         return []
 
@@ -151,7 +151,7 @@ class NaverRealEstateCrawler:
             f"{base_url}/marketPrice/recent?complexNumber={complex_id}&pyeongTypeNumber=1&realEstateType=A01",
         ]
 
-        detail_data = {
+        detail_data: dict[str, Any] = {
             "complex_id": complex_id,
             "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
@@ -519,8 +519,9 @@ class NaverRealEstateCrawler:
 
         # 체크포인트 로드
         checkpoint = self.checkpoint_manager.load()
-        if checkpoint:
-            self.logger.info("checkpoint_loaded", checkpoint=checkpoint["last_completed"])
+        last_dong = checkpoint.get("last_dong") if checkpoint else None
+        if last_dong:
+            self.logger.info("checkpoint_loaded", last_dong=last_dong)
 
         all_results: list[dict[str, Any]] = []
         url = self.get_url()
@@ -538,13 +539,23 @@ class NaverRealEstateCrawler:
             )
             completed_count = 0
 
+            # 체크포인트에서부터 시작하기 위한 플래그
+            should_start_crawling = last_dong is None
+
             for district in self.districts_data["districts"]:
                 for dong in district["dongs"]:
-                    # 체크포인트에서 완료된 동 건너뛰기
-                    if self.checkpoint_manager.should_skip_dong(dong["cortarNo"]):
-                        self.logger.info("skipping_completed_dong", dong=dong["dong_name"])
-                        completed_count += 1
-                        continue
+                    # last_dong을 찾을 때까지 건너뛰기
+                    if not should_start_crawling:
+                        if dong["cortarNo"] == last_dong:
+                            should_start_crawling = True
+                            self.logger.info("resuming_from_checkpoint", dong=dong["dong_name"])
+                            # 마지막으로 처리한 동은 다시 처리하지 않고 건너뛰기
+                            completed_count += 1
+                            continue
+                        else:
+                            self.logger.info("skipping_dong", dong=dong["dong_name"])
+                            completed_count += 1
+                            continue
 
                     self.logger.info(
                         "crawling_dong",
@@ -556,16 +567,8 @@ class NaverRealEstateCrawler:
                     results = self._fetch_with_retry(dong)
                     all_results.extend(results)
 
-                    # 체크포인트 업데이트
-                    self.checkpoint_manager.checkpoint["last_completed"] = {
-                        "district": district["district_name"],
-                        "dong": dong["dong_name"],
-                    }
-                    self.checkpoint_manager.checkpoint.setdefault("completed_dongs", []).append(
-                        dong["cortarNo"]
-                    )
-                    self.checkpoint_manager.checkpoint["total_complexes_crawled"] = len(all_results)
-                    self.checkpoint_manager.save(self.checkpoint_manager.checkpoint)
+                    # 체크포인트 저장 - 마지막으로 완료한 동만 기록
+                    self.checkpoint_manager.save(dong["cortarNo"])
 
                     completed_count += 1
 
