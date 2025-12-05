@@ -26,6 +26,9 @@ class CrawlCoordinator:
     - 체크포인트 관리를 통해 중단된 크롤링 지원
     """
 
+    # 거래 유형 상수 (매매, 전세, 월세)
+    TRADE_TYPES = ["A1", "B1", "B2"]
+
     def __init__(
         self,
         output_dir: Path,
@@ -132,7 +135,7 @@ class CrawlCoordinator:
                     pyeong_type_number = pyeong["pyeong_type_number"]
 
                     # 모든 거래 유형 조회 (매매, 전세, 월세)
-                    for trade_type in ["A1", "B1", "B2"]:
+                    for trade_type in self.TRADE_TYPES:
                         self.rate_limiter.wait()
 
                         transactions = fetch_transaction_history(
@@ -149,15 +152,12 @@ class CrawlCoordinator:
                             dong_stats["transactions_collected"] += len(transactions)
                             self.stats["total_transactions_collected"] += len(transactions)
 
-                # 3. 거래내역 정규화 후 통계 계산하여 단지 정보 저장
-                # TransactionCSVWriter의 _normalize_transaction 메서드를 사용하여 정규화
-                normalized_transactions = [
-                    self.transaction_writer._normalize_transaction(t)
-                    for t in all_transactions
-                ]
+                # 3. 거래내역 통계 계산하여 단지 정보 저장
+                # append 메서드가 이미 정규화를 수행하므로 all_transactions를 그대로 사용
+                # append_with_statistics에서 내부적으로 다시 정규화함
                 self.complexes_writer.append_with_statistics(
                     complex_data={**complex, **detail},
-                    transactions=normalized_transactions,
+                    transactions=all_transactions,
                 )
 
                 dong_stats["complexes_processed"] += 1

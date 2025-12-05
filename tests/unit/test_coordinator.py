@@ -234,7 +234,7 @@ class TestCrawlCoordinator:
         # 최종 체크포인트 확인
         final_checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
         assert final_checkpoint["last_dong"] == "1154510300"
-        assert "last_updated" in final_checkpoint
+        assert "last_updated_at" in final_checkpoint
 
     def test_error_handling_and_statistics(
         self, temp_dir, sample_dong_complexes

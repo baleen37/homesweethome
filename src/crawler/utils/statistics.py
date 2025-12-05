@@ -57,7 +57,11 @@ def calculate_statistics_from_transactions(
 
         # Latest deal price depends on trade type
         if latest_transaction.get("trade_type") == "A1":  # 매매
-            stats["latest_deal_price"] = latest_transaction.get("deal_price", 0)
+            deal_price = latest_transaction.get("deal_price", 0)
+            try:
+                stats["latest_deal_price"] = int(deal_price) if deal_price else 0
+            except (ValueError, TypeError):
+                stats["latest_deal_price"] = 0
         # For lease/rent, we don't fill latest_deal_price (keep as 0)
 
     # Calculate statistics for the last year
@@ -75,11 +79,17 @@ def calculate_statistics_from_transactions(
                 stats["rent_count_1year"] += 1
 
         # Calculate average deal price for the last year (only for 매매)
-        deal_prices = [
-            t.get("deal_price", 0)
-            for t in recent_transactions
-            if t.get("trade_type") == "A1" and t.get("deal_price", 0) > 0
-        ]
+        deal_prices = []
+        for t in recent_transactions:
+            if t.get("trade_type") == "A1":
+                deal_price = t.get("deal_price", 0)
+                # Convert to int if it's a string
+                try:
+                    deal_price_int = int(deal_price) if deal_price else 0
+                except (ValueError, TypeError):
+                    deal_price_int = 0
+                if deal_price_int > 0:
+                    deal_prices.append(deal_price_int)
 
         if deal_prices:
             stats["avg_deal_price_1year"] = sum(deal_prices) // len(deal_prices)
