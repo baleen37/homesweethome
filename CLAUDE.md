@@ -182,12 +182,20 @@ class BaseCrawler(ABC):
 - 상세 분석 문서: `docs/analysis/naver-real-estate-final-approach.md`
 - API 엔드포인트 및 DOM 구조: `naver-real-estate-crawling.md`
 
+### 점진적 크롤링 기능
+
+- **fetch_complex_detail(complex_id)**: 단지 상세 정보 조회 (평형, 보유세, 공시가격, 시세)
+- **fetch_complex_listings(complex_id, trade_type)**: 단지별 매물 목록 조회 (페이지네이션 지원)
+- **체크포인트 시스템**: 중단된 크롤링을 이어서 진행할 수 있음 (`output/checkpoint.json`)
+- **CSV 확장 필드**: 단지 상세 정보와 매물 정보가 기본 CSV에 추가됨
+
 ## 크롤링 주의사항
 
-- **Rate limiting**: 요청 간 500ms~1000ms 대기 권장
+- **Rate limiting**: 요청 간 2~4초 대기 필수 (네이버 429 에러 방지)
 - **User-Agent**: 필요 시 설정 (네이버 부동산의 경우)
 - **에러 처리**: 재시도 로직 구현 권장
 - **세션 관리**: 네이버 부동산 API는 브라우저 세션 내에서만 동작 (쿠키 필요)
+- **HTTP 429**: 네이버 서버의 Rate Limiting이 매우 엄격하여 API 호출이 제한될 수 있음
 
 ## 코드 스타일
 

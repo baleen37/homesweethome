@@ -180,7 +180,7 @@ class NaverRealEstateCrawler:
                 try:
                     # 첫 호출 전에 더 긴 대기
                     if idx == 0:
-                        time.sleep(1)
+                        time.sleep(3)
 
                     response = self.page.evaluate(
                         """
@@ -212,9 +212,9 @@ class NaverRealEstateCrawler:
                     )
 
                     detail_data[endpoint_name] = response
-                    # Rate limiting - API 호출 간 1초 대기
+                    # Rate limiting - API 호출 간 3초 대기 (429 에러 방지)
                     if idx < len(endpoints) - 1:
-                        time.sleep(1)
+                        time.sleep(3)
 
                 except Exception as e:
                     self.logger.error(
@@ -417,8 +417,8 @@ class NaverRealEstateCrawler:
 
                 page += 1
 
-                # Rate limiting - 페이지별 2초 대기 (429 에러 방지)
-                time.sleep(2)
+                # Rate limiting - 페이지별 4초 대기 (429 에러 방지)
+                time.sleep(4)
 
             except Exception as e:
                 self.logger.error(

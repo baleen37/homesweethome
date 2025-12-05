@@ -41,6 +41,13 @@ mypy_path = "src"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = "src"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: marks tests as integration tests (requiring network/browser)"
+]
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.3.0",
 ]
