@@ -131,6 +131,190 @@ class NaverRealEstateCrawler:
                 return []
         return []
 
+    def fetch_complex_detail(self, complex_id: str) -> dict[str, Any]:
+        """단지 상세 정보 조회 (평형, 보유세, 공시가격, 시세 등)"""
+        self.logger.info("fetching_complex_detail", complex_id=complex_id)
+
+        base_url = "https://fin.land.naver.com/front-api/v1/complex"
+
+        # API 엔드포인트 목록
+        endpoints = [
+            # 평형 정보
+            f"{base_url}/building/pyeongList?complexNumber={complex_id}",
+            # 보유세 정보 (pyeongTypeNumber=1 필요)
+            f"{base_url}/holdingTax?complexNumber={complex_id}&pyeongTypeNumber=1",
+            # 공시가격 정보 (pyeongTypeNumber=1 필요)
+            f"{base_url}/declaredValue/pyeongType?complexNumber={complex_id}&pyeongTypeNumber=1",
+            # 매물 가격 분포 (추가 파라미터 필요)
+            f"{base_url}/askingPrice?complexNumber={complex_id}&pyeongTypeNumber=1&realEstateType=A01",
+            # 최근 시세 (추가 파라미터 필요)
+            f"{base_url}/marketPrice/recent?complexNumber={complex_id}&pyeongTypeNumber=1&realEstateType=A01",
+        ]
+
+        detail_data = {
+            "complex_id": complex_id,
+            "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        try:
+            # 페이지가 없으면 새로 생성
+            if not self.page:
+                browser = sync_playwright().start()
+                self.page = browser.chromium.launch(headless=self.config.headless).new_page()
+                self.page.goto("https://fin.land.naver.com/complexes")
+                self.page.wait_for_load_state("networkidle")
+                # 추가 대기 시간
+                time.sleep(2)
+
+            # 단지 상세 페이지에 먼저 접속하여 세션 확보
+            self.logger.info("accessing_complex_page", complex_id=complex_id)
+            self.page.goto(f"https://fin.land.naver.com/complexes/{complex_id}")
+            self.page.wait_for_load_state("networkidle")
+            time.sleep(3)  # 페이지 로딩 및 초기 API 호출 대기
+
+            # 각 API 엔드포인트 호출
+            for idx, endpoint_url in enumerate(endpoints):
+                endpoint_name = endpoint_url.split("/")[-1].split("?")[0]
+                self.logger.info("fetching_endpoint", endpoint=endpoint_name)
+
+                try:
+                    # 첫 호출 전에 더 긴 대기
+                    if idx == 0:
+                        time.sleep(1)
+
+                    response = self.page.evaluate(
+                        """
+                        async (url) => {
+                            try {
+                                const response = await fetch(url, {
+                                    method: 'GET',
+                                    headers: {
+                                        'Accept': 'application/json, text/plain, */*',
+                                        'Accept-Language': 'ko-KR,ko;q=0.9',
+                                    }
+                                });
+
+                                if (!response.ok) {
+                                    const errorText = await response.text();
+                                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                                }
+
+                                return await response.json();
+                            } catch (error) {
+                                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                                    throw new Error('Network error: Failed to fetch');
+                                }
+                                throw error;
+                            }
+                        }
+                        """,
+                        endpoint_url,
+                    )
+
+                    detail_data[endpoint_name] = response
+                    # Rate limiting - API 호출 간 1초 대기
+                    if idx < len(endpoints) - 1:
+                        time.sleep(1)
+
+                except Exception as e:
+                    self.logger.error(
+                        "endpoint_fetch_error",
+                        endpoint=endpoint_name,
+                        error=str(e),
+                    )
+                    detail_data[endpoint_name] = {"error": str(e)}
+
+            # 데이터 파싱
+            parsed_detail = self._parse_complex_detail(detail_data)
+            self.logger.info("complex_detail_fetched", complex_id=complex_id)
+
+            return parsed_detail
+
+        except Exception as e:
+            self.logger.error(
+                "complex_detail_fetch_failed",
+                complex_id=complex_id,
+                error=str(e),
+            )
+            return {
+                "complex_id": complex_id,
+                "error": str(e),
+                "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+
+    def _parse_complex_detail(self, raw_data: dict[str, Any]) -> dict[str, Any]:
+        """API 응답 데이터를 파싱하여 필요한 정보 추출"""
+        parsed = {
+            "complex_id": raw_data.get("complex_id", ""),
+            "fetched_at": raw_data.get("fetched_at", ""),
+        }
+
+        # 1. 평형 정보 파싱 (pyeongList)
+        if "pyeongList" in raw_data and not raw_data["pyeongList"].get("error"):
+            pyeong_data = raw_data["pyeongList"]
+            if pyeong_data.get("isSuccess"):
+                pyeong_list = pyeong_data.get("result", [])
+                parsed["pyeong_types"] = []
+                for pyeong in pyeong_list:
+                    parsed["pyeong_types"].append({
+                        "pyeong_type_number": pyeong.get("pyeongTypeNumber", 0),
+                        "pyeong_name": pyeong.get("pyeongName", ""),
+                        "supply_area": pyeong.get("supplyArea", ""),  # 공급면적
+                        "exclusive_area": pyeong.get("exclusiveArea", ""),  # 전용면적
+                        "room_count": pyeong.get("roomCount", ""),  # 방 개수
+                        "bathroom_count": pyeong.get("bathroomCount", ""),  # 화장실 개수
+                        "household_count": pyeong.get("householdCount", 0),  # 세대수
+                    })
+
+        # 2. 보유세 정보 파싱 (holdingTax)
+        if "holdingTax" in raw_data and not raw_data["holdingTax"].get("error"):
+            tax_data = raw_data["holdingTax"]
+            if tax_data.get("isSuccess"):
+                result = tax_data.get("result", {})
+                parsed["holding_tax"] = {
+                    "property_tax": result.get("propertyTax", 0),  # 재산세
+                    "comprehensive_real_estate_tax": result.get("comprehensiveRealEstateTax", 0),  # 종부세
+                    "total_tax": result.get("totalTax", 0),  # 총 보유세
+                    "tax_base_year": result.get("taxBaseYear", ""),  # 과세 기준년도
+                }
+
+        # 3. 공시가격 정보 파싱 (pyeongType)
+        if "pyeongType" in raw_data and not raw_data["pyeongType"].get("error"):
+            declared_data = raw_data["pyeongType"]
+            if declared_data.get("isSuccess"):
+                result = declared_data.get("result", {})
+                parsed["declared_value"] = {
+                    "declared_price": result.get("declaredPrice", 0),  # 공시가격
+                    "declared_price_per_pyeong": result.get("declaredPricePerPyeong", 0),  # 평당 공시가격
+                    "declared_year": result.get("declaredYear", ""),  # 공시가격 기준년도
+                }
+
+        # 4. 매물 가격 분포 파싱 (askingPrice)
+        if "askingPrice" in raw_data and not raw_data["askingPrice"].get("error"):
+            price_data = raw_data["askingPrice"]
+            if price_data.get("isSuccess"):
+                result = price_data.get("result", {})
+                parsed["asking_price"] = {
+                    "min_price": result.get("minPrice", 0),  # 최저가
+                    "max_price": result.get("maxPrice", 0),  # 최고가
+                    "avg_price": result.get("avgPrice", 0),  # 평균가
+                    "price_distribution": result.get("priceDistribution", []),  # 가격 분포
+                }
+
+        # 5. 최근 시세 파싱 (recent)
+        if "recent" in raw_data and not raw_data["recent"].get("error"):
+            market_data = raw_data["recent"]
+            if market_data.get("isSuccess"):
+                result = market_data.get("result", {})
+                parsed["recent_market_price"] = {
+                    "recent_price": result.get("recentPrice", 0),  # 최근 시세
+                    "price_change_rate": result.get("priceChangeRate", 0),  # 변동률
+                    "updated_date": result.get("updatedDate", ""),  # 업데이트 일자
+                    "source": result.get("source", ""),  # 제공처 (KB, 한국부동산원 등)
+                }
+
+        return parsed
+
     def crawl(self) -> list[dict[str, Any]]:
         """서울시 전체 구/동을 순회하며 크롤링"""
         self.logger.info("crawling_start")
