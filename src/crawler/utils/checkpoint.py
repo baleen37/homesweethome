@@ -174,7 +174,7 @@ class CheckpointManager:
             self.checkpoint["failed_dongs"] = failed_dongs
 
             # 즉시 저장
-            self.checkpoint["last_updated"] = datetime.now().isoformat()
+            self.checkpoint["last_updated_at"] = datetime.now().isoformat()
             self.filepath.parent.mkdir(parents=True, exist_ok=True)
             with open(self.filepath, "w") as f:
                 json.dump(self.checkpoint, f, indent=2, ensure_ascii=False)
