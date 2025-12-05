@@ -15,6 +15,7 @@ from crawler.utils.checkpoint import CheckpointManager
 from crawler.rate_limiter import AdaptiveRateLimiter as RateLimiter
 from crawler.writers.complexes_csv_writer import ComplexesCSVWriter
 from crawler.writers.transaction_csv_writer import TransactionCSVWriter
+from crawler.progress_tracker import ProgressTracker
 
 
 class CrawlCoordinator:
@@ -35,6 +36,8 @@ class CrawlCoordinator:
         checkpoint_path: Path | None = None,
         initial_delay: float = 2.0,
         max_delay: float = 10.0,
+        enable_progress_tracking: bool = True,
+        progress_report_interval: int = 60,
     ) -> None:
         """CrawlCoordinator 초기화
 
@@ -43,6 +46,8 @@ class CrawlCoordinator:
             checkpoint_path: 체크포인트 파일 경로 (None이면 체크포인트 미사용)
             initial_delay: 초기 요청 간 지연 시간 (초)
             max_delay: 최대 지연 시간 (초)
+            enable_progress_tracking: 진행 상황 추적 활성화 여부
+            progress_report_interval: 진행 상황 리포트 출력 간격 (초)
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -68,6 +73,15 @@ class CrawlCoordinator:
             self.rate_limiter.current_delay = initial_delay
         # Note: max_delay is final in AdaptiveRateLimiter, cannot be modified
         # We'll use the provided max_delay as a soft limit in our code
+
+        # Progress Tracker
+        self.progress_tracker = None
+        if enable_progress_tracking:
+            self.progress_tracker = ProgressTracker(
+                output_dir=self.output_dir,
+                report_interval=progress_report_interval,
+                log_file="progress.log",
+            )
 
         # 통계
         self.stats: Dict[str, Any] = {
@@ -101,6 +115,10 @@ class CrawlCoordinator:
         """
         self.logger.info("crawling_dong", dong_code=dong_code, dong_name=dong_name)
 
+        # Progress tracking: 동 처리 시작
+        if self.progress_tracker:
+            self.progress_tracker.start_dong(dong_code, dong_name, len(complexes))
+
         dong_stats: Dict[str, Any] = {
             "dong_code": dong_code,
             "dong_name": dong_name,
@@ -118,6 +136,10 @@ class CrawlCoordinator:
 
                 complex_id = complex["complex_id"]
                 self.logger.info("processing_complex", complex_id=complex_id)
+
+                # Progress tracking: 단지 처리 시작
+                if self.progress_tracker:
+                    self.progress_tracker.start_complex(complex_id, complex.get("complex_name", ""))
 
                 # 1. 단지 상세 정보 조회
                 detail = fetch_complex_detail(complex_id)
@@ -163,6 +185,14 @@ class CrawlCoordinator:
                 dong_stats["complexes_processed"] += 1
                 self.stats["total_complexes_processed"] += 1
 
+                # Progress tracking: 단지 처리 완료
+                if self.progress_tracker:
+                    self.progress_tracker.complete_complex(
+                        complex_id,
+                        complex.get("complex_name", ""),
+                        len(all_transactions)
+                    )
+
                 # 성공 시 rate limiter 보상
                 self.rate_limiter.on_success()
 
@@ -171,6 +201,10 @@ class CrawlCoordinator:
                 self.logger.error("complex_error", error=error_msg)
                 dong_stats["errors"].append(error_msg)
                 self.stats["errors"].append(error_msg)
+
+                # Progress tracking: 에러 기록
+                if self.progress_tracker:
+                    self.progress_tracker.add_error(error_msg)
 
                 # 에러 시 rate limiter 페널티
                 self.rate_limiter.on_error()
@@ -188,6 +222,18 @@ class CrawlCoordinator:
             transactions_collected=dong_stats["transactions_collected"],
             errors_count=len(dong_stats["errors"]),
         )
+
+        # Progress tracking: 동 처리 완료
+        if self.progress_tracker:
+            self.progress_tracker.complete_dong(
+                dong_code,
+                dong_name,
+                dong_stats["complexes_processed"],
+                dong_stats["transactions_collected"],
+                dong_stats["errors"]
+            )
+            # Rate limiter 상태 업데이트
+            self.progress_tracker.update_rate_limiter_delay(self.rate_limiter.current_delay)
 
         return dong_stats
 
@@ -211,6 +257,14 @@ class CrawlCoordinator:
             전체 크롤링 결과 통계
         """
         start_time = time.time()
+
+        # Progress tracking: 크롤링 시작
+        if self.progress_tracker:
+            total_complexes = sum(len(d["complexes"]) for d in dong_complexes)
+            self.progress_tracker.start_crawling(
+                total_dongs=len(dong_complexes),
+                total_complexes=total_complexes
+            )
 
         # 이어서 진행할 위치 찾기
         start_index = 0
@@ -273,6 +327,10 @@ class CrawlCoordinator:
             transactions_collected=final_stats["total_transactions_collected"],
             duration_seconds=final_stats["duration_seconds"],
         )
+
+        # Progress tracking: 크롤링 완료
+        if self.progress_tracker:
+            self.progress_tracker.finish_crawling()
 
         return final_stats
 

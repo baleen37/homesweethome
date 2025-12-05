@@ -62,7 +62,14 @@ class NaverRealEstateCrawler:
         result = self.page.evaluate(
             """
             async (url) => {
-                const response = await fetch(url);
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json, text/plain, */*',
+                        'Accept-Language': 'ko-KR,ko;q=0.9',
+                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+                    }
+                });
                 return await response.json();
             }
             """,
@@ -110,8 +117,11 @@ class NaverRealEstateCrawler:
     def _fetch_with_retry(self, dong: dict[str, Any], max_retries: int = 3) -> list[dict[str, Any]]:
         for attempt in range(max_retries):
             try:
+                # Rate limiting 먼저 적용 (요청 전 대기)
+                self.rate_limiter.wait()
                 data = self._fetch_dong_data(dong)
-                time.sleep(0.5)  # Rate limiting
+                # 성공 시 rate limiter 업데이트
+                self.rate_limiter.on_success()
                 return data
             except TimeoutError:
                 self.logger.warning(
@@ -120,18 +130,48 @@ class NaverRealEstateCrawler:
                     attempt=attempt + 1,
                     max_retries=max_retries,
                 )
+                self.rate_limiter.on_error()
                 if attempt == max_retries - 1:
                     self.checkpoint_manager.add_failed_dong(dong["cortarNo"], "Timeout after retries")
                     return []
                 time.sleep(2**attempt)  # 지수 백오프
             except Exception as e:
-                self.logger.error(
-                    "fetch_error",
-                    dong=dong.get("dong_name", ""),
-                    error=str(e),
-                )
-                self.checkpoint_manager.add_failed_dong(dong["cortarNo"], str(e))
-                return []
+                error_msg = str(e)
+
+                # 429 에러인지 확인
+                if "429" in error_msg or "Too Many Requests" in error_msg:
+                    self.logger.warning(
+                        "rate_limit_error_dong",
+                        dong=dong.get("dong_name", ""),
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                    )
+                    self.rate_limiter.on_rate_limit_error()
+
+                    # 재시도
+                    if attempt < max_retries - 1:
+                        wait_time = self.rate_limiter.get_retry_delay(attempt)
+                        self.logger.info(
+                            "retrying_dong_after_rate_limit",
+                            dong=dong.get("dong_name", ""),
+                            attempt=attempt + 1,
+                            wait_time=wait_time,
+                        )
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        self.checkpoint_manager.add_failed_dong(dong["cortarNo"], error_msg)
+                        return []
+                else:
+                    # 기타 에러
+                    self.logger.error(
+                        "fetch_error",
+                        dong=dong.get("dong_name", ""),
+                        error=error_msg,
+                    )
+                    self.rate_limiter.on_error()
+                    self.checkpoint_manager.add_failed_dong(dong["cortarNo"], error_msg)
+                    return []
         return []
 
     def fetch_complex_detail(self, complex_id: str) -> dict[str, Any]:
@@ -167,65 +207,30 @@ class NaverRealEstateCrawler:
                 self.page.goto("https://fin.land.naver.com/complexes")
                 self.page.wait_for_load_state("networkidle")
                 # 추가 대기 시간
-                time.sleep(2)
+                time.sleep(3)
 
             # 단지 상세 페이지에 먼저 접속하여 세션 확보
             self.logger.info("accessing_complex_page", complex_id=complex_id)
             self.page.goto(f"https://fin.land.naver.com/complexes/{complex_id}")
             self.page.wait_for_load_state("networkidle")
-            time.sleep(3)  # 페이지 로딩 및 초기 API 호출 대기
+            time.sleep(5)  # 페이지 로딩 및 세션 안정화를 위한 충분한 대기
 
             # 각 API 엔드포인트 호출
             for idx, endpoint_url in enumerate(endpoints):
                 endpoint_name = endpoint_url.split("/")[-1].split("?")[0]
-                self.logger.info("fetching_endpoint", endpoint=endpoint_name)
+                self.logger.info("fetching_endpoint", endpoint=endpoint_name, index=idx + 1, total=len(endpoints))
 
-                try:
-                    # 첫 호출 전에 더 긴 대기
-                    if idx == 0:
-                        time.sleep(3)
+                # 엔드포인트 호출을 재시도 로직으로 감싸기
+                response = self._fetch_endpoint_with_retry(endpoint_url, endpoint_name)
 
-                    response = self.page.evaluate(
-                        """
-                        async (url) => {
-                            try {
-                                const response = await fetch(url, {
-                                    method: 'GET',
-                                    headers: {
-                                        'Accept': 'application/json, text/plain, */*',
-                                        'Accept-Language': 'ko-KR,ko;q=0.9',
-                                    }
-                                });
-
-                                if (!response.ok) {
-                                    const errorText = await response.text();
-                                    throw new Error(`HTTP ${response.status}: ${errorText}`);
-                                }
-
-                                return await response.json();
-                            } catch (error) {
-                                if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                                    throw new Error('Network error: Failed to fetch');
-                                }
-                                throw error;
-                            }
-                        }
-                        """,
-                        endpoint_url,
-                    )
-
+                if response is not None:
                     detail_data[endpoint_name] = response
-                    # Rate limiting - API 호출 간 3초 대기 (429 에러 방지)
-                    if idx < len(endpoints) - 1:
-                        time.sleep(3)
+                else:
+                    detail_data[endpoint_name] = {"error": "Failed after retries"}
 
-                except Exception as e:
-                    self.logger.error(
-                        "endpoint_fetch_error",
-                        endpoint=endpoint_name,
-                        error=str(e),
-                    )
-                    detail_data[endpoint_name] = {"error": str(e)}
+                # Rate limiting - API 호출 간 충분한 대기 (429 에러 방지)
+                if idx < len(endpoints) - 1:
+                    time.sleep(6)  # 6초 대기로 증가
 
             # 데이터 파싱
             parsed_detail = self._parse_complex_detail(detail_data)
@@ -244,6 +249,107 @@ class NaverRealEstateCrawler:
                 "error": str(e),
                 "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
+
+    def _fetch_endpoint_with_retry(
+        self,
+        endpoint_url: str,
+        endpoint_name: str,
+        max_retries: int = 3
+    ) -> dict[str, Any] | None:
+        """
+        API 엔드포인트를 재시도 로직과 함께 호출
+
+        429 에러 발생 시 exponential backoff를 사용하여 재시도합니다.
+
+        Args:
+            endpoint_url: API 엔드포인트 URL
+            endpoint_name: 엔드포인트 이름 (로깅용)
+            max_retries: 최대 재시도 횟수
+
+        Returns:
+            API 응답 JSON 또는 None (모든 재시도 실패 시)
+        """
+        for attempt in range(max_retries):
+            try:
+                # 재시도인 경우 추가 대기
+                if attempt > 0:
+                    backoff_time = 10 * (2 ** attempt)  # 10초, 20초, 40초
+                    self.logger.info(
+                        "retrying_endpoint",
+                        endpoint=endpoint_name,
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        backoff_seconds=backoff_time
+                    )
+                    time.sleep(backoff_time)
+
+                result = self.page.evaluate(
+                    """
+                    async (url) => {
+                        try {
+                            const response = await fetch(url, {
+                                method: 'GET',
+                                headers: {
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Accept-Language': 'ko-KR,ko;q=0.9',
+                                }
+                            });
+
+                            if (!response.ok) {
+                                const errorText = await response.text();
+                                throw new Error(`HTTP ${response.status}: ${errorText}`);
+                            }
+
+                            return await response.json();
+                        } catch (error) {
+                            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                                throw new Error('Network error: Failed to fetch');
+                            }
+                            throw error;
+                        }
+                    }
+                    """,
+                    endpoint_url,
+                )
+
+                # 성공 시 응답 반환 (타입 캐스팅)
+                self.logger.info("endpoint_fetch_success", endpoint=endpoint_name, attempt=attempt + 1)
+                return dict(result)  # 명시적 dict 변환으로 타입 체커 만족
+
+            except Exception as e:
+                error_msg = str(e)
+
+                # 429 에러인지 확인
+                if "429" in error_msg or "Too Many Requests" in error_msg:
+                    self.logger.warning(
+                        "rate_limit_error_endpoint",
+                        endpoint=endpoint_name,
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        error=error_msg
+                    )
+
+                    # 마지막 시도가 아니면 계속 재시도
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        self.logger.error(
+                            "endpoint_retry_exhausted",
+                            endpoint=endpoint_name,
+                            max_retries=max_retries
+                        )
+                        return None
+                else:
+                    # 기타 에러는 즉시 반환
+                    self.logger.error(
+                        "endpoint_fetch_error",
+                        endpoint=endpoint_name,
+                        error=error_msg,
+                    )
+                    return None
+
+        # 모든 재시도 실패
+        return None
 
     def _parse_complex_detail(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """API 응답 데이터를 파싱하여 필요한 정보 추출"""
@@ -833,10 +939,12 @@ class NaverRealEstateCrawler:
         self.logger.info("crawling_start_with_transactions")
 
         # CrawlCoordinator 초기화
-        output_dir = Path("output")
+        output_dir = Path(self.config.output_dir)
         coordinator = CrawlCoordinator(
             output_dir=output_dir,
-            checkpoint_path=output_dir / "checkpoint.json"
+            checkpoint_path=output_dir / "checkpoint.json",
+            enable_progress_tracking=True,
+            progress_report_interval=60,  # 60초마다 리포트 출력
         )
 
         # Rate limiter 상태 복원
@@ -850,13 +958,14 @@ class NaverRealEstateCrawler:
 
         # 준비: 모든 동의 단지 정보 수집
         dong_complexes = []
-        url = self.get_url()
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.config.headless)
             self.page = browser.new_page()
-            self.page.goto(url, timeout=self.config.timeout * 1000)
+            # m.land.naver.com에 먼저 접속하여 세션 확보 (API와 동일한 도메인)
+            self.page.goto("https://m.land.naver.com/complexes", timeout=self.config.timeout * 1000)
             self.page.wait_for_load_state("networkidle")
+            time.sleep(2)  # 세션 안정화 대기
             self.logger.info("browser_ready")
 
             # 모든 동에 대한 단지 정보 수집
