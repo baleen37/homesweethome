@@ -17,6 +17,101 @@ from crawler.writers.csv_writer import CSVWriter
 
 
 @pytest.mark.integration
+def test_crawl_complexes_basic(tmp_path: Path) -> None:
+    """
+    기본 단지 크롤링 기능 테스트 (Level 1)
+
+    이 테스트는:
+    - 금천구의 첫 번째 동만 크롤링합니다 (1개 동만)
+    - 실제 브라우저를 실행합니다 (headless=True)
+    - 기본 필드들이 올바르게 수집되는지 검증합니다
+    - CSV 저장 기능을 검증합니다
+    - 체크포인트 파일 생성을 확인합니다
+
+    실행: pytest tests/integration/test_naver_integration.py::test_crawl_complexes_basic -v -s
+    """
+    # 체크포인트 초기화
+    checkpoint_path = Path("output/checkpoint.json")
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
+
+    # CrawlerConfig 생성 (headless=True)
+    config = CrawlerConfig(timeout=30, headless=True, output_dir=str(tmp_path))
+
+    # NaverRealEstateCrawler 초기화
+    crawler = NaverRealEstateCrawler(config)
+
+    # 금천구만 선택하고 첫 번째 동만 사용
+    original_data = crawler.districts_data
+    test_district = None
+    for district in original_data["districts"]:
+        if district["district_name"] == "금천구":
+            test_district = district
+            break
+
+    assert test_district is not None, "금천구를 찾을 수 없습니다"
+    assert len(test_district["dongs"]) >= 1, "금천구에 동이 없습니다"
+
+    # districts_data를 금천구의 첫 번째 동만으로 수정
+    crawler.districts_data = {
+        "districts": [{
+            "district_name": test_district["district_name"],
+            "district_code": test_district["district_code"],
+            "dongs": [test_district["dongs"][0]]  # 첫 번째 동만
+        }]
+    }
+
+    print(f"\n테스트 대상: {test_district['district_name']} {test_district['dongs'][0]['dong_name']}")
+
+    # 크롤러 실행
+    results = crawler.crawl()
+
+    # 결과 검증
+    assert len(results) > 0, "크롤링 결과가 비어있습니다"
+    print(f"\n크롤링된 단지 수: {len(results)}")
+
+    # 기본 필드 검증
+    first_result = results[0]
+    required_fields = [
+        "complex_id",
+        "complex_name",
+        "real_estate_type",
+        "completion_year_month",
+        "total_dong_count",
+        "total_household_count",
+        "min_area",
+        "max_area"
+    ]
+
+    for field in required_fields:
+        assert field in first_result, f"필수 필드 '{field}'가 없습니다"
+
+    # CSV 저장 테스트
+    output_path = tmp_path / "test_basic_crawl.csv"
+    writer = CSVWriter(output_path)
+    writer.write(results)
+
+    assert output_path.exists(), "CSV 파일이 생성되지 않았습니다"
+    assert output_path.stat().st_size > 0, "CSV 파일이 비어있습니다"
+
+    # CSV 내용 검증
+    with open(output_path, encoding="utf-8") as f:
+        lines = f.readlines()
+        assert len(lines) > 1, "CSV에 데이터가 없습니다 (헤더만 존재)"
+        assert "complex_id" in lines[0], "CSV 헤더에 complex_id가 없습니다"
+
+    print(f"CSV 저장 완료: {output_path}")
+    print(f"CSV 라인 수: {len(lines)} (헤더 포함)")
+
+    # 체크포인트 파일 생성 검증
+    assert checkpoint_path.exists(), "체크포인트 파일이 생성되지 않았습니다"
+
+    print(f"\n✅ test_crawl_complexes_basic 테스트 통과!")
+    print(f"   - 크롤링된 단지: {len(results)}개")
+    print(f"   - 체크포인트: 생성됨")
+
+
+@pytest.mark.integration
 def test_real_crawl_small_area(tmp_path: Path) -> None:
     """
     실제 Playwright를 띄워서 금천구 3개 동만 크롤링하는 E2E 테스트
