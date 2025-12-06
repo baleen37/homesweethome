@@ -9,7 +9,7 @@ from crawler.config import CrawlerConfig
 from crawler.rate_limiter import AdaptiveRateLimiter
 from crawler.utils.checkpoint import CheckpointManager
 from crawler.utils.browser_manager import BrowserManager
-from crawler.utils.retry import BROWSER_RETRY_CONFIG
+from crawler.utils.retry import BROWSER_RETRY_CONFIG, Retryable
 from crawler.coordinator import CrawlCoordinator
 
 
