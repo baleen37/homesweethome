@@ -9,7 +9,7 @@ from crawler.config import CrawlerConfig
 from crawler.rate_limiter import AdaptiveRateLimiter
 from crawler.utils.checkpoint import CheckpointManager
 from crawler.utils.browser_manager import BrowserManager
-from crawler.utils.retry import BROWSER_RETRY_CONFIG, Retryable
+from crawler.utils.retry import BROWSER_RETRY_CONFIG
 from crawler.utils.logging_config import CrawlLogger
 from crawler.coordinator import CrawlCoordinator
 
@@ -63,23 +63,26 @@ class NaverRealEstateCrawler:
             raise ValueError(f"유효하지 않은 구 이름: {', '.join(invalid_names)}")
 
         # 필터링
-        filtered = [
-            d for d in districts
-            if d["district_name"] in district_names
-        ]
+        filtered = [d for d in districts if d["district_name"] in district_names]
 
         return filtered
 
-    def crawl(self) -> list[dict[str, Any]]:
+    def crawl(self, district_filter: list[str] | None = None) -> list[dict[str, Any]]:
         """
         네이버 부동산에서 단지 목록 데이터 크롤링
+
+        Args:
+            district_filter: 크롤링할 구 필터 (None이면 전체)
 
         Returns:
             단지 정보 리스트
         """
+        # 구 필터링
+        filtered_districts = self.filter_districts(district_filter)
+
         self.crawl_logger.log_crawl_start(
-            total_items=len(self.districts_data.get("districts", [])),
-            districts_count=len(self.districts_data.get("districts", [])),
+            total_items=len(filtered_districts),
+            districts_count=len(filtered_districts),
         )
 
         # 리소스 사용량 초기 로깅
@@ -90,16 +93,38 @@ class NaverRealEstateCrawler:
 
         try:
             # CrawlCoordinator를 사용하여 크롤링 조정
-            coordinator = CrawlCoordinator(self.config, self)
-            result = coordinator.crawl_all_districts()
+            coordinator = CrawlCoordinator(
+                output_dir=Path("output"), checkpoint_path=Path("output/checkpoint.json")
+            )
+
+            # 필터링된 구 데이터를 dong_complexes 형식으로 변환
+            dong_complexes = []
+            for district in filtered_districts:
+                dong_complexes.append(
+                    {
+                        "dong_code": district["district_code"],
+                        "dong_name": district["district_name"],
+                        "complexes": [],  # 복합 단지 정보는 나중에 채워짐
+                    }
+                )
+
+            # crawl_multiple_dongs 메서드 호출
+            result = coordinator.crawl_multiple_dongs(
+                dong_complexes=dong_complexes,
+                fetch_complex_detail=self.fetch_complex_detail,
+                fetch_transaction_history=self.fetch_transaction_history,
+                resume=self.checkpoint_manager.exists(),
+            )
 
             # 크롤링 완료 로깅
             self.crawl_logger.log_crawl_end(
-                items_processed=len(result),
+                items_processed=result["total_complexes_processed"],
                 success=True,
                 summary={
-                    "districts_crawled": len(result),
-                }
+                    "districts_crawled": result["total_dongs"],
+                    "complexes_processed": result["total_complexes_processed"],
+                    "transactions_collected": result["total_transactions_collected"],
+                },
             )
 
             # 최종 리소스 사용량 로깅
@@ -108,6 +133,7 @@ class NaverRealEstateCrawler:
                 avg_response_time=0,  # TODO: 평균 응답시간 계산 추가
             )
 
+            # 통계 결과 반환
             return result
 
         except Exception as e:
@@ -131,77 +157,138 @@ class NaverRealEstateCrawler:
             raise
 
     def _fetch_dong_data(self, dong: dict[str, Any]) -> list[dict[str, Any]]:
-        """
-        동 단위로 데이터를 가져오는 메서드
-
-        Args:
-            dong: 동 정보
-
-        Returns:
-            단지 정보 리스트
-        """
+        """법정동별 단지 데이터 수집 (모바일 API 사용)"""
         start_time = time.time()
         dong_name = dong.get("dong_name", "")
+        cortar_no = dong.get("cortarNo", "")
 
         # BrowserManager를 사용하여 브라우저 리소스 관리
         with self.browser_manager.managed_browser() as page:
             self.page = page  # 일시적으로 저장
 
-            # 동 페이지 접속
-            self.crawl_logger.log_api_call(
-                endpoint=f"/houses?cortarNo={dong['cortarNo']}",
-                params={"dong_name": dong_name},
+            # 모바일 페이지 접속하여 세션 확보
+            page.goto("https://m.land.naver.com/complexes")
+            page.wait_for_load_state("networkidle")
+            time.sleep(3)  # 세션 안정화
+
+            # bounds 정보 가져오기
+            bounds = dong.get(
+                "bounds",
+                {
+                    "leftLon": 127.047294,
+                    "rightLon": 127.063564,
+                    "topLat": 37.527949,
+                    "bottomLat": 37.513261,
+                },
             )
 
-            page.goto(f"https://new.land.naver.com/houses?cortarNo={dong['cortarNo']}")
-            page.wait_for_load_state("networkidle")
+            # 중심 좌표 계산
+            center_lon = (bounds["leftLon"] + bounds["rightLon"]) / 2
+            center_lat = (bounds["topLat"] + bounds["bottomLat"]) / 2
 
-            # 데이터 추출 스크립트 실행
-            self.logger.info("extracting_dong_data", dong=dong_name)
+            # 모바일 API URL 생성
+            api_url = (
+                f"https://m.land.naver.com/cluster/ajax/complexList?"
+                f"cortarNo={cortar_no}&"
+                f"rletTpCd=APT&"
+                f"tradTpCd=A1&"
+                f"z=17&"
+                f"lat={center_lat}&"
+                f"lon={center_lon}&"
+                f"btm={bounds['bottomLat']}&"
+                f"lft={bounds['leftLon']}&"
+                f"top={bounds['topLat']}&"
+                f"rgt={bounds['rightLon']}"
+            )
 
-            # 페이지에 있는 데이터 추출
-            result = page.evaluate("""
-                () => {
-                    const data = [];
-
-                    // 단지 목록 추출
-                    const complexes = document.querySelectorAll('a.item_link');
-                    complexes.forEach(complex => {
-                        try {
-                            const complexName = complex.querySelector('.complex_name')?.textContent?.trim() || '';
-                            const price = complex.querySelector('.price_line')?.textContent?.trim() || '';
-                            const spec = complex.querySelector('.spec_line')?.textContent?.trim() || '';
-                            const location = complex.querySelector('.location_line')?.textContent?.trim() || '';
-
-                            if (complexName) {
-                                data.push({
-                                    complex_name: complexName,
-                                    price: price,
-                                    spec: spec,
-                                    location: location
-                                });
+            # 브라우저 컨텍스트에서 API 호출
+            result = page.evaluate(
+                """
+                async (url) => {
+                    try {
+                        const response = await fetch(url, {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Accept': 'application/json, text/plain, */*',
+                                'Accept-Language': 'ko-KR,ko;q=0.9',
+                                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
                             }
-                        } catch (e) {
-                            console.error('Error extracting complex:', e);
-                        }
-                    });
+                        });
 
-                    return data;
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`HTTP ${response.status}: ${errorText}`);
+                        }
+
+                        return await response.json();
+                    } catch (error) {
+                        console.error('API call failed:', error);
+                        return { error: error.message };
+                    }
                 }
-            """)
+            """,
+                api_url,
+            )
 
             # 응답 시간 로깅
             response_time = time.time() - start_time
             self.crawl_logger.log_api_call(
-                endpoint="/houses/data_extract",
-                params={"dong_name": dong_name},
+                endpoint="/cluster/ajax/complexList",
+                params={"cortarNo": cortar_no, "dong_name": dong_name},
                 response_time=response_time,
-                response_size=len(str(result)),
+                response_size=len(str(result)) if result else 0,
+                status_code=200 if result and not result.get("error") else 500,
             )
 
-            return result
+            # 데이터 파싱
+            if result and result.get("error"):
+                self.logger.error("api_call_failed", dong_name=dong_name, error=result["error"])
+                return []
 
-    def fetch_dong_with_retry(self, dong: dict[str, Any], max_retries: int = 3) -> list[dict[str, Any]]:
+            return self._parse_complex_list_api(result)
+
+    def _parse_complex_list_api(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        """모바일 API 응답 파싱"""
+        # 모바일 API는 "result" 키에 데이터가 들어있음
+        items = response.get("result", [])
+
+        if not items:
+            return []
+
+        results = []
+        for item in items:
+            # HTML 태그 제거 함수
+            def clean_price(price_str: str) -> str:
+                if not price_str:
+                    return ""
+                return price_str.replace("<em class='txt_unit'>", "").replace("</em>", "").strip()
+
+            results.append(
+                {
+                    "complex_id": item.get("hscpNo", ""),
+                    "complex_name": item.get("hscpNm", ""),
+                    "real_estate_type": item.get("hscpTypeNm", ""),
+                    "completion_year_month": item.get("useAprvYmd", ""),
+                    "total_dong_count": item.get("totDongCnt", 0),
+                    "total_household_count": item.get("totHsehCnt", 0),
+                    "min_area": item.get("minSpc", ""),
+                    "max_area": item.get("maxSpc", ""),
+                    "deal_count": item.get("dealCnt", 0),
+                    "lease_count": item.get("leaseCnt", 0),
+                    "rent_count": item.get("rentCnt", 0),
+                    "deal_price_min": clean_price(item.get("dealPrcMin", "")),
+                    "deal_price_max": clean_price(item.get("dealPrcMax", "")),
+                    "lease_price_min": clean_price(item.get("leasePrcMin", "")),
+                    "lease_price_max": clean_price(item.get("leasePrcMax", "")),
+                }
+            )
+
+        return results
+
+    def fetch_dong_with_retry(
+        self, dong: dict[str, Any], max_retries: int = 3
+    ) -> list[dict[str, Any]]:
         """
         재시도 로직과 함께 동 데이터 가져오기
 
@@ -238,7 +325,9 @@ class NaverRealEstateCrawler:
                 )
                 self.rate_limiter.on_error()
                 if attempt == max_retries - 1:
-                    self.checkpoint_manager.add_failed_dong(dong["cortarNo"], "Timeout after retries")
+                    self.checkpoint_manager.add_failed_dong(
+                        dong["cortarNo"], "Timeout after retries"
+                    )
                     return []
                 time.sleep(delay)
             except Exception as e:
@@ -387,11 +476,7 @@ class NaverRealEstateCrawler:
             }
 
     def _fetch_endpoint_with_retry(
-        self,
-        page: Any,
-        endpoint_url: str,
-        endpoint_name: str,
-        max_retries: int = 3
+        self, page: Any, endpoint_url: str, endpoint_name: str, max_retries: int = 3
     ) -> dict[str, Any] | None:
         """
         API 엔드포인트를 재시도 로직과 함께 호출
@@ -407,6 +492,7 @@ class NaverRealEstateCrawler:
         Returns:
             API 응답 JSON 또는 None (모든 재시도 실패 시)
         """
+
         def fetch_endpoint():
             start_time = time.time()
             result = page.evaluate(
@@ -426,7 +512,18 @@ class NaverRealEstateCrawler:
                             throw new Error(`HTTP ${response.status}: ${errorText}`);
                         }
 
-                        return await response.json();
+                        const responseText = await response.text();
+
+                        // 응답이 JSON인지 확인
+                        if (responseText.trim().startsWith('<')) {
+                            throw new Error('Received HTML instead of JSON - likely blocked or redirected');
+                        }
+
+                        try {
+                            return JSON.parse(responseText);
+                        } catch (parseError) {
+                            throw new Error(`Invalid JSON response: ${parseError.message}. Response starts with: ${responseText.substring(0, 100)}`);
+                        }
                     } catch (error) {
                         console.error('API call failed:', error);
                         throw error;
@@ -468,7 +565,9 @@ class NaverRealEstateCrawler:
                 error=e,
                 context={
                     "endpoint": endpoint_name,
-                    "endpoint_url": endpoint_url[:100] + "..." if len(endpoint_url) > 100 else endpoint_url,
+                    "endpoint_url": endpoint_url[:100] + "..."
+                    if len(endpoint_url) > 100
+                    else endpoint_url,
                     "max_retries": max_retries,
                     "error_type": "api_fetch_failed",
                 },
@@ -514,7 +613,9 @@ class NaverRealEstateCrawler:
 
         return parsed
 
-    def fetch_complex_listings(self, complex_id: str, trade_type: str = "A1") -> list[dict[str, Any]]:
+    def fetch_complex_listings(
+        self, complex_id: str, trade_type: str = "A1"
+    ) -> list[dict[str, Any]]:
         """
         특정 단지의 매물 목록을 가져옵니다.
 
@@ -539,14 +640,14 @@ class NaverRealEstateCrawler:
         with self.browser_manager.managed_browser() as page:
             self.page = page  # 일시적으로 저장
 
-            # 먼저 단지 페이지에 접속하여 세션 확보
-            page.goto("https://m.land.naver.com/complexes")
+            # 먼저 메인 페이지 접속하여 세션 확보
+            page.goto("https://new.land.naver.com/complexes")
             page.wait_for_load_state("networkidle")
-            time.sleep(2)
+            time.sleep(3)
 
-            page.goto(f"https://m.land.naver.com/complex/{complex_id}")
+            page.goto(f"https://new.land.naver.com/complexes/{complex_id}")
             page.wait_for_load_state("networkidle")
-            time.sleep(2)
+            time.sleep(3)
 
             page = 1
             max_pages = 10  # 최대 페이지 수 제한
@@ -562,13 +663,13 @@ class NaverRealEstateCrawler:
                     },
                 )
 
-                # 모바일 API URL
+                # new.land.naver.com API URL
                 api_url = (
-                    f"https://m.land.naver.com/cluster/ajax/articleList?"
-                    f"complexNo={complex_id}&"
-                    f"tradTpCd={trade_type}&"
+                    f"https://new.land.naver.com/api/articles/complex/{complex_id}?"
+                    f"realEstateType=APT&"
+                    f"tradeType={trade_type}&"
                     f"page={page}&"
-                    f"showR0=N"
+                    f"order=rank"
                 )
 
                 try:
@@ -583,7 +684,7 @@ class NaverRealEstateCrawler:
                                     headers: {
                                         'Accept': 'application/json, text/plain, */*',
                                         'Accept-Language': 'ko-KR,ko;q=0.9',
-                                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
                                     }
                                 });
 
@@ -591,7 +692,18 @@ class NaverRealEstateCrawler:
                                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                                 }
 
-                                return await response.json();
+                                const responseText = await response.text();
+
+                                // 응답이 JSON인지 확인
+                                if (responseText.trim().startsWith('<')) {
+                                    throw new Error('Received HTML instead of JSON - likely blocked or redirected');
+                                }
+
+                                try {
+                                    return JSON.parse(responseText);
+                                } catch (parseError) {
+                                    throw new Error(`Invalid JSON response: ${parseError.message}. Response starts with: ${responseText.substring(0, 100)}`);
+                                }
                             } catch (error) {
                                 console.error('API call failed:', error);
                                 throw error;
@@ -604,10 +716,10 @@ class NaverRealEstateCrawler:
 
                     # API 호출 로깅
                     self.crawl_logger.log_api_call(
-                        endpoint="/cluster/ajax/articleList",
+                        endpoint="/api/articles/complex",
                         params={
-                            "complexNo": complex_id,
-                            "tradTpCd": trade_type,
+                            "complex_id": complex_id,
+                            "tradeType": trade_type,
                             "page": page,
                         },
                         response_time=response_time,
@@ -631,7 +743,19 @@ class NaverRealEstateCrawler:
                     all_listings.extend(listings)
 
                     # API 응답에 결과 수가 설정된 경우 확인
-                    if "result" in result and len(result["result"]) < 20:
+                    # 배열 응답과 객체 응답을 모두 처리
+                    response_size = 0
+                    if isinstance(result, list):
+                        response_size = len(result)
+                    elif isinstance(result, dict):
+                        if "result" in result:
+                            response_size = len(result["result"])
+                        elif "articles" in result:
+                            response_size = len(result["articles"])
+                        elif "articleList" in result:
+                            response_size = len(result["articleList"])
+
+                    if response_size > 0 and response_size < 20:
                         # 한 페이지에 20개 미만이면 마지막 페이지로 간주
                         break
 
@@ -664,36 +788,54 @@ class NaverRealEstateCrawler:
 
             return all_listings
 
-    def _parse_complex_listings(self, api_response: dict[str, Any]) -> list[dict[str, Any]]:
+    def _parse_complex_listings(self, api_response: dict[str, Any] | list) -> list[dict[str, Any]]:
         """API 응답에서 매물 정보 파싱"""
         listings = []
 
-        if "result" not in api_response:
+        # API 응답이 배열일 경우와 객체일 경우를 모두 처리
+        items = []
+        if isinstance(api_response, list):
+            items = api_response
+        elif isinstance(api_response, dict) and "result" in api_response:
+            items = api_response["result"]
+        elif isinstance(api_response, dict):
+            # 다른 가능한 키들 확인
+            for key in ["articles", "articleList", "list", "data"]:
+                if key in api_response:
+                    items = api_response[key]
+                    break
+
+        if not items:
             return listings
 
-        for item in api_response["result"]:
+        for item in items:
             try:
                 listing = {
-                    "article_no": item.get("articleNo"),
-                    "trade_type_name": item.get("tradeTypeName"),
-                    "floor": item.get("floor"),
-                    "area": item.get("area2"),
+                    "article_no": item.get("articleNo")
+                    or item.get("atclNo")
+                    or item.get("articleId"),
+                    "trade_type_name": item.get("tradeTypeName") or item.get("tradeTpNm"),
+                    "floor": item.get("floor") or item.get("flrInfo"),
+                    "area": item.get("area2") or item.get("spc1") or item.get("representativeArea"),
                     "area_pyeong": item.get("area1"),
-                    "price": item.get("price"),
-                    "rent_price": item.get("rentPrice"),
+                    "price": item.get("price") or item.get("prcInfo") or item.get("sellingPrice"),
+                    "rent_price": item.get("rentPrice") or item.get("rentPrc"),
                     "direction": item.get("direction"),
-                    "description": item.get("description"),
+                    "description": item.get("description")
+                    or item.get("tagList")
+                    or item.get("articleFeatureDesc"),
                     "tag_list": item.get("tagList"),
-                    "representative_image": item.get("representativeImgurl"),
-                    "room_count": item.get("roomCount"),
-                    "bathroom_count": item.get("bathroomCount"),
+                    "representative_image": item.get("representativeImgurl") or item.get("imgUrl"),
+                    "room_count": item.get("roomCount") or item.get("roomCnt"),
+                    "bathroom_count": item.get("bathroomCount") or item.get("bathCnt"),
                     "is_jeonse_key": item.get("isJeonseKey", False),
-                    "is_immediately_available": item.get("isImmediate", False),
-                    "is_heating_type": item.get("heatingType"),
-                    "building_name": item.get("buildingName"),
-                    "reg_date": item.get("regDate"),
-                    "contact_agent_name": item.get("agentName"),
-                    "contact_tel1": item.get("tel1"),
+                    "is_immediately_available": item.get("isImmediate", False)
+                    or item.get("mvInDt") == "즉시입주",
+                    "is_heating_type": item.get("heatingType") or item.get("heatTpNm"),
+                    "building_name": item.get("buildingName") or item.get("hscpNm"),
+                    "reg_date": item.get("regDate") or item.get("atclYmd"),
+                    "contact_agent_name": item.get("agentName") or item.get("rltrNm"),
+                    "contact_tel1": item.get("tel1") or item.get("telNo"),
                     "contact_tel2": item.get("tel2"),
                 }
                 listings.append(listing)
@@ -873,7 +1015,18 @@ class NaverRealEstateCrawler:
                                 throw new Error(`HTTP ${response.status}: ${errorText}`);
                             }
 
-                            return await response.json();
+                            const responseText = await response.text();
+
+                            // 응답이 JSON인지 확인
+                            if (responseText.trim().startsWith('<')) {
+                                throw new Error('Received HTML instead of JSON - likely blocked or redirected');
+                            }
+
+                            try {
+                                return JSON.parse(responseText);
+                            } catch (parseError) {
+                                throw new Error(`Invalid JSON response: ${parseError.message}. Response starts with: ${responseText.substring(0, 100)}`);
+                            }
                         }
                         """,
                         api_url,
