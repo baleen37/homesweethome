@@ -8,30 +8,21 @@ from typing import Any
 
 def pytest_addoption(parser):
     """pytest 커맨드 라인 옵션 추가"""
-    parser.addoption(
-        "--run-slow",
-        action="store_true",
-        default=False,
-        help="run slow tests"
-    )
+    parser.addoption("--run-slow", action="store_true", default=False, help="run slow tests")
     parser.addoption(
         "--run-integration",
         action="store_true",
         default=False,
-        help="run integration tests with real API calls"
+        help="run integration tests with real API calls",
     )
 
 
 def pytest_configure(config):
     """pytest 설정 초기화"""
     config.addinivalue_line(
-        "markers",
-        "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
     )
-    config.addinivalue_line(
-        "markers",
-        "integration: marks tests as integration tests"
-    )
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -54,11 +45,7 @@ def test_config(tmp_path: Path) -> CrawlerConfig:
     """테스트용 CrawlerConfig fixture"""
     output_dir = tmp_path / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
-    return CrawlerConfig(
-        headless=True,
-        timeout=30,
-        output_dir=str(output_dir)
-    )
+    return CrawlerConfig(headless=True, timeout=30, output_dir=str(output_dir))
 
 
 @pytest.fixture
@@ -90,6 +77,6 @@ def sample_districts_data() -> dict[str, Any]:
             {"district_code": "1117000000", "district_name": "은평구"},
             {"district_code": "1114000000", "district_name": "종로구"},
             {"district_code": "1116500000", "district_name": "중구"},
-            {"district_code": "1172000000", "district_name": "중랑구"}
+            {"district_code": "1172000000", "district_name": "중랑구"},
         ]
     }

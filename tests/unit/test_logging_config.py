@@ -1,12 +1,9 @@
 """로깅 설정 관련 테스트"""
 
-import json
 import logging
-import re
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import pytest
 
 from crawler.utils.logging_config import (
     CrawlLogger,
@@ -102,7 +99,6 @@ class TestSensitiveDataFilter:
 
     def test_structlog_processor(self):
         """structlog용 프로세서 함수 테스트"""
-        from crawler.utils.logging_config import sensitive_data_processor
 
         info_dict = {
             "user_email": "test@example.com",

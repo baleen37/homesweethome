@@ -6,13 +6,11 @@ from src/crawler/utils/retry.py instead of custom retry logic.
 
 import unittest.mock as mock
 
-import pytest
 
 from crawler.crawlers.naver import NaverRealEstateCrawler
-from crawler.utils.retry import Retryable
 
 
-@mock.patch('crawler.crawlers.naver.BROWSER_RETRY_CONFIG')
+@mock.patch("crawler.crawlers.naver.BROWSER_RETRY_CONFIG")
 def test_naver_crawler_uses_retryable_class(mock_browser_retry_config):
     """Test that NaverRealEstateCrawler uses Retryable class for retry logic.
 
@@ -31,10 +29,7 @@ def test_naver_crawler_uses_retryable_class(mock_browser_retry_config):
 
     # Call the method
     result = crawler._fetch_endpoint_with_retry(
-        mock_page,
-        "https://example.com/api",
-        "test_endpoint",
-        max_retries=3
+        mock_page, "https://example.com/api", "test_endpoint", max_retries=3
     )
 
     # Verify the result

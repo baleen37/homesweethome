@@ -1,4 +1,5 @@
 """체크포인트 동시성 관리를 위한 스레드 세이프 체크포인트 매니저"""
+
 import json
 import os
 import tempfile
@@ -36,18 +37,14 @@ class CheckpointManager:
             # 기본 위치 정보
             "last_dong": None,  # 마지막으로 처리된 동 ID
             "last_complex": None,  # 마지막으로 처리된 단지 ID
-
             # 처리 통계
             "total_complexes_processed": 0,  # 처리된 총 단지 수
             "total_transactions_collected": 0,  # 수집된 총 거래내역 수
-
             # 시간 정보
             "started_at": None,  # 시작 시각
             "last_updated_at": None,  # 마지막 업데이트 시각
-
             # 실패 기록
             "failed_dongs": [],  # 실패한 동 코드 목록
-
             # Rate limiter 상태
             "rate_limiter_state": None,
         }
@@ -71,16 +68,14 @@ class CheckpointManager:
                 return {}
 
             try:
-                with open(self.checkpoint_path, 'r', encoding='utf-8') as f:
+                with open(self.checkpoint_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    logger.debug("checkpoint_loaded", path=str(self.checkpoint_path), keys=len(data))
+                    logger.debug(
+                        "checkpoint_loaded", path=str(self.checkpoint_path), keys=len(data)
+                    )
                     return data
             except (json.JSONDecodeError, IOError) as e:
-                logger.warning(
-                    "checkpoint_corrupted",
-                    path=str(self.checkpoint_path),
-                    error=str(e)
-                )
+                logger.warning("checkpoint_corrupted", path=str(self.checkpoint_path), error=str(e))
                 # 손상된 파일 백업
                 self._backup_corrupted_file()
                 return {}
@@ -88,37 +83,23 @@ class CheckpointManager:
     def _backup_corrupted_file(self) -> None:
         """손상된 체크포인트 파일 백업"""
         if self.checkpoint_path.exists():
-            backup_path = self.checkpoint_path.with_suffix('.json.backup')
+            backup_path = self.checkpoint_path.with_suffix(".json.backup")
             try:
                 # 기존 백업이 있으면 타임스탬프 추가
                 if backup_path.exists():
                     import time
+
                     timestamp = int(time.time())
-                    backup_path = backup_path.with_suffix(f'.json.backup.{timestamp}')
+                    backup_path = backup_path.with_suffix(f".json.backup.{timestamp}")
 
                 self.checkpoint_path.rename(backup_path)
-                logger.info("checkpoint_backed_up", original=str(self.checkpoint_path), backup=str(backup_path))
-            except OSError as e:
-                logger.error(
-                    "backup_failed",
-                    path=str(self.checkpoint_path),
-                    error=str(e)
+                logger.info(
+                    "checkpoint_backed_up",
+                    original=str(self.checkpoint_path),
+                    backup=str(backup_path),
                 )
-
-    def save(self, key: str, data: Any) -> None:
-        """체크포인트 데이터 저장
-
-        Args:
-            key: 저장할 데이터의 키
-            data: 저장할 데이터
-        """
-        with self._lock:
-            # 현재 데이터 로드
-            current_data = self.load()
-            current_data[key] = data
-
-            # 원자적 쓰기
-            self._atomic_write(current_data)
+            except OSError as e:
+                logger.error("backup_failed", path=str(self.checkpoint_path), error=str(e))
 
     def _atomic_write(self, data: Dict[str, Any]) -> None:
         """원자적 파일 쓰기 (임시 파일 + rename)
@@ -128,14 +109,12 @@ class CheckpointManager:
         """
         # 임시 파일에 쓰기
         fd, temp_path = tempfile.mkstemp(
-            suffix='.tmp',
-            prefix='checkpoint_',
-            dir=self.checkpoint_path.parent
+            suffix=".tmp", prefix="checkpoint_", dir=self.checkpoint_path.parent
         )
 
         try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2, separators=(',', ': '))
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2, separators=(",", ": "))
                 f.flush()  # 디스크에 즉시 쓰기
                 os.fsync(f.fileno())  # 파일 시스템 동기화
 
@@ -182,7 +161,9 @@ class CheckpointManager:
                     self.checkpoint_path.unlink()
                     logger.debug("checkpoint_cleared", path=str(self.checkpoint_path))
                 except OSError as e:
-                    logger.error("checkpoint_clear_failed", path=str(self.checkpoint_path), error=str(e))
+                    logger.error(
+                        "checkpoint_clear_failed", path=str(self.checkpoint_path), error=str(e)
+                    )
                     raise
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -216,6 +197,14 @@ class CheckpointManager:
                 return True
             return False
 
+    def exists(self) -> bool:
+        """체크포인트 파일 존재 여부 확인
+
+        Returns:
+            파일 존재 여부
+        """
+        return self.checkpoint_path.exists()
+
     def update(self, updates: Dict[str, Any]) -> None:
         """여러 키-값 쌍 한 번에 업데이트
 
@@ -241,7 +230,7 @@ class CheckpointManager:
                 "keys_count": len(data),
                 "file_size_bytes": file_size,
                 "file_path": str(self.checkpoint_path),
-                "exists": self.checkpoint_path.exists()
+                "exists": self.checkpoint_path.exists(),
             }
 
     # 기존 API 호환성 메서드들 (naver.py에서 사용)
@@ -252,16 +241,12 @@ class CheckpointManager:
                 return None
 
             try:
-                with open(self.checkpoint_path, 'r', encoding='utf-8') as f:
+                with open(self.checkpoint_path, "r", encoding="utf-8") as f:
                     loaded_checkpoint = json.load(f)
                     self.checkpoint.update(loaded_checkpoint)
                 return self.checkpoint
             except (json.JSONDecodeError, IOError) as e:
-                logger.warning(
-                    "checkpoint_corrupted",
-                    path=str(self.checkpoint_path),
-                    error=str(e)
-                )
+                logger.warning("checkpoint_corrupted", path=str(self.checkpoint_path), error=str(e))
                 # 손상된 파일 백업
                 self._backup_corrupted_file()
                 return None
@@ -275,11 +260,7 @@ class CheckpointManager:
             # 원자적 쓰기
             self._atomic_write(self.checkpoint)
 
-    def save(
-        self,
-        *args,
-        **kwargs
-    ) -> None:
+    def save(self, *args, **kwargs) -> None:
         """다중 정의: 기존 API와 새 API 모두 지원
 
         새 API용: save(key, data)
@@ -376,7 +357,9 @@ class CheckpointManager:
                 "last_dong": self.checkpoint.get("last_dong"),
                 "last_complex": self.checkpoint.get("last_complex"),
                 "total_complexes_processed": self.checkpoint.get("total_complexes_processed", 0),
-                "total_transactions_collected": self.checkpoint.get("total_transactions_collected", 0),
+                "total_transactions_collected": self.checkpoint.get(
+                    "total_transactions_collected", 0
+                ),
                 "started_at": self.checkpoint.get("started_at"),
                 "last_updated_at": self.checkpoint.get("last_updated_at"),
                 "failed_dongs_count": len(self.checkpoint.get("failed_dongs", [])),

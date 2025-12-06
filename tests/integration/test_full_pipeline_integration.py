@@ -16,10 +16,7 @@ class TestFullPipelineIntegration:
     @pytest.fixture
     def config(self):
         """Create test configuration."""
-        return CrawlerConfig(
-            headless=True,
-            timeout=30
-        )
+        return CrawlerConfig(headless=True, timeout=30)
 
     @pytest.fixture
     def mock_districts_data(self):
@@ -36,21 +33,23 @@ class TestFullPipelineIntegration:
                                 "leftLon": 126.880,
                                 "rightLon": 126.890,
                                 "topLat": 37.480,
-                                "bottomLat": 37.470
-                            }
+                                "bottomLat": 37.470,
+                            },
                         }
-                    ]
+                    ],
                 }
             ]
         }
 
     def test_single_complex_full_pipeline(self, config):
         """Level 3: Test single complex full pipeline - fetch details and all transactions."""
-        with patch('crawler.crawlers.naver.NaverRealEstateCrawler._load_districts_data') as mock_load:
+        with patch(
+            "crawler.crawlers.naver.NaverRealEstateCrawler._load_districts_data"
+        ) as mock_load:
             mock_load.return_value = {"districts": []}
 
             # Mock fetch_complex_detail
-            with patch.object(NaverRealEstateCrawler, 'fetch_complex_detail') as mock_fetch_detail:
+            with patch.object(NaverRealEstateCrawler, "fetch_complex_detail") as mock_fetch_detail:
                 # Prepare mock complex detail with pyeong types
                 mock_detail = {
                     "complex_id": "111515",
@@ -59,14 +58,18 @@ class TestFullPipelineIntegration:
                         {"pyeong_type_number": 1, "pyeong_name": "84A"},
                         {"pyeong_type_number": 2, "pyeong_name": "84B"},
                         {"pyeong_type_number": 3, "pyeong_name": "105A"},
-                    ]
+                    ],
                 }
                 mock_fetch_detail.return_value = mock_detail
 
                 # Mock fetch_transaction_history
-                with patch.object(NaverRealEstateCrawler, 'fetch_transaction_history') as mock_fetch_transactions:
+                with patch.object(
+                    NaverRealEstateCrawler, "fetch_transaction_history"
+                ) as mock_fetch_transactions:
                     # Different transaction data for different types
-                    def transaction_side_effect(complex_id, pyeong_type_number, trade_type, **kwargs):
+                    def transaction_side_effect(
+                        complex_id, pyeong_type_number, trade_type, **kwargs
+                    ):
                         if trade_type == "A1":  # 매매
                             return [
                                 {
@@ -133,7 +136,7 @@ class TestFullPipelineIntegration:
                                 pyeong_type_number=pyeong["pyeong_type_number"],
                                 trade_type=trade_type,
                                 complex_name="헬리오시티",
-                                pyeong_name=pyeong["pyeong_name"]
+                                pyeong_name=pyeong["pyeong_name"],
                             )
                             all_transactions.extend(transactions)
 
@@ -162,7 +165,9 @@ class TestFullPipelineIntegration:
     def test_single_dong_full_pipeline(self, config, mock_districts_data):
         """Level 4: Test single dong crawling with all complexes and transactions."""
         # Create crawler
-        with patch.object(NaverRealEstateCrawler, '_load_districts_data', return_value=mock_districts_data):
+        with patch.object(
+            NaverRealEstateCrawler, "_load_districts_data", return_value=mock_districts_data
+        ):
             crawler = NaverRealEstateCrawler(config)
 
             # Mock crawl method to return expected results for a single dong
@@ -174,22 +179,18 @@ class TestFullPipelineIntegration:
                 "total_transactions_collected": 9,  # 1 complex × 3 pyeong types × 3 trade types
                 "total_errors": 0,
                 "duration_seconds": 30.0,
-                "rate_limiter_state": {
-                    "current_delay": 2.5,
-                    "success_count": 10,
-                    "error_count": 0
-                },
+                "rate_limiter_state": {"current_delay": 2.5, "success_count": 10, "error_count": 0},
                 "results": [
                     {
                         "complex_id": "111515",
                         "complex_name": "헬리오시티",
                         "pyeong_types_count": 3,
-                        "transactions_count": 9
+                        "transactions_count": 9,
                     }
-                ]
+                ],
             }
 
-            with patch.object(crawler, 'crawl', return_value=expected_results):
+            with patch.object(crawler, "crawl", return_value=expected_results):
                 results = crawler.crawl()
 
             # Verify results
@@ -223,10 +224,10 @@ class TestFullPipelineIntegration:
                 "total_complexes_processed": 10,
                 "total_transactions_collected": 150,
                 "started_at": "2025-12-06T10:00:00",
-                "last_updated_at": "2025-12-06T11:30:00"
+                "last_updated_at": "2025-12-06T11:30:00",
             }
 
-            with open(checkpoint_path, 'w') as f:
+            with open(checkpoint_path, "w") as f:
                 json.dump(initial_checkpoint, f)
 
             # Test loading checkpoint
@@ -243,7 +244,7 @@ class TestFullPipelineIntegration:
                 last_dong="1154510200",
                 last_complex="111516",
                 increment_complexes=True,
-                increment_transactions=150  # Additional transactions
+                increment_transactions=150,  # Additional transactions
             )
 
             # Load again to verify
@@ -286,7 +287,9 @@ class TestFullPipelineIntegration:
 
     def test_transaction_validation_and_parsing(self, config):
         """Test transaction validation and parsing with edge cases."""
-        with patch('crawler.crawlers.naver.NaverRealEstateCrawler._load_districts_data') as mock_load:
+        with patch(
+            "crawler.crawlers.naver.NaverRealEstateCrawler._load_districts_data"
+        ) as mock_load:
             mock_load.return_value = {"districts": []}
             crawler = NaverRealEstateCrawler(config)
 
@@ -295,16 +298,12 @@ class TestFullPipelineIntegration:
                 "tradeDate": "2025-11-14",
                 "floor": 21,
                 "dealPrice": 1700000000,
-                "isDelete": True
+                "isDelete": True,
             }
             assert crawler._validate_transaction(deleted_txn) is False
 
             # Test validation of transaction with missing fields
-            incomplete_txn = {
-                "floor": 21,
-                "dealPrice": 1700000000,
-                "isDelete": False
-            }
+            incomplete_txn = {"floor": 21, "dealPrice": 1700000000, "isDelete": False}
             assert crawler._validate_transaction(incomplete_txn) is False
 
             # Test validation of valid transaction
@@ -314,7 +313,7 @@ class TestFullPipelineIntegration:
                 "dealPrice": 1700000000,
                 "deposit": 0,
                 "monthlyRent": 0,
-                "isDelete": False
+                "isDelete": False,
             }
             assert crawler._validate_transaction(valid_txn) is True
 
@@ -328,7 +327,7 @@ class TestFullPipelineIntegration:
                 "monthlyRent": 2000000,
                 "isDelete": False,
                 "tradeCategory": "중개거래",
-                "isRenew": False
+                "isRenew": False,
             }
 
             parsed = crawler._parse_transaction(
@@ -337,7 +336,7 @@ class TestFullPipelineIntegration:
                 complex_name="헬리오시티",
                 pyeong_type_number=1,
                 pyeong_name="84A",
-                trade_type="B2"
+                trade_type="B2",
             )
 
             assert parsed["trade_type_name"] == "월세"

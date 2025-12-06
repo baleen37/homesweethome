@@ -3,7 +3,6 @@
 민감한 정보를 필터링하고 구조화된 로깅을 제공합니다.
 """
 
-import json
 import logging
 import logging.handlers
 import re
@@ -47,11 +46,11 @@ SENSITIVE_PATTERNS = {
 class SensitiveDataFilter(logging.Filter):
     """로그에서 민감한 정보를 마스킹하는 필터"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.patterns = SENSITIVE_PATTERNS
 
-    def _mask_value(self, match: re.Match) -> str:
+    def _mask_value(self, match: re.Match[str]) -> str:
         """매치된 값에 적절한 마스킹 적용"""
         value = match.group(0)
 
@@ -104,7 +103,9 @@ class SensitiveDataFilter(logging.Filter):
         return True
 
 
-def sensitive_data_processor(logger, method_name: str, event_dict: dict) -> dict:
+def sensitive_data_processor(
+    logger: Any, method_name: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
     """structlog용 민감 데이터 처리 프로세서"""
     # dict 값들에서 민감 정보 찾아서 마스킹
     for key, value in event_dict.items():
@@ -220,11 +221,11 @@ class CrawlLogger:
     def log_api_call(
         self,
         endpoint: str,
-        params: Optional[dict] = None,
+        params: Optional[dict[str, Any]] = None,
         response_time: Optional[float] = None,
         status_code: Optional[int] = None,
         response_size: Optional[int] = None,
-    ):
+    ) -> None:
         """API 호출 로깅
 
         Args:
@@ -238,7 +239,6 @@ class CrawlLogger:
 
         log_data = {
             "crawler": self.crawler_name,
-            "event": "api_call",
             "endpoint": endpoint,
             "request_count": self.request_count,
         }
@@ -254,7 +254,9 @@ class CrawlLogger:
 
         # 요청 간격 계산
         if self.last_request_time > 0:
-            log_data["interval_since_last"] = round(time.time() - self.last_request_time, 3)
+            log_data["interval_since_last"] = float(
+                round(time.time() - self.last_request_time, 3)
+            )
         self.last_request_time = time.time()
 
         # 로그 레벨 결정
@@ -269,8 +271,8 @@ class CrawlLogger:
         max_attempts: int,
         error: str,
         delay: float,
-        context: Optional[dict] = None,
-    ):
+        context: Optional[dict[str, Any]] = None,
+    ) -> None:
         """재시도 로깅
 
         Args:
@@ -282,7 +284,6 @@ class CrawlLogger:
         """
         log_data = {
             "crawler": self.crawler_name,
-            "event": "retry",
             "attempt": attempt,
             "max_attempts": max_attempts,
             "error": error,
@@ -301,7 +302,7 @@ class CrawlLogger:
         item_type: str = "items",
         elapsed_time: Optional[float] = None,
         eta: Optional[float] = None,
-    ):
+    ) -> None:
         """진행률 로깅
 
         Args:
@@ -315,7 +316,6 @@ class CrawlLogger:
 
         log_data = {
             "crawler": self.crawler_name,
-            "event": "progress",
             "current": current,
             "total": total,
             "percentage": round(percentage, 2),
@@ -339,7 +339,7 @@ class CrawlLogger:
         cpu_percent: Optional[float] = None,
         requests_made: Optional[int] = None,
         avg_response_time: Optional[float] = None,
-    ):
+    ) -> None:
         """리소스 사용량 로깅
 
         Args:
@@ -350,7 +350,6 @@ class CrawlLogger:
         """
         log_data = {
             "crawler": self.crawler_name,
-            "event": "resource_usage",
             "uptime": round(time.time() - self.start_time, 1),
         }
 
@@ -368,9 +367,9 @@ class CrawlLogger:
     def error_with_context(
         self,
         error: Exception,
-        context: Optional[dict] = None,
+        context: Optional[dict[str, Any]] = None,
         critical: bool = False,
-    ):
+    ) -> None:
         """에러와 컨텍스트 정보 함께 로깅
 
         Args:
@@ -380,7 +379,6 @@ class CrawlLogger:
         """
         log_data = {
             "crawler": self.crawler_name,
-            "event": "error",
             "error_type": type(error).__name__,
             "error_message": str(error),
             "critical": critical,
@@ -403,30 +401,28 @@ class CrawlLogger:
         else:
             self.logger.error("Error occurred", **log_data)
 
-    def log_crawl_start(self, total_items: Optional[int] = None, **kwargs):
+    def log_crawl_start(self, total_items: Optional[int] = None, **kwargs: Any) -> None:
         """크롤링 시작 로깅"""
         log_data = {
             "crawler": self.crawler_name,
-            "event": "crawl_start",
         }
         if total_items is not None:
             log_data["total_items"] = total_items
         log_data.update(kwargs)
 
-        self.logger.info("Starting crawl", **log_data)
+        self.logger.info("crawl_start", **log_data)
 
     def log_crawl_end(
         self,
         items_processed: int,
         success: bool = True,
-        summary: Optional[dict] = None,
-    ):
+        summary: Optional[dict[str, Any]] = None,
+    ) -> None:
         """크롤링 종료 로깅"""
         elapsed_time = time.time() - self.start_time
 
         log_data = {
             "crawler": self.crawler_name,
-            "event": "crawl_end",
             "items_processed": items_processed,
             "success": success,
             "elapsed_time": round(elapsed_time, 1),
@@ -440,6 +436,6 @@ class CrawlLogger:
             log_data.update(summary)
 
         if success:
-            self.logger.info("Crawl completed successfully", **log_data)
+            self.logger.info("crawl_end_success", **log_data)
         else:
-            self.logger.warning("Crawl completed with issues", **log_data)
+            self.logger.warning("crawl_end_issues", **log_data)

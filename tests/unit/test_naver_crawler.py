@@ -30,25 +30,70 @@ def sample_districts_data() -> dict[str, Any]:
                 "district_code": "11110",
                 "district_name": "종로구",
                 "dongs": [
-                    {"cortarNo": "1111010100", "dong_name": "사직동", "bounds": {"leftLon": 126.97, "rightLon": 126.99, "topLat": 37.58, "bottomLat": 37.56}},
-                    {"cortarNo": "1111010300", "dong_name": "삼청동", "bounds": {"leftLon": 126.98, "rightLon": 127.00, "topLat": 37.59, "bottomLat": 37.57}},
-                ]
+                    {
+                        "cortarNo": "1111010100",
+                        "dong_name": "사직동",
+                        "bounds": {
+                            "leftLon": 126.97,
+                            "rightLon": 126.99,
+                            "topLat": 37.58,
+                            "bottomLat": 37.56,
+                        },
+                    },
+                    {
+                        "cortarNo": "1111010300",
+                        "dong_name": "삼청동",
+                        "bounds": {
+                            "leftLon": 126.98,
+                            "rightLon": 127.00,
+                            "topLat": 37.59,
+                            "bottomLat": 37.57,
+                        },
+                    },
+                ],
             },
             {
                 "district_code": "11140",
                 "district_name": "중구",
                 "dongs": [
-                    {"cortarNo": "1114010100", "dong_name": "소공동", "bounds": {"leftLon": 126.97, "rightLon": 126.99, "topLat": 37.56, "bottomLat": 37.54}},
-                    {"cortarNo": "1114010300", "dong_name": "회현동", "bounds": {"leftLon": 126.98, "rightLon": 127.00, "topLat": 37.55, "bottomLat": 37.53}},
-                ]
+                    {
+                        "cortarNo": "1114010100",
+                        "dong_name": "소공동",
+                        "bounds": {
+                            "leftLon": 126.97,
+                            "rightLon": 126.99,
+                            "topLat": 37.56,
+                            "bottomLat": 37.54,
+                        },
+                    },
+                    {
+                        "cortarNo": "1114010300",
+                        "dong_name": "회현동",
+                        "bounds": {
+                            "leftLon": 126.98,
+                            "rightLon": 127.00,
+                            "topLat": 37.55,
+                            "bottomLat": 37.53,
+                        },
+                    },
+                ],
             },
             {
                 "district_code": "11170",
                 "district_name": "용산구",
                 "dongs": [
-                    {"cortarNo": "1117010100", "dong_name": "후암동", "bounds": {"leftLon": 126.96, "rightLon": 126.98, "topLat": 37.54, "bottomLat": 37.52}},
-                ]
-            }
+                    {
+                        "cortarNo": "1117010100",
+                        "dong_name": "후암동",
+                        "bounds": {
+                            "leftLon": 126.96,
+                            "rightLon": 126.98,
+                            "topLat": 37.54,
+                            "bottomLat": 37.52,
+                        },
+                    },
+                ],
+            },
         ]
     }
 
@@ -363,7 +408,7 @@ def test_fetch_complex_listings_calls_api_correctly(crawler_config: CrawlerConfi
                 "bathCnt": "2",
                 "heatTpNm": "중앙난방",
                 "mvInDt": "즉시입주",
-                "tagList": "[풀옵션,역세권]"
+                "tagList": "[풀옵션,역세권]",
             }
         ]
     }
@@ -438,7 +483,7 @@ def test_fetch_complex_listings_handles_pagination(crawler_config: CrawlerConfig
             "rentFee": "",
             "deposit": "",
             "shortRentYn": "N",
-            "spcPrv": "특약사항 없음"
+            "spcPrv": "특약사항 없음",
         }
 
     first_page_response = {
@@ -452,7 +497,7 @@ def test_fetch_complex_listings_handles_pagination(crawler_config: CrawlerConfig
     mock_page.evaluate.side_effect = [
         first_page_response,
         second_page_response,
-        third_page_response
+        third_page_response,
     ]
     crawler.page = mock_page
 
@@ -554,7 +599,7 @@ def test_parse_complex_listings_extracts_all_fields(crawler_config: CrawlerConfi
                 "rentFee": "",
                 "deposit": "",
                 "shortRentYn": "N",
-                "spcPrv": "특약사항 없음"
+                "spcPrv": "특약사항 없음",
             }
         ]
     }
@@ -612,7 +657,9 @@ def test_fetch_transaction_history_single_page(crawler_config: CrawlerConfig) ->
     crawler = NaverRealEstateCrawler(crawler_config)
 
     # Load test fixture for last page (hasNextPage: false)
-    fixture_path = Path(__file__).parent.parent / "fixtures" / "naver_transaction_response_last_page.json"
+    fixture_path = (
+        Path(__file__).parent.parent / "fixtures" / "naver_transaction_response_last_page.json"
+    )
     with open(fixture_path) as f:
         mock_response = json.load(f)
 
@@ -625,13 +672,11 @@ def test_fetch_transaction_history_single_page(crawler_config: CrawlerConfig) ->
     crawler.page = mock_page
 
     # Mock rate limiter
-    with patch.object(crawler.rate_limiter, 'wait'):
-        with patch.object(crawler.rate_limiter, 'on_success'):
+    with patch.object(crawler.rate_limiter, "wait"):
+        with patch.object(crawler.rate_limiter, "on_success"):
             # Call the method
             transactions = crawler.fetch_transaction_history(
-                complex_id="111515",
-                pyeong_type_number=1,
-                trade_type="A1"
+                complex_id="111515", pyeong_type_number=1, trade_type="A1"
             )
 
     # Verify results - should only have 1 transaction from the last page fixture
@@ -645,7 +690,7 @@ def test_fetch_transaction_history_single_page(crawler_config: CrawlerConfig) ->
         "pyeongTypeNumber=1",
         "tradeType=A1",
         "page=1",
-        "size=20"
+        "size=20",
     ]
     call_args = mock_page.evaluate.call_args[0][1]
     for expected_part in expected_url_contains:
@@ -659,8 +704,12 @@ def test_fetch_transaction_history_pagination(crawler_config: CrawlerConfig) -> 
     crawler = NaverRealEstateCrawler(crawler_config)
 
     # Load test fixtures
-    first_page_fixture = Path(__file__).parent.parent / "fixtures" / "naver_transaction_response.json"
-    last_page_fixture = Path(__file__).parent.parent / "fixtures" / "naver_transaction_response_last_page.json"
+    first_page_fixture = (
+        Path(__file__).parent.parent / "fixtures" / "naver_transaction_response.json"
+    )
+    last_page_fixture = (
+        Path(__file__).parent.parent / "fixtures" / "naver_transaction_response_last_page.json"
+    )
 
     with open(first_page_fixture) as f:
         first_page_response = json.load(f)
@@ -677,13 +726,11 @@ def test_fetch_transaction_history_pagination(crawler_config: CrawlerConfig) -> 
     crawler.page = mock_page
 
     # Mock rate limiter
-    with patch.object(crawler.rate_limiter, 'wait'):
-        with patch.object(crawler.rate_limiter, 'on_success'):
+    with patch.object(crawler.rate_limiter, "wait"):
+        with patch.object(crawler.rate_limiter, "on_success"):
             # Call the method
             transactions = crawler.fetch_transaction_history(
-                complex_id="111515",
-                pyeong_type_number=1,
-                trade_type="A1"
+                complex_id="111515", pyeong_type_number=1, trade_type="A1"
             )
 
     # Verify results from both pages
@@ -710,21 +757,19 @@ def test_fetch_transaction_history_rate_limit_error(crawler_config: CrawlerConfi
     # First call throws 429 error, second call succeeds
     mock_page.evaluate.side_effect = [
         Exception("HTTP 429: Too Many Requests"),
-        {"isSuccess": True, "result": {"list": [], "hasNextPage": False}}
+        {"isSuccess": True, "result": {"list": [], "hasNextPage": False}},
     ]
 
     crawler.page = mock_page
 
     # Mock rate limiter and sleep
-    with patch.object(crawler.rate_limiter, 'wait'):
-        with patch.object(crawler.rate_limiter, 'on_success'):
-            with patch.object(crawler.rate_limiter, 'on_rate_limit_error') as mock_429:
-                with patch('time.sleep') as mock_sleep:
+    with patch.object(crawler.rate_limiter, "wait"):
+        with patch.object(crawler.rate_limiter, "on_success"):
+            with patch.object(crawler.rate_limiter, "on_rate_limit_error") as mock_429:
+                with patch("time.sleep") as mock_sleep:
                     # Call the method
                     transactions = crawler.fetch_transaction_history(
-                        complex_id="111515",
-                        pyeong_type_number=1,
-                        trade_type="A1"
+                        complex_id="111515", pyeong_type_number=1, trade_type="A1"
                     )
 
     # Verify rate limiter was called on error
@@ -748,7 +793,7 @@ def test_parse_transaction_normalizes_data(crawler_config: CrawlerConfig) -> Non
         "isDelete": False,
         "tradeCategory": "중개거래",
         "propertyType": "NORMAL",
-        "isRenew": False
+        "isRenew": False,
     }
 
     # Call parse method
@@ -758,7 +803,7 @@ def test_parse_transaction_normalizes_data(crawler_config: CrawlerConfig) -> Non
         complex_name="헬리오시티",
         pyeong_type_number=1,
         pyeong_name="84A",
-        trade_type="A1"
+        trade_type="A1",
     )
 
     # Verify normalized data
@@ -793,7 +838,7 @@ def test_parse_transaction_jeonse_wolse(crawler_config: CrawlerConfig) -> None:
         "monthlyRent": 0,
         "isDelete": False,
         "tradeCategory": "중개거래",
-        "isRenew": False
+        "isRenew": False,
     }
 
     parsed = crawler._parse_transaction(
@@ -802,7 +847,7 @@ def test_parse_transaction_jeonse_wolse(crawler_config: CrawlerConfig) -> None:
         complex_name="헬리오시티",
         pyeong_type_number=1,
         pyeong_name="84A",
-        trade_type="B1"
+        trade_type="B1",
     )
 
     assert parsed["trade_type_name"] == "전세"
@@ -819,7 +864,7 @@ def test_parse_transaction_jeonse_wolse(crawler_config: CrawlerConfig) -> None:
         "monthlyRent": 2000000,
         "isDelete": False,
         "tradeCategory": "중개거래",
-        "isRenew": False
+        "isRenew": False,
     }
 
     parsed = crawler._parse_transaction(
@@ -828,7 +873,7 @@ def test_parse_transaction_jeonse_wolse(crawler_config: CrawlerConfig) -> None:
         complex_name="헬리오시티",
         pyeong_type_number=1,
         pyeong_name="84A",
-        trade_type="B2"
+        trade_type="B2",
     )
 
     assert parsed["trade_type_name"] == "월세"
@@ -843,7 +888,9 @@ def test_fetch_transaction_history_all_trade_types(crawler_config: CrawlerConfig
     crawler = NaverRealEstateCrawler(crawler_config)
 
     # Load test fixture for last page (hasNextPage: false)
-    fixture_path = Path(__file__).parent.parent / "fixtures" / "naver_transaction_response_last_page.json"
+    fixture_path = (
+        Path(__file__).parent.parent / "fixtures" / "naver_transaction_response_last_page.json"
+    )
     with open(fixture_path) as f:
         mock_response = json.load(f)
 
@@ -856,14 +903,12 @@ def test_fetch_transaction_history_all_trade_types(crawler_config: CrawlerConfig
     crawler.page = mock_page
 
     # Mock rate limiter
-    with patch.object(crawler.rate_limiter, 'wait'):
-        with patch.object(crawler.rate_limiter, 'on_success'):
+    with patch.object(crawler.rate_limiter, "wait"):
+        with patch.object(crawler.rate_limiter, "on_success"):
             # Test all trade types
             for trade_type in ["A1", "B1", "B2"]:
                 transactions = crawler.fetch_transaction_history(
-                    complex_id="111515",
-                    pyeong_type_number=1,
-                    trade_type=trade_type
+                    complex_id="111515", pyeong_type_number=1, trade_type=trade_type
                 )
 
                 # Should get some transactions
@@ -878,7 +923,9 @@ def test_fetch_transaction_history_all_trade_types(crawler_config: CrawlerConfig
 # Tests for filter_districts method
 
 
-def test_filter_districts_none_returns_all(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+def test_filter_districts_none_returns_all(
+    crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]
+) -> None:
     """district_names이 None이면 전체 구를 반환하는지 테스트"""
     crawler = NaverRealEstateCrawler(crawler_config)
 
@@ -895,7 +942,9 @@ def test_filter_districts_none_returns_all(crawler_config: CrawlerConfig, sample
     assert result[2]["district_name"] == "용산구"
 
 
-def test_filter_districts_valid_single_district(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+def test_filter_districts_valid_single_district(
+    crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]
+) -> None:
     """유효한 단일 구 필터링 테스트"""
     crawler = NaverRealEstateCrawler(crawler_config)
 
@@ -911,7 +960,9 @@ def test_filter_districts_valid_single_district(crawler_config: CrawlerConfig, s
     assert result[0]["district_code"] == "11140"
 
 
-def test_filter_districts_valid_multiple_districts(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+def test_filter_districts_valid_multiple_districts(
+    crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]
+) -> None:
     """유효한 여러 구 필터링 테스트"""
     crawler = NaverRealEstateCrawler(crawler_config)
 
@@ -927,7 +978,9 @@ def test_filter_districts_valid_multiple_districts(crawler_config: CrawlerConfig
     assert result[1]["district_name"] == "용산구"
 
 
-def test_filter_districts_invalid_district_raises_error(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+def test_filter_districts_invalid_district_raises_error(
+    crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]
+) -> None:
     """유효하지 않은 구 이름으로 ValueError 발생 테스트"""
     crawler = NaverRealEstateCrawler(crawler_config)
 
@@ -947,7 +1000,9 @@ def test_filter_districts_invalid_district_raises_error(crawler_config: CrawlerC
     assert "용산구" in error_msg
 
 
-def test_filter_districts_mixed_valid_invalid(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+def test_filter_districts_mixed_valid_invalid(
+    crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]
+) -> None:
     """유효한 구와 유효하지 않은 구가 섞여있을 때 테스트"""
     crawler = NaverRealEstateCrawler(crawler_config)
 
@@ -964,7 +1019,9 @@ def test_filter_districts_mixed_valid_invalid(crawler_config: CrawlerConfig, sam
     assert "사용 가능한 구:" in error_msg
 
 
-def test_filter_districts_empty_list_returns_empty(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+def test_filter_districts_empty_list_returns_empty(
+    crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]
+) -> None:
     """빈 리스트 전달 시 빈 리스트 반환 테스트"""
     crawler = NaverRealEstateCrawler(crawler_config)
 

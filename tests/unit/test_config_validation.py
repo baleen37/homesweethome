@@ -44,13 +44,16 @@ class TestConfigValidation:
         with pytest.raises(ValueError, match="retry_attempts은 10 이하여야 합니다"):
             CrawlerConfig(retry_attempts=11)
 
-    @patch.dict(os.environ, {
-        'CRAWLER_PAGE_SIZE': '0',
-        'CRAWLER_TIMEOUT': '301',
-        'CRAWLER_RETRY_ATTEMPTS': '-1',
-        'CRAWLER_DELAY_SECONDS': '0.1',
-        'CRAWLER_MAX_WORKERS': '0'
-    })
+    @patch.dict(
+        os.environ,
+        {
+            "CRAWLER_PAGE_SIZE": "0",
+            "CRAWLER_TIMEOUT": "301",
+            "CRAWLER_RETRY_ATTEMPTS": "-1",
+            "CRAWLER_DELAY_SECONDS": "0.1",
+            "CRAWLER_MAX_WORKERS": "0",
+        },
+    )
     def test_config_from_env_with_invalid_values(self):
         """환경 변수에서 유효하지 않은 값으로 설정 생성 시 검증"""
         with pytest.raises(ValueError):
@@ -80,20 +83,14 @@ class TestConfigValidation:
     def test_config_compatibility_validation(self):
         """설정 간 호환성 검증"""
         # 너무 많은 worker와 너무 짧은 delay 조합
-        with pytest.raises(ValidationError, match="너무 많은 worker와 짧은 delay는 서버에 부하를 줄 수 있습니다"):
-            CrawlerConfig(
-                max_workers=10,
-                delay_seconds=0.1,
-                use_threading=True
-            )
+        with pytest.raises(
+            ValidationError, match="너무 많은 worker와 짧은 delay는 서버에 부하를 줄 수 있습니다"
+        ):
+            CrawlerConfig(max_workers=10, delay_seconds=0.1, use_threading=True)
 
         # timeout이 retry_attempts * retry_delay보다 작은 경우
         with pytest.raises(ValidationError, match="timeout.*전체 재시도 시간"):
-            CrawlerConfig(
-                timeout=5,
-                retry_attempts=3,
-                retry_delay=2
-            )
+            CrawlerConfig(timeout=5, retry_attempts=3, retry_delay=2)
 
     def test_valid_config_values(self):
         """유효한 설정값으로 생성 성공 테스트"""
@@ -105,7 +102,7 @@ class TestConfigValidation:
             retry_delay=1,
             delay_seconds=1.0,
             max_workers=4,
-            use_threading=True
+            use_threading=True,
         )
 
         assert config.page_size == 50

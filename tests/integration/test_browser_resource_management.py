@@ -7,7 +7,6 @@ even when exceptions occur during crawling.
 
 import psutil
 import pytest
-import structlog
 
 from crawler.crawlers.naver import NaverRealEstateCrawler
 from crawler.config import CrawlerConfig
@@ -16,9 +15,9 @@ from crawler.config import CrawlerConfig
 def get_chromium_process_count() -> int:
     """Count the number of Chromium processes running."""
     count = 0
-    for proc in psutil.process_iter(['name']):
+    for proc in psutil.process_iter(["name"]):
         try:
-            if 'chromium' in proc.info['name'].lower():
+            if "chromium" in proc.info["name"].lower():
                 count += 1
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
@@ -54,4 +53,6 @@ class TestBrowserResourceManagement:
         # Assert no new Chromium processes were leaked
         # Note: We allow some tolerance for existing browser processes
         # The key is that we don't have MORE processes than before
-        assert final_count <= initial_count, f"Browser resource leak detected: {final_count} > {initial_count}"
+        assert (
+            final_count <= initial_count
+        ), f"Browser resource leak detected: {final_count} > {initial_count}"

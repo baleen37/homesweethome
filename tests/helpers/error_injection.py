@@ -1,8 +1,9 @@
 """
 에러 인젝션 헬퍼 - 테스트를 위한 제어된 에러 주입
 """
+
 import random
-from typing import Any, Optional, Callable, Dict, List
+from typing import Any, Optional, Dict, List
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
@@ -50,7 +51,7 @@ class ErrorInjector:
         self.call_history.append({"call_number": self.call_count, "injected": False})
 
         # 설정된 에러 주입 횟수 초과 확인
-        max_injections = self.error_config.get("max_injections", float('inf'))
+        max_injections = self.error_config.get("max_injections", float("inf"))
         injected_count = sum(1 for h in self.call_history if h["injected"])
         if injected_count >= max_injections:
             return None
@@ -102,9 +103,8 @@ class ErrorInjector:
             "injected_calls": injected_calls,
             "injection_rate": injected_calls / total_calls if total_calls > 0 else 0,
             "last_injected_at": next(
-                (h["call_number"] for h in reversed(self.call_history) if h["injected"]),
-                None
-            )
+                (h["call_number"] for h in reversed(self.call_history) if h["injected"]), None
+            ),
         }
 
 
@@ -164,31 +164,17 @@ class MockResponseBuilder:
     @staticmethod
     def success_response(data: Any) -> Dict[str, Any]:
         """성공 응답 생성"""
-        return {
-            "result": data,
-            "timestamp": "2025-12-07T00:00:00Z"
-        }
+        return {"result": data, "timestamp": "2025-12-07T00:00:00Z"}
 
     @staticmethod
     def error_response(message: str, status_code: int = 500) -> Dict[str, Any]:
         """에러 응답 생성"""
-        return {
-            "error": {
-                "message": message,
-                "status": status_code,
-                "code": f"ERR_{status_code}"
-            }
-        }
+        return {"error": {"message": message, "status": status_code, "code": f"ERR_{status_code}"}}
 
     @staticmethod
     def rate_limit_response(retry_after: int = 60) -> Dict[str, Any]:
         """Rate Limit 응답 생성"""
-        return {
-            "error": {
-                "message": "HTTP 429: Too Many Requests",
-                "retry_after": retry_after
-            }
-        }
+        return {"error": {"message": "HTTP 429: Too Many Requests", "retry_after": retry_after}}
 
     @staticmethod
     def timeout_response() -> Dict[str, Any]:

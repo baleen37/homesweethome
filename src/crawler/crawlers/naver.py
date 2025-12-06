@@ -100,13 +100,25 @@ class NaverRealEstateCrawler:
             # 필터링된 구 데이터를 dong_complexes 형식으로 변환
             dong_complexes = []
             for district in filtered_districts:
-                dong_complexes.append(
-                    {
-                        "dong_code": district["district_code"],
-                        "dong_name": district["district_name"],
-                        "complexes": [],  # 복합 단지 정보는 나중에 채워짐
-                    }
-                )
+                # 각 구의 동(dongs)을 개별적으로 처리
+                for dong in district.get("dongs", []):
+                    # 각 동에 대해 단지 데이터 수집
+                    self.logger.info(
+                        "fetching_dong_complexes",
+                        dong_name=dong.get("dong_name", ""),
+                        cortar_no=dong.get("cortarNo", ""),
+                    )
+
+                    # 재시도 로직과 함께 동 데이터 가져오기
+                    complexes = self.fetch_dong_with_retry(dong)
+
+                    dong_complexes.append(
+                        {
+                            "dong_code": dong.get("cortarNo", ""),
+                            "dong_name": dong.get("dong_name", ""),
+                            "complexes": complexes,  # 수집된 단지 정보
+                        }
+                    )
 
             # crawl_multiple_dongs 메서드 호출
             result = coordinator.crawl_multiple_dongs(
@@ -233,18 +245,52 @@ class NaverRealEstateCrawler:
 
             # 응답 시간 로깅
             response_time = time.time() - start_time
+            status_code = 200 if result and not result.get("error") else 500
+
+            # API 호출 결과 상세 로깅
             self.crawl_logger.log_api_call(
                 endpoint="/cluster/ajax/complexList",
                 params={"cortarNo": cortar_no, "dong_name": dong_name},
                 response_time=response_time,
                 response_size=len(str(result)) if result else 0,
-                status_code=200 if result and not result.get("error") else 500,
+                status_code=status_code,
             )
+
+            # 응답 시간에 대한 추가 로깅
+            if response_time > 3.0:
+                self.logger.warning(
+                    "slow_api_response",
+                    dong_name=dong_name,
+                    response_time=response_time,
+                    status_code=status_code,
+                )
+            else:
+                self.logger.info(
+                    "api_call_completed",
+                    dong_name=dong_name,
+                    response_time=response_time,
+                    status_code=status_code,
+                    complex_count=len(result.get("result", []))
+                    if result and not result.get("error")
+                    else 0,
+                )
 
             # 데이터 파싱
             if result and result.get("error"):
-                self.logger.error("api_call_failed", dong_name=dong_name, error=result["error"])
+                # 429 에러 핸들링
+                if "429" in str(result["error"]) or "Too Many Requests" in str(result["error"]):
+                    self.logger.warning(
+                        "rate_limit_hit", dong_name=dong_name, wait_time=10, error=result["error"]
+                    )
+                    time.sleep(10)  # Rate limit 걸리면 10초 대기
+                else:
+                    self.logger.error("api_call_failed", dong_name=dong_name, error=result["error"])
                 return []
+
+            # API 호출 성공 후 Rate Limiting
+            if not result.get("error"):
+                # 다음 API 호출까지 최소 5초 대기
+                time.sleep(5)
 
             return self._parse_complex_list_api(result)
 
@@ -256,14 +302,14 @@ class NaverRealEstateCrawler:
         if not items:
             return []
 
+        # HTML 태그 제거 함수 (루프 외부로 이동)
+        def clean_price(price_str: str) -> str:
+            if not price_str:
+                return ""
+            return price_str.replace("<em class='txt_unit'>", "").replace("</em>", "").strip()
+
         results = []
         for item in items:
-            # HTML 태그 제거 함수
-            def clean_price(price_str: str) -> str:
-                if not price_str:
-                    return ""
-                return price_str.replace("<em class='txt_unit'>", "").replace("</em>", "").strip()
-
             results.append(
                 {
                     "complex_id": item.get("hscpNo", ""),
@@ -617,7 +663,7 @@ class NaverRealEstateCrawler:
         self, complex_id: str, trade_type: str = "A1"
     ) -> list[dict[str, Any]]:
         """
-        특정 단지의 매물 목록을 가져옵니다.
+        특정 단지의 매물 목록을 가져옵니다 (모바일 API 사용).
 
         Args:
             complex_id: 단지 ID (예: 111861)
@@ -626,167 +672,97 @@ class NaverRealEstateCrawler:
         Returns:
             매물 정보 리스트
         """
-        self.crawl_logger.log_api_call(
-            endpoint="/complex/listings",
-            params={
-                "complex_id": complex_id,
-                "trade_type": trade_type,
-            },
+        self.logger.info(
+            "fetching_complex_listings",
+            complex_id=complex_id,
+            trade_type=trade_type,
         )
 
         all_listings = []
 
         # BrowserManager를 사용하여 브라우저 리소스 관리
         with self.browser_manager.managed_browser() as page:
-            self.page = page  # 일시적으로 저장
-
-            # 먼저 메인 페이지 접속하여 세션 확보
-            page.goto("https://new.land.naver.com/complexes")
+            # 모바일 페이지 접속하여 세션 확보
+            page.goto("https://m.land.naver.com/complexes")
             page.wait_for_load_state("networkidle")
-            time.sleep(3)
+            time.sleep(2)
 
-            page.goto(f"https://new.land.naver.com/complexes/{complex_id}")
-            page.wait_for_load_state("networkidle")
-            time.sleep(3)
+            current_page = 1
+            max_pages = 10
 
-            page = 1
-            max_pages = 10  # 최대 페이지 수 제한
-
-            while page <= max_pages:
-                self.crawl_logger.log_progress(
-                    current=page,
-                    total=max_pages,
-                    item_type="listing_pages",
-                    context={
-                        "complex_id": complex_id,
-                        "trade_type": trade_type,
-                    },
-                )
-
-                # new.land.naver.com API URL
+            while current_page <= max_pages:
+                # 모바일 API URL
                 api_url = (
-                    f"https://new.land.naver.com/api/articles/complex/{complex_id}?"
-                    f"realEstateType=APT&"
-                    f"tradeType={trade_type}&"
-                    f"page={page}&"
-                    f"order=rank"
+                    f"https://m.land.naver.com/cluster/ajax/articleList?"
+                    f"complexNo={complex_id}&"
+                    f"tradTpCd={trade_type}&"
+                    f"page={current_page}&"
+                    f"showR0=N"
                 )
 
-                try:
-                    # 브라우저 컨텍스트에서 API 호출
-                    start_time = time.time()
-                    result = page.evaluate(
-                        """
-                        async (url) => {
-                            try {
-                                const response = await fetch(url, {
-                                    method: 'GET',
-                                    headers: {
-                                        'Accept': 'application/json, text/plain, */*',
-                                        'Accept-Language': 'ko-KR,ko;q=0.9',
-                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-                                    }
-                                });
-
-                                if (!response.ok) {
-                                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                # 브라우저 컨텍스트에서 API 호출
+                result = page.evaluate("""
+                    async (url) => {
+                        try {
+                            const response = await fetch(url, {
+                                method: 'GET',
+                                credentials: 'same-origin',
+                                headers: {
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15'
                                 }
+                            });
 
-                                const responseText = await response.text();
-
-                                // 응답이 JSON인지 확인
-                                if (responseText.trim().startsWith('<')) {
-                                    throw new Error('Received HTML instead of JSON - likely blocked or redirected');
-                                }
-
-                                try {
-                                    return JSON.parse(responseText);
-                                } catch (parseError) {
-                                    throw new Error(`Invalid JSON response: ${parseError.message}. Response starts with: ${responseText.substring(0, 100)}`);
-                                }
-                            } catch (error) {
-                                console.error('API call failed:', error);
-                                throw error;
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                             }
+
+                            return await response.json();
+                        } catch (error) {
+                            console.error('API call failed:', error);
+                            throw error;
                         }
-                        """,
-                        api_url,
+                    }
+                """, api_url)
+
+                # 응답 로깅
+                self.logger.info(
+                    "api_response_received",
+                    complex_id=complex_id,
+                    current_page=current_page,
+                    response_keys=result.keys() if isinstance(result, dict) else type(result),
+                    has_result=result.get("result") if isinstance(result, dict) else False,
+                )
+
+                # 데이터 파싱
+                listings = self._parse_complex_listings(result)
+
+                if not listings:
+                    self.logger.info(
+                        "no_listings_found",
+                        complex_id=complex_id,
+                        current_page=current_page,
+                        response_result=result.get("result", []) if isinstance(result, dict) else result,
                     )
-                    response_time = time.time() - start_time
-
-                    # API 호출 로깅
-                    self.crawl_logger.log_api_call(
-                        endpoint="/api/articles/complex",
-                        params={
-                            "complex_id": complex_id,
-                            "tradeType": trade_type,
-                            "page": page,
-                        },
-                        response_time=response_time,
-                        response_size=len(str(result)) if result else 0,
-                        status_code=200 if result else 500,
-                    )
-
-                    # 응답 파싱
-                    listings = self._parse_complex_listings(result)
-
-                    # 더 이상 매물이 없으면 중단
-                    if not listings:
-                        self.logger.info(
-                            "no_more_listings",
-                            complex_id=complex_id,
-                            trade_type=trade_type,
-                            last_page=page - 1,
-                        )
-                        break
-
-                    all_listings.extend(listings)
-
-                    # API 응답에 결과 수가 설정된 경우 확인
-                    # 배열 응답과 객체 응답을 모두 처리
-                    response_size = 0
-                    if isinstance(result, list):
-                        response_size = len(result)
-                    elif isinstance(result, dict):
-                        if "result" in result:
-                            response_size = len(result["result"])
-                        elif "articles" in result:
-                            response_size = len(result["articles"])
-                        elif "articleList" in result:
-                            response_size = len(result["articleList"])
-
-                    if response_size > 0 and response_size < 20:
-                        # 한 페이지에 20개 미만이면 마지막 페이지로 간주
-                        break
-
-                    page += 1
-
-                    # Rate limiting - 페이지별 4초 대기 (429 에러 방지)
-                    time.sleep(4)
-
-                except Exception as e:
-                    self.crawl_logger.error_with_context(
-                        error=e,
-                        context={
-                            "complex_id": complex_id,
-                            "trade_type": trade_type,
-                            "page": page,
-                            "api_url": api_url[:100] + "..." if len(api_url) > 100 else api_url,
-                            "error_type": "listing_fetch_error",
-                        },
-                    )
-                    # 오류 발생 시 중단
                     break
 
-            self.logger.info(
-                "complex_listings_fetched",
-                complex_id=complex_id,
-                trade_type=trade_type,
-                total_listings=len(all_listings),
-                pages_fetched=page - 1,
-            )
+                all_listings.extend(listings)
 
-            return all_listings
+                # Check response size from appropriate key
+                response_size = 0
+                if isinstance(result, dict):
+                    if "result" in result:
+                        response_size = len(result["result"])
+                    elif "body" in result:
+                        response_size = len(result["body"])
+
+                if response_size > 0 and response_size < 20:
+                    break
+
+                current_page += 1
+                time.sleep(4)  # 페이지별 대기
+
+        return all_listings
 
     def _parse_complex_listings(self, api_response: dict[str, Any] | list) -> list[dict[str, Any]]:
         """API 응답에서 매물 정보 파싱"""
@@ -800,7 +776,7 @@ class NaverRealEstateCrawler:
             items = api_response["result"]
         elif isinstance(api_response, dict):
             # 다른 가능한 키들 확인
-            for key in ["articles", "articleList", "list", "data"]:
+            for key in ["body", "articles", "articleList", "list", "data"]:
                 if key in api_response:
                     items = api_response[key]
                     break

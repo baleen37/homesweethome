@@ -27,33 +27,37 @@ class TestCrawlCoordinator:
     @pytest.fixture
     def mock_fetch_functions(self):
         """모의 fetch 함수 fixture"""
-        mock_detail = Mock(return_value={
-            "complex_id": "111515",
-            "pyeong_types": [
-                {"pyeong_type_number": 1, "pyeong_name": "84A"},
-                {"pyeong_type_number": 2, "pyeong_name": "84B"},
-            ],
-        })
-
-        mock_transactions = Mock(side_effect=lambda complex_id, pyeong_type, trade_type: [
-            {
-                "complex_id": complex_id,
-                "complex_name": "헬리오시티",
-                "pyeong_type_number": pyeong_type,
-                "pyeong_name": f"84{['A', 'B'][pyeong_type-1]}",
-                "trade_type": trade_type,
-                "trade_type_name": {"A1": "매매", "B1": "전세", "B2": "월세"}[trade_type],
-                "trade_date": "2025-11-14",
-                "trade_year": "2025",
-                "floor": "15",
-                "deal_price": "1700000000" if trade_type == "A1" else "0",
-                "deposit": "0" if trade_type == "A1" else "800000000",
-                "monthly_rent": "0" if trade_type in ["A1", "B1"] else "2000000",
-                "trade_category": "중개거래",
-                "is_delete": False,
-                "is_renew": False,
+        mock_detail = Mock(
+            return_value={
+                "complex_id": "111515",
+                "pyeong_types": [
+                    {"pyeong_type_number": 1, "pyeong_name": "84A"},
+                    {"pyeong_type_number": 2, "pyeong_name": "84B"},
+                ],
             }
-        ])
+        )
+
+        mock_transactions = Mock(
+            side_effect=lambda complex_id, pyeong_type, trade_type: [
+                {
+                    "complex_id": complex_id,
+                    "complex_name": "헬리오시티",
+                    "pyeong_type_number": pyeong_type,
+                    "pyeong_name": f"84{['A', 'B'][pyeong_type-1]}",
+                    "trade_type": trade_type,
+                    "trade_type_name": {"A1": "매매", "B1": "전세", "B2": "월세"}[trade_type],
+                    "trade_date": "2025-11-14",
+                    "trade_year": "2025",
+                    "floor": "15",
+                    "deal_price": "1700000000" if trade_type == "A1" else "0",
+                    "deposit": "0" if trade_type == "A1" else "800000000",
+                    "monthly_rent": "0" if trade_type in ["A1", "B1"] else "2000000",
+                    "trade_category": "중개거래",
+                    "is_delete": False,
+                    "is_renew": False,
+                }
+            ]
+        )
 
         return mock_detail, mock_transactions
 
@@ -220,6 +224,7 @@ class TestCrawlCoordinator:
 
         # 원래 함수에 체크포인트 확인 로직 추가
         original_fetch_detail = mock_detail
+
         def fetch_detail_with_check(complex_id):
             check_checkpoint()
             return original_fetch_detail(complex_id)
@@ -236,10 +241,9 @@ class TestCrawlCoordinator:
         assert final_checkpoint["last_dong"] == "1154510300"
         assert "last_updated_at" in final_checkpoint
 
-    def test_error_handling_and_statistics(
-        self, temp_dir, sample_dong_complexes
-    ):
+    def test_error_handling_and_statistics(self, temp_dir, sample_dong_complexes):
         """에러 발생 시 통계가 올바르게 기록되는지 테스트"""
+
         # 에러를 발생시키는 모의 함수
         def failing_fetch_detail(complex_id):
             if complex_id == "111515":  # 첫 번째 단지만 실패
@@ -278,9 +282,7 @@ class TestCrawlCoordinator:
         assert stats["total_complexes_processed"] == 0
         assert len(stats["errors"]) == 2
 
-    def test_rate_limiter_integration(
-        self, temp_dir, mock_fetch_functions, sample_dong_complexes
-    ):
+    def test_rate_limiter_integration(self, temp_dir, mock_fetch_functions, sample_dong_complexes):
         """Rate limiter가 올바르게 동작하는지 테스트"""
         mock_detail, mock_transactions = mock_fetch_functions
         coordinator = CrawlCoordinator(
@@ -298,6 +300,7 @@ class TestCrawlCoordinator:
             return mock_detail(complex_id)
 
         import time
+
         coordinator.crawl_dong(
             dong_code="1154510200",
             dong_name="역삼1동",

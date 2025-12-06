@@ -96,6 +96,7 @@ def test_statistics_and_csv_integration() -> None:
 
         # Read and verify CSV content
         import csv
+
         with open(csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             rows = list(reader)

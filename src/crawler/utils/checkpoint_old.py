@@ -22,18 +22,14 @@ class CheckpointManager:
             # 기본 위치 정보
             "last_dong": None,  # 마지막으로 처리된 동 ID
             "last_complex": None,  # 마지막으로 처리된 단지 ID
-
             # 처리 통계
             "total_complexes_processed": 0,  # 처리된 총 단지 수
             "total_transactions_collected": 0,  # 수집된 총 거래내역 수
-
             # 시간 정보
             "started_at": None,  # 시작 시각
             "last_updated_at": None,  # 마지막 업데이트 시각
-
             # 실패 기록
             "failed_dongs": [],  # 실패한 동 코드 목록
-
             # Rate limiter 상태
             "rate_limiter_state": None,
         }

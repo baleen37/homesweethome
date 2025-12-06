@@ -1,16 +1,14 @@
 """
 실패 시나리오 테스트 - 크롤러 안정성 검증
 """
+
 import pytest
-import time
-import json
 import os
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
+from unittest.mock import Mock, patch
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-from src.crawler.crawlers.naver import NaverRealEstateCrawler
-from src.crawler.config import CrawlerConfig
+from crawler.crawlers.naver import NaverRealEstateCrawler
+from crawler.config import CrawlerConfig
 
 
 class TestFailureScenarios:
@@ -29,15 +27,12 @@ class TestFailureScenarios:
         mock_page.evaluate.side_effect = PlaywrightTimeoutError("Request timed out")
 
         # _fetch_endpoint_with_retry 메서드 테스트
-        with patch.object(crawler, 'browser_manager') as mock_browser_manager:
+        with patch.object(crawler, "browser_manager") as mock_browser_manager:
             mock_browser_manager.managed_browser.return_value.__enter__.return_value = mock_page
 
             # 타임아웃 발생 시 None을 반환하는지 확인
             result = crawler._fetch_endpoint_with_retry(
-                mock_page,
-                "test_url",
-                "test_endpoint",
-                max_retries=2
+                mock_page, "test_url", "test_endpoint", max_retries=2
             )
 
             # 타임아웃 후 None을 반환해야 함
@@ -58,12 +53,9 @@ class TestFailureScenarios:
         mock_page.evaluate.side_effect = Exception("HTTP 429: Too Many Requests")
 
         # _fetch_endpoint_with_retry 메서드 테스트
-        with patch('time.sleep') as mock_sleep:
+        with patch("time.sleep") as mock_sleep:
             result = crawler._fetch_endpoint_with_retry(
-                mock_page,
-                "test_url",
-                "test_endpoint",
-                max_retries=3
+                mock_page, "test_url", "test_endpoint", max_retries=3
             )
 
             # 지연 시간이 있었는지 확인 (Retryable이 sleep 호출)
@@ -83,7 +75,7 @@ class TestFailureScenarios:
             {"error": {"message": "Unknown error"}},
             {"result": None},
             "not_a_dict",
-            None
+            None,
         ]
 
         for response in test_cases:
@@ -94,10 +86,7 @@ class TestFailureScenarios:
             # 잘못된 응답을 처리할 수 있는지 확인
             try:
                 result = crawler._fetch_endpoint_with_retry(
-                    mock_page,
-                    "test_url",
-                    "test_endpoint",
-                    max_retries=1
+                    mock_page, "test_url", "test_endpoint", max_retries=1
                 )
                 # 예외가 발생하지 않더라도 응답을 반환해야 함
                 assert result == response
@@ -110,13 +99,15 @@ class TestFailureScenarios:
         config = CrawlerConfig.from_env()
         crawler = NaverRealEstateCrawler(config)
 
-        with patch.object(crawler, 'browser_manager') as mock_browser_manager:
+        with patch.object(crawler, "browser_manager") as mock_browser_manager:
             # 첫 번째 시도에서 브라우저 크래시 시뮬레이션
-            mock_browser_manager.managed_browser.return_value.__enter__.side_effect = Exception("Browser crashed")
+            mock_browser_manager.managed_browser.return_value.__enter__.side_effect = Exception(
+                "Browser crashed"
+            )
 
             # 브라우저 크래시 후 예외가 발생하는지 확인
             with pytest.raises(Exception, match="Browser crashed"):
-                result = crawler.fetch_complex_detail("test_complex_id")
+                _result = crawler.fetch_complex_detail("test_complex_id")
 
             # 브라우저 관리자가 호출되었는지 확인
             assert mock_browser_manager.managed_browser.call_count >= 1
@@ -127,12 +118,12 @@ class TestFailureScenarios:
         crawler = NaverRealEstateCrawler(config)
 
         # 손상된 체크포인트 파일 생성
-        if hasattr(crawler, 'checkpoint_manager') and crawler.checkpoint_manager:
+        if hasattr(crawler, "checkpoint_manager") and crawler.checkpoint_manager:
             checkpoint_file = crawler.checkpoint_manager.checkpoint_file
             checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
             checkpoint_file.write_text("invalid json content")
 
-            with patch.object(crawler, 'fetch_complex_list') as mock_fetch:
+            with patch.object(crawler, "fetch_complex_list") as mock_fetch:
                 mock_fetch.return_value = []
 
                 # 손상된 체크포인트로도 크롤링이 진행되는지 확인
@@ -148,11 +139,11 @@ class TestFailureScenarios:
         config = CrawlerConfig.from_env()
         crawler = NaverRealEstateCrawler(config)
 
-        with patch('builtins.open') as mock_open:
+        with patch("builtins.open") as mock_open:
             # 디스크 공간 부족 에러 시뮬레이션
             mock_open.side_effect = OSError("No space left on device")
 
-            with patch.object(crawler, 'fetch_complex_list') as mock_fetch:
+            with patch.object(crawler, "fetch_complex_list") as mock_fetch:
                 mock_fetch.return_value = [{"complex_id": "1", "complex_name": "test"}]
 
                 # 디스크 공간 부족 시 예외가 발생하는지 확인
@@ -165,18 +156,13 @@ class TestFailureScenarios:
         crawler = NaverRealEstateCrawler(config)
 
         # 빈 데이터 처리
-        test_cases = [
-            [],
-            [{}],
-            [{"complex_name": "", "price": ""}],
-            None
-        ]
+        test_cases = [[], [{}], [{"complex_name": "", "price": ""}], None]
 
         for test_data in test_cases:
             # 데이터 처리 테스트
             try:
                 # _parse_complex_detail 메서드가 있는지 확인
-                if hasattr(crawler, '_parse_complex_detail'):
+                if hasattr(crawler, "_parse_complex_detail"):
                     result = crawler._parse_complex_detail({"data": test_data})
                     assert isinstance(result, dict)
                 else:
@@ -196,7 +182,7 @@ class TestFailureScenarios:
             PlaywrightTimeoutError("Timeout"),
             Exception("HTTP 429: Too Many Requests"),
             Exception("Server error"),
-            None
+            None,
         ]
 
         for scenario in failure_scenarios:
@@ -211,10 +197,7 @@ class TestFailureScenarios:
             # 실패 처리 확인
             try:
                 result = crawler._fetch_endpoint_with_retry(
-                    mock_page,
-                    "test_url",
-                    "test_endpoint",
-                    max_retries=2
+                    mock_page, "test_url", "test_endpoint", max_retries=2
                 )
 
                 if scenario is None:
@@ -242,9 +225,14 @@ class TestFailureScenarios:
         # 많은 수의 동 데이터 시뮬레이션
         districts = crawler.filter_districts(None)[:5]  # 5개 구만 사용
 
-        with patch.object(crawler, '_fetch_dong_data') as mock_fetch:
+        with patch.object(crawler, "_fetch_dong_data") as mock_fetch:
             mock_fetch.return_value = [
-                {"complex_name": f"Test Complex {i}", "price": "1억", "spec": "84㎡", "location": "서울"}
+                {
+                    "complex_name": f"Test Complex {i}",
+                    "price": "1억",
+                    "spec": "84㎡",
+                    "location": "서울",
+                }
                 for i in range(10)  # 각 동당 10개 단지
             ]
 
@@ -261,8 +249,9 @@ class TestFailureScenarios:
         memory_increase = final_memory - initial_memory
 
         # 메모리 증가가 합리적인지 확인 (100MB 미만)
-        assert memory_increase < 100 * 1024 * 1024, \
-            f"Memory leak detected: {memory_increase / 1024 / 1024:.2f}MB increase"
+        assert (
+            memory_increase < 100 * 1024 * 1024
+        ), f"Memory leak detected: {memory_increase / 1024 / 1024:.2f}MB increase"
 
     def test_concurrent_operation_safety(self):
         """동시 작업 안전성 테스트"""
@@ -270,7 +259,7 @@ class TestFailureScenarios:
         crawler = NaverRealEstateCrawler(config)
 
         # 체크포인트 동시 접근 테스트
-        if hasattr(crawler, 'checkpoint_manager') and crawler.checkpoint_manager:
+        if hasattr(crawler, "checkpoint_manager") and crawler.checkpoint_manager:
             import threading
             import time
 
@@ -281,7 +270,9 @@ class TestFailureScenarios:
                 try:
                     for i in range(5):
                         # 실패한 동 추가 (체크포인트 사용)
-                        crawler.checkpoint_manager.add_failed_dong(f"test_{worker_id}_{i}", f"error_{i}")
+                        crawler.checkpoint_manager.add_failed_dong(
+                            f"test_{worker_id}_{i}", f"error_{i}"
+                        )
                         time.sleep(0.01)
                         checkpoint = crawler.checkpoint_manager.load()
                         results.append((worker_id, i, checkpoint))
@@ -310,16 +301,13 @@ class TestFailureScenarios:
         # Mock page object
         mock_page = Mock()
 
-        with patch('time.sleep') as mock_sleep:
+        with patch("time.sleep") as mock_sleep:
             # 지속적인 429 에러 시뮬레이션
             mock_page.evaluate.side_effect = Exception("HTTP 429: Too Many Requests")
 
             # 지수 백오프 확인
             crawler._fetch_endpoint_with_retry(
-                mock_page,
-                "test_url",
-                "test_endpoint",
-                max_retries=3
+                mock_page, "test_url", "test_endpoint", max_retries=3
             )
 
             # 재시도 사이에 sleep이 호출되었는지 확인
@@ -330,21 +318,16 @@ class TestFailureScenarios:
             if len(sleep_calls) > 1:
                 # 지수적으로 증가하거나 최소한 증가하는지 확인
                 for i in range(1, len(sleep_calls)):
-                    assert sleep_calls[i] >= sleep_calls[i-1] * 0.5, \
-                        f"Sleep time should roughly increase: {sleep_calls}"
+                    assert (
+                        sleep_calls[i] >= sleep_calls[i - 1] * 0.5
+                    ), f"Sleep time should roughly increase: {sleep_calls}"
 
     def test_invalid_url_handling(self):
         """잘못된 URL 처리 테스트"""
         config = CrawlerConfig.from_env()
         crawler = NaverRealEstateCrawler(config)
 
-        invalid_urls = [
-            None,
-            "",
-            "invalid-url",
-            "ftp://invalid-protocol.com",
-            "javascript:void(0)"
-        ]
+        invalid_urls = [None, "", "invalid-url", "ftp://invalid-protocol.com", "javascript:void(0)"]
 
         for invalid_url in invalid_urls:
             # Mock page object
@@ -354,10 +337,7 @@ class TestFailureScenarios:
             # 잘못된 URL을 처리할 수 있는지 확인
             try:
                 result = crawler._fetch_endpoint_with_retry(
-                    mock_page,
-                    invalid_url,
-                    "test_endpoint",
-                    max_retries=1
+                    mock_page, invalid_url, "test_endpoint", max_retries=1
                 )
                 # None이나 빈 결과를 반환해야 함
                 assert result is None or result == {"error": {"message": "Invalid URL"}}
@@ -383,10 +363,7 @@ class TestFailureScenarios:
 
         # 대용량 응답을 처리할 수 있는지 확인
         result = crawler._fetch_endpoint_with_retry(
-            mock_page,
-            "test_url",
-            "test_endpoint",
-            max_retries=1
+            mock_page, "test_url", "test_endpoint", max_retries=1
         )
 
         # 결과가 처리되었는지 확인

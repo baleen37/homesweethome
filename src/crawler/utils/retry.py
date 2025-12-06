@@ -19,12 +19,10 @@ T = TypeVar("T")
 
 
 # Alias for backward compatibility
-BackoffStrategy = Enum('BackoffStrategy', {
-    'EXPONENTIAL': 'exponential',
-    'LINEAR': 'linear',
-    'FIXED': 'fixed',
-    'FIBONACCI': 'fibonacci'
-})
+BackoffStrategy = Enum(
+    "BackoffStrategy",
+    {"EXPONENTIAL": "exponential", "LINEAR": "linear", "FIXED": "fixed", "FIBONACCI": "fibonacci"},
+)
 
 
 class RetryError(Exception):
@@ -132,8 +130,10 @@ class Retryable:
 
     def __call__(self, func: Callable[..., T]) -> Callable[..., T]:
         """Decorator to wrap a function with retry logic."""
+
         def wrapper(*args: Any, **kwargs: Any) -> T:
             return self.execute(func, *args, **kwargs)
+
         return wrapper
 
     def execute(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
@@ -218,9 +218,8 @@ class Retryable:
                     raise
 
                 # Check if exception is retryable
-                is_retryable = (
-                    isinstance(e, self.retry_on) and
-                    (self.retry_on_predicate is None or self.retry_on_predicate(e))
+                is_retryable = isinstance(e, self.retry_on) and (
+                    self.retry_on_predicate is None or self.retry_on_predicate(e)
                 )
 
                 if not is_retryable:
@@ -268,21 +267,21 @@ class Retryable:
         error_msg = error_msg.lower()
         # Check for rate limiting or temporary errors
         return (
-            "429" in error_msg or
-            "too many requests" in error_msg or
-            "network error" in error_msg or
-            "timeout" in error_msg or
-            "connection" in error_msg or
-            "temporary" in error_msg or
-            "502" in error_msg or
-            "503" in error_msg or
-            "504" in error_msg
+            "429" in error_msg
+            or "too many requests" in error_msg
+            or "network error" in error_msg
+            or "timeout" in error_msg
+            or "connection" in error_msg
+            or "temporary" in error_msg
+            or "502" in error_msg
+            or "503" in error_msg
+            or "504" in error_msg
         )
 
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay for given attempt number."""
         if self.strategy == BackoffStrategy.EXPONENTIAL:
-            delay = self.base_delay * (self.exponential_base ** attempt)
+            delay = self.base_delay * (self.exponential_base**attempt)
         elif self.strategy == BackoffStrategy.LINEAR:
             delay = self.base_delay * (attempt + 1)
         elif self.strategy == BackoffStrategy.FIXED:
@@ -342,18 +341,19 @@ def retry_transient_errors(
     max_delay: float = 30.0,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Retry decorator optimized for transient network errors."""
+
     def is_transient(e: Exception) -> bool:
         # Check if error message indicates transient failure
         msg = str(e).lower()
         return (
-            "timeout" in msg or
-            "connection" in msg or
-            "network" in msg or
-            "temporary" in msg or
-            "429" in msg or  # Rate limit
-            "502" in msg or  # Bad gateway
-            "503" in msg or  # Service unavailable
-            "504" in msg     # Gateway timeout
+            "timeout" in msg
+            or "connection" in msg
+            or "network" in msg
+            or "temporary" in msg
+            or "429" in msg  # Rate limit
+            or "502" in msg  # Bad gateway
+            or "503" in msg  # Service unavailable
+            or "504" in msg  # Gateway timeout
         )
 
     retryable = Retryable(
@@ -374,6 +374,7 @@ def retry_rate_limit(
     max_delay: float = 120.0,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Retry decorator optimized for rate limit errors."""
+
     def is_rate_limit(e: Exception) -> bool:
         msg = str(e).lower()
         return "429" in msg or "too many requests" in msg

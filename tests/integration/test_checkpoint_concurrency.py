@@ -1,10 +1,8 @@
 """체크포인트 동시성 테스트"""
+
 import json
 import os
-import tempfile
 import threading
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -29,6 +27,7 @@ class TestCheckpointManager:
 
                 # 잠시 대기 (동시성 테스트)
                 import time
+
                 time.sleep(0.001)
 
                 # 체크포인트 로드 확인
@@ -70,7 +69,9 @@ class TestCheckpointManager:
         missing_keys = expected_keys - actual_keys
 
         assert len(missing_keys) == 0, f"Missing keys: {missing_keys}"
-        assert len(actual_keys) == len(expected_keys), f"Expected {len(expected_keys)} keys, got {len(actual_keys)}"
+        assert len(actual_keys) == len(
+            expected_keys
+        ), f"Expected {len(expected_keys)} keys, got {len(actual_keys)}"
 
     def test_checkpoint_recovery_after_corruption(self, tmp_path):
         """손상된 체크포인트 파일 복구 테스트"""
@@ -84,7 +85,7 @@ class TestCheckpointManager:
         assert os.path.exists(checkpoint_path)
 
         # 2. 파일 손상 시키기 (잘못된 JSON)
-        with open(checkpoint_path, 'w') as f:
+        with open(checkpoint_path, "w") as f:
             f.write('{"invalid": json content}')  # 잘못된 JSON
 
         # 3. 백업 파일이 없는 상태에서 CheckpointManager 로드
@@ -96,7 +97,7 @@ class TestCheckpointManager:
         assert recovered_data == {}
 
         # 백업 파일이 생성되었는지 확인
-        backup_path = checkpoint_path.with_suffix('.json.backup')
+        backup_path = checkpoint_path.with_suffix(".json.backup")
         assert backup_path.exists()
 
         # 4. 새로운 데이터 저장 가능
@@ -120,7 +121,7 @@ class TestCheckpointManager:
             large_data[key] = {
                 "id": i,
                 "text": "x" * 100,  # 각 데이터에 100자의 텍스트
-                "nested": {"value": i * 2}
+                "nested": {"value": i * 2},
             }
 
         # 모든 데이터 저장
@@ -130,7 +131,7 @@ class TestCheckpointManager:
         # 3. 파일이 항상 유효한 JSON인지 확인
         for _ in range(10):  # 여러 번 확인
             try:
-                with open(checkpoint_path, 'r') as f:
+                with open(checkpoint_path, "r") as f:
                     json.load(f)  # JSON 파싱 시도
             except json.JSONDecodeError as e:
                 pytest.fail(f"Checkpoint file contains invalid JSON: {e}")
@@ -175,6 +176,7 @@ class TestCheckpointManager:
 
                 # 잠시 대기
                 import time
+
                 time.sleep(0.001)
 
         # 공유 CheckpointManager 인스턴스 생성
@@ -186,7 +188,9 @@ class TestCheckpointManager:
 
         threads = []
         for i in range(num_threads):
-            thread = threading.Thread(target=increment_worker, args=(manager, i, increments_per_thread))
+            thread = threading.Thread(
+                target=increment_worker, args=(manager, i, increments_per_thread)
+            )
             threads.append(thread)
 
         # 모든 스레드 시작

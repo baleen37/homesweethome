@@ -53,12 +53,8 @@ class CrawlCoordinator:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # CSV Writer 초기화
-        self.transaction_writer = TransactionCSVWriter(
-            self.output_dir / "transactions.csv"
-        )
-        self.complexes_writer = ComplexesCSVWriter(
-            self.output_dir / "complexes.csv"
-        )
+        self.transaction_writer = TransactionCSVWriter(self.output_dir / "transactions.csv")
+        self.complexes_writer = ComplexesCSVWriter(self.output_dir / "complexes.csv")
 
         # 체크포인트 관리자
         self.checkpoint_manager = None
@@ -144,9 +140,7 @@ class CrawlCoordinator:
                 # 1. 단지 상세 정보 조회
                 detail = fetch_complex_detail(complex_id)
                 if not detail:
-                    dong_stats["errors"].append(
-                        f"Failed to fetch detail for complex {complex_id}"
-                    )
+                    dong_stats["errors"].append(f"Failed to fetch detail for complex {complex_id}")
                     continue
 
                 # 2. 거래내역 조회 (평형별, 거래 유형별)
@@ -188,16 +182,16 @@ class CrawlCoordinator:
                 # Progress tracking: 단지 처리 완료
                 if self.progress_tracker:
                     self.progress_tracker.complete_complex(
-                        complex_id,
-                        complex.get("complex_name", ""),
-                        len(all_transactions)
+                        complex_id, complex.get("complex_name", ""), len(all_transactions)
                     )
 
                 # 성공 시 rate limiter 보상
                 self.rate_limiter.on_success()
 
             except Exception as e:
-                error_msg = f"Error processing complex {complex.get('complex_id', 'unknown')}: {str(e)}"
+                error_msg = (
+                    f"Error processing complex {complex.get('complex_id', 'unknown')}: {str(e)}"
+                )
                 self.logger.error("complex_error", error=error_msg)
                 dong_stats["errors"].append(error_msg)
                 self.stats["errors"].append(error_msg)
@@ -230,7 +224,7 @@ class CrawlCoordinator:
                 dong_name,
                 dong_stats["complexes_processed"],
                 dong_stats["transactions_collected"],
-                dong_stats["errors"]
+                dong_stats["errors"],
             )
             # Rate limiter 상태 업데이트
             self.progress_tracker.update_rate_limiter_delay(self.rate_limiter.current_delay)
@@ -262,8 +256,7 @@ class CrawlCoordinator:
         if self.progress_tracker:
             total_complexes = sum(len(d["complexes"]) for d in dong_complexes)
             self.progress_tracker.start_crawling(
-                total_dongs=len(dong_complexes),
-                total_complexes=total_complexes
+                total_dongs=len(dong_complexes), total_complexes=total_complexes
             )
 
         # 이어서 진행할 위치 찾기

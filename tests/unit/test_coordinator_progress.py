@@ -20,6 +20,7 @@ class TestCrawlCoordinatorProgress:
     def teardown_method(self):
         """테스트 메서드 실행 후 정리"""
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_init_with_progress_tracking(self):
@@ -45,7 +46,7 @@ class TestCrawlCoordinatorProgress:
 
         assert coordinator.progress_tracker is None
 
-    @patch('crawler.coordinator.ProgressTracker')
+    @patch("crawler.coordinator.ProgressTracker")
     def test_crawl_dong_with_progress_tracking(self, mock_progress_tracker_class):
         """Progress tracking과 함께 동 크롤링 테스트"""
         # Mock ProgressTracker
@@ -127,7 +128,7 @@ class TestCrawlCoordinatorProgress:
         assert result["complexes_processed"] == 1  # 하나만 성공
         assert len(result["errors"]) == 1  # 에러 개수 확인
 
-    @patch('crawler.coordinator.ProgressTracker')
+    @patch("crawler.coordinator.ProgressTracker")
     def test_crawl_multiple_dongs_with_progress_tracking(self, mock_progress_tracker_class):
         """여러 동 크롤링 시 Progress tracking 테스트"""
         # Mock ProgressTracker
