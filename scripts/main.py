@@ -36,13 +36,15 @@ def main() -> None:
         district_filter = [d.strip() for d in args.district.split(",") if d.strip()]
 
     # 출력 파일명 생성
-    if args.output is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = Path(f"output/seoul_apartments_{timestamp}.csv")
-    else:
-        output_path = args.output
+    output_file = None
+    if args.output is not None:
+        output_file = str(args.output)
 
-    config = CrawlerConfig.from_env()
+    try:
+        config = CrawlerConfig.from_env(output_file=output_file)
+    except ValueError as e:
+        print(f"설정 오류: {e}")
+        exit(1)
 
     print("네이버 부동산 크롤링 시작...")
     if args.resume:
