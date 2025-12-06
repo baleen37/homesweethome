@@ -2,7 +2,6 @@
 
 from unittest.mock import patch
 
-import pytest
 
 from crawler.rate_limiter import AdaptiveRateLimiter
 
@@ -81,7 +80,6 @@ class TestAdaptiveRateLimiterIntegration:
                 for _ in range(5):
                     limiter.wait()
                     limiter.on_success()
-                initial_calls = mock_sleep.call_count
 
                 # Phase 2: Hit rate limit
                 limiter.wait()

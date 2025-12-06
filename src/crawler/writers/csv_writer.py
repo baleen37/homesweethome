@@ -3,8 +3,6 @@ from pathlib import Path
 from typing import Any
 
 # Re-export for backward compatibility
-from crawler.writers.complexes_csv_writer import ComplexesCSVWriter
-from crawler.writers.transaction_csv_writer import TransactionCSVWriter
 
 
 class CSVWriter:

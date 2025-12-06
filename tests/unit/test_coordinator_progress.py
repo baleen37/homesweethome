@@ -4,7 +4,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from crawler.coordinator import CrawlCoordinator
 from crawler.progress_tracker import ProgressTracker
@@ -187,8 +186,8 @@ class TestCrawlCoordinatorProgress:
         )
 
         # Mock functions
-        mock_fetch_detail = MagicMock(return_value={"pyeong_types": []})
-        mock_fetch_transactions = MagicMock(return_value=[])
+        MagicMock(return_value={"pyeong_types": []})
+        MagicMock(return_value=[])
 
         # 진행 상황 파일이 초기에 생성되는지 확인
         progress_file = self.temp_dir / "progress.json"

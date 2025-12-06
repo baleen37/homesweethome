@@ -6,7 +6,7 @@ Tests the incremental saving functionality and checkpoint management.
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
@@ -93,7 +93,7 @@ class TestCrawlCoordinator:
     def test_init_creates_output_directory(self, temp_dir):
         """초기화 시 출력 디렉토리를 생성하는지 테스트"""
         output_dir = temp_dir / "output"
-        coordinator = CrawlCoordinator(output_dir)
+        CrawlCoordinator(output_dir)
 
         assert output_dir.exists()
         assert output_dir.is_dir()
@@ -224,7 +224,7 @@ class TestCrawlCoordinator:
             check_checkpoint()
             return original_fetch_detail(complex_id)
 
-        result = coordinator.crawl_multiple_dongs(
+        coordinator.crawl_multiple_dongs(
             dong_complexes=sample_dong_complexes,
             fetch_complex_detail=fetch_detail_with_check,
             fetch_transaction_history=mock_transactions,
@@ -298,7 +298,7 @@ class TestCrawlCoordinator:
             return mock_detail(complex_id)
 
         import time
-        result = coordinator.crawl_dong(
+        coordinator.crawl_dong(
             dong_code="1154510200",
             dong_name="역삼1동",
             complexes=sample_dong_complexes[0]["complexes"][:1],  # 하나만 처리

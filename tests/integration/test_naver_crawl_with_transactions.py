@@ -1,7 +1,6 @@
 """Integration tests for NaverRealEstateCrawler with transaction data collection."""
 
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 

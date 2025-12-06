@@ -48,7 +48,7 @@ class CheckpointManager:
                 loaded_checkpoint = json.load(f)
                 self.checkpoint.update(loaded_checkpoint)
             return self.checkpoint
-        except (json.JSONDecodeError, KeyError) as e:
+        except (json.JSONDecodeError, KeyError):
             # 손상된 파일은 무시
             return None
 

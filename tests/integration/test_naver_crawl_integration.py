@@ -233,9 +233,6 @@ class TestNaverCrawlerIntegration:
         """Test that crawl method has correct structure and imports."""
         # Check that all required components are imported
         from crawler.crawlers.naver import NaverRealEstateCrawler
-        from crawler.coordinator import CrawlCoordinator
-        from crawler.writers.complexes_csv_writer import ComplexesCSVWriter
-        from crawler.writers.transaction_csv_writer import TransactionCSVWriter
 
         # Verify the method exists and has correct signature
         assert hasattr(NaverRealEstateCrawler, 'crawl')

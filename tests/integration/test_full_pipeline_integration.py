@@ -3,7 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 import pytest
 
 from crawler.config import CrawlerConfig
@@ -211,7 +211,6 @@ class TestFullPipelineIntegration:
     def test_checkpoint_and_resume_functionality(self, config):
         """Test that checkpointing works for resuming crawling."""
         from crawler.utils.checkpoint import CheckpointManager
-        from crawler.coordinator import CrawlCoordinator
 
         # Create a temporary checkpoint file
         with tempfile.TemporaryDirectory() as tmpdir:

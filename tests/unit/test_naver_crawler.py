@@ -217,9 +217,10 @@ def test_crawl_iterates_through_all_dongs(crawler_config: CrawlerConfig) -> None
         with patch("time.sleep"):  # 테스트 속도 향상
             results = crawler.crawl()
 
-    # 실제 seoul_districts.json에는 467개 동이 있으므로 467개 단지 크롤링 예상
-    assert len(results) == 467
-    assert mock_page.evaluate.call_count == 467
+    # 실제 seoul_districts.json에는 467개 동이 있으므로 467개 동 처리 예상
+    assert results["dongs_processed"] == 467
+    # 각 동에 대해 최소 1번 이상의 API 호출이 있어야 함
+    assert mock_page.evaluate.call_count >= 467
 
 
 def test_fetch_complex_listings_calls_api_correctly(crawler_config: CrawlerConfig) -> None:
@@ -522,8 +523,8 @@ def test_fetch_transaction_history_single_page(crawler_config: CrawlerConfig) ->
 
     # Verify results - should only have 1 transaction from the last page fixture
     assert len(transactions) == 1
-    assert transactions[0]["tradeDate"] == "2023-12-01"
-    assert transactions[0]["dealPrice"] == 1550000000
+    assert transactions[0]["trade_date"] == "2023-12-01"
+    assert transactions[0]["deal_price"] == 1550000000
 
     # Verify API call
     expected_url_contains = [
@@ -577,8 +578,8 @@ def test_fetch_transaction_history_pagination(crawler_config: CrawlerConfig) -> 
     assert mock_page.evaluate.call_count == 2
 
     # Verify the correct transactions were retrieved
-    assert transactions[0]["tradeDate"] == "2025-11-14"  # From first page
-    assert transactions[4]["tradeDate"] == "2023-12-01"  # From second page
+    assert transactions[0]["trade_date"] == "2025-11-14"  # From first page
+    assert transactions[4]["trade_date"] == "2023-12-01"  # From second page
 
     # Verify second page call
     second_call_args = mock_page.evaluate.call_args_list[1][0][1]
@@ -602,8 +603,8 @@ def test_fetch_transaction_history_rate_limit_error(crawler_config: CrawlerConfi
     crawler.page = mock_page
 
     # Mock rate limiter and sleep
-    with patch.object(crawler.rate_limiter, 'wait') as mock_wait:
-        with patch.object(crawler.rate_limiter, 'on_success') as mock_success:
+    with patch.object(crawler.rate_limiter, 'wait'):
+        with patch.object(crawler.rate_limiter, 'on_success'):
             with patch.object(crawler.rate_limiter, 'on_rate_limit_error') as mock_429:
                 with patch('time.sleep') as mock_sleep:
                     # Call the method
