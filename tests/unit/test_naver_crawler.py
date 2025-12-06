@@ -255,6 +255,87 @@ def test_crawl_iterates_through_all_dongs(crawler_config: CrawlerConfig) -> None
     assert mock_page.evaluate.call_count >= 467
 
 
+def test_crawl_with_district_filter(crawler_config: CrawlerConfig) -> None:
+    """crawl() 메서드가 district_filter 파라미터로 특정 구만 필터링하여 처리하는지 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # 강남구와 서초구만 필터링
+    district_filter = ["강남구", "서초구"]
+
+    # filter_districts 메서드를 직접 테스트하여 필터링 기능 확인
+    filtered_districts = crawler.filter_districts(district_filter)
+
+    # 필터링된 구 이름 확인
+    filtered_district_names = [d["district_name"] for d in filtered_districts]
+    assert "강남구" in filtered_district_names
+    assert "서초구" in filtered_district_names
+    assert len(filtered_districts) == 2
+
+    # 전체 구가 아닌 필터링된 구만 포함되는지 확인
+    assert len(filtered_districts) < len(crawler.districts_data["districts"])
+
+    # Mock Playwright context (CrawlCoordinator 동작을 간단화하기 위해 mock)
+    with patch("crawler.crawlers.naver.CrawlCoordinator") as mock_coordinator_class:
+        mock_coordinator = Mock()
+        mock_coordinator.crawl_multiple_dongs.return_value = {
+            "dongs_processed": 24,  # 강남구(18) + 서초구(6) 동 수
+            "total_complexes_processed": 0,
+            "total_transactions_collected": 0,
+            "duration_seconds": 0.1,
+        }
+
+        # Mock checkpoint_manager 설정
+        mock_checkpoint_manager = Mock()
+        mock_checkpoint_manager.checkpoint = {}  # 빈 checkpoint 딕셔너리
+        mock_checkpoint_manager.should_skip_dong.return_value = False  # 모든 동을 처리하도록 설정
+        mock_coordinator.checkpoint_manager = mock_checkpoint_manager
+
+        mock_coordinator_class.return_value = mock_coordinator
+
+        with patch("crawler.crawlers.naver.sync_playwright") as mock_playwright:
+            mock_browser = Mock()
+            mock_page = Mock()
+            mock_page.evaluate.return_value = {
+                "result": [{"hscpNo": "123", "hscpNm": "단지1"}],
+            }
+            mock_playwright.return_value.__enter__.return_value.chromium.launch.return_value = (
+                mock_browser
+            )
+            mock_browser.new_page.return_value = mock_page
+            mock_page.goto.return_value = None
+            mock_page.wait_for_load_state.return_value = None
+
+            with patch("time.sleep"):  # 테스트 속도 향상
+                # district_filter 파라미터와 함께 호출
+                results = crawler.crawl(district_filter=district_filter)
+
+                # CrawlCoordinator가 필터링된 동들로 호출되었는지 확인
+                mock_coordinator.crawl_multiple_dongs.assert_called_once()
+
+                # 전달된 dong_complexes 확인
+                call_args = mock_coordinator.crawl_multiple_dongs.call_args
+                dong_complexes = call_args[1]["dong_complexes"]  # kwargs에서 dong_complexes 추출
+
+                # 총 동 개수 확인 (강남구 18개 + 서초구 6개 = 24개)
+                assert len(dong_complexes) == 24
+
+                # 각 동이 필터링된 구에 속하는지 확인
+                dong_districts = set()
+                for dong_complex in dong_complexes:
+                    # 각 동이 어느 구에 속하는지 확인
+                    for district in filtered_districts:
+                        district_dongs = {d["cortarNo"] for d in district["dongs"]}
+                        if dong_complex["dong_code"] in district_dongs:
+                            dong_districts.add(district["district_name"])
+                            break
+
+                # 오직 강남구와 서초구만 포함되어야 함
+                assert dong_districts == {"강남구", "서초구"}
+
+                # 최종 결과 확인
+                assert results["dongs_processed"] == 24
+
+
 def test_fetch_complex_listings_calls_api_correctly(crawler_config: CrawlerConfig) -> None:
     """fetch_complex_listings가 올바른 API URL과 파라미터로 호출하는지 테스트"""
     crawler = NaverRealEstateCrawler(crawler_config)

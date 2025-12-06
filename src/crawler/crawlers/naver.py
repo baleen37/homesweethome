@@ -963,9 +963,19 @@ class NaverRealEstateCrawler:
 
         return listings
 
-    def crawl(self) -> dict[str, Any]:
-        """서울시 전체 구/동을 순회하며 크롤링 (거래내역 포함)"""
-        self.logger.info("crawling_start_with_transactions")
+    def crawl(self, district_filter: list[str] | None = None) -> dict[str, Any]:
+        """서울시 구/동을 순회하며 크롤링 (거래내역 포함)
+
+        Args:
+            district_filter: 크롤링할 구 이름 리스트 (None이면 전체)
+
+        Returns:
+            크롤링 결과 통계
+        """
+        self.logger.info("crawling_start_with_transactions", districts=district_filter)
+
+        # 구 필터링
+        districts = self.filter_districts(district_filter)
 
         # CrawlCoordinator 초기화
         output_dir = Path(self.config.output_dir)
@@ -998,8 +1008,9 @@ class NaverRealEstateCrawler:
             time.sleep(2)  # 세션 안정화 대기
             self.logger.info("browser_ready")
 
-            # 모든 동에 대한 단지 정보 수집
-            for district in self.districts_data["districts"]:
+            # 필터링된 구의 동들만 수집
+            for district in districts:
+                self.logger.info("processing_district", district_name=district["district_name"])
                 for dong in district["dongs"]:
                     # 체크포인트에서부터 시작
                     if coordinator.checkpoint_manager is not None:
