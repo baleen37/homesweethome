@@ -46,7 +46,7 @@ def test_fetch_complex_detail():
         # 보유세 정보
         if 'holding_tax' in detail:
             tax = detail['holding_tax']
-            print(f"\n보유세 정보:")
+            print("\n보유세 정보:")
             print(f"  재산세: {tax.get('property_tax', 'N/A'):,}원")
             print(f"  종부세: {tax.get('comprehensive_real_estate_tax', 'N/A'):,}원")
             print(f"  총 보유세: {tax.get('total_tax', 'N/A'):,}원")
@@ -55,7 +55,7 @@ def test_fetch_complex_detail():
         # 공시가격 정보
         if 'declared_value' in detail:
             declared = detail['declared_value']
-            print(f"\n공시가격 정보:")
+            print("\n공시가격 정보:")
             print(f"  공시가격: {declared.get('declared_price', 'N/A'):,}원")
             print(f"  평당 공시가격: {declared.get('declared_price_per_pyeong', 'N/A'):,}원")
             print(f"  기준년도: {declared.get('declared_year', 'N/A')}")
@@ -63,7 +63,7 @@ def test_fetch_complex_detail():
         # 최근 시세 정보
         if 'recent_market_price' in detail:
             market = detail['recent_market_price']
-            print(f"\n최근 시세:")
+            print("\n최근 시세:")
             print(f"  최근 시세: {market.get('recent_price', 'N/A'):,}원")
             print(f"  변동률: {market.get('price_change_rate', 'N/A'):.2f}%")
             print(f"  제공처: {market.get('source', 'N/A')}")
@@ -91,7 +91,7 @@ def test_fetch_complex_detail():
         if hasattr(crawler, 'page') and crawler.page:
             try:
                 crawler.page.close()
-            except:
+            except Exception:
                 pass
 
 

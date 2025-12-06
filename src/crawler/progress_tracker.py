@@ -9,7 +9,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import structlog
 
@@ -38,7 +38,7 @@ class ProgressTracker:
 
         # 리포트 간격 설정
         self.report_interval = report_interval
-        self.last_report_time = 0
+        self.last_report_time: float = 0.0
 
         # 로그 설정
         self.logger = structlog.get_logger()
@@ -66,8 +66,8 @@ class ProgressTracker:
 
         # 속도 측정을 위한 타이밍 데이터
         self.timings: List[Dict[str, Any]] = []
-        self.current_dong_start = 0
-        self.current_complex_start = 0
+        self.current_dong_start: float = 0.0
+        self.current_complex_start: float = 0.0
 
         # 진행 상황 저장 파일
         self.progress_file = self.output_dir / "progress.json"
@@ -376,7 +376,7 @@ class ProgressTracker:
         print(f"예상 남은 시간: {summary['eta_formatted']}")
 
         # 성능 지표
-        print(f"\n성능:")
+        print("\n성능:")
         print(f"  - 단지 처리 속도: {summary['complexes_per_hour']:.1f}개/시간")
         print(f"  - 거래내역 수집 속도: {summary['transactions_per_hour']:.1f}건/시간")
         print(f"  - 평균 Rate Limit: {summary['rate_limiter_delay']:.1f}초")
@@ -474,7 +474,7 @@ class ProgressTracker:
         if self.progress_file.exists():
             try:
                 with open(self.progress_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    return cast(Dict[str, Any], json.load(f))
             except Exception as e:
                 self.logger.warning(
                     "failed_to_load_progress",

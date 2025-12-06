@@ -106,9 +106,9 @@ def test_crawl_complexes_basic(tmp_path: Path) -> None:
     # 체크포인트 파일 생성 검증
     assert checkpoint_path.exists(), "체크포인트 파일이 생성되지 않았습니다"
 
-    print(f"\n✅ test_crawl_complexes_basic 테스트 통과!")
+    print("\n✅ test_crawl_complexes_basic 테스트 통과!")
     print(f"   - 크롤링된 단지: {len(results)}개")
-    print(f"   - 체크포인트: 생성됨")
+    print("   - 체크포인트: 생성됨")
 
 
 @pytest.mark.integration
@@ -342,7 +342,7 @@ def test_fetch_complex_detail(tmp_path: Path) -> None:
             # 에러가 있어도 테스트는 계속 진행 (일부 필드만 확인)
 
         # 주요 정보 출력
-        print(f"\n=== 단지 상세 정보 ===")
+        print("\n=== 단지 상세 정보 ===")
         print(f"Complex ID: {detail.get('complex_id', 'N/A')}")
         print(f"Fetched at: {detail.get('fetched_at', 'N/A')}")
 
@@ -361,7 +361,7 @@ def test_fetch_complex_detail(tmp_path: Path) -> None:
             "parking_count", "heating_type", "move_in_date", "total_dong_count"
         ]
 
-        print(f"\n=== 기타 필드 확인 ===")
+        print("\n=== 기타 필드 확인 ===")
         found_fields = []
         for field in other_fields:
             value = detail.get(field)
@@ -382,7 +382,7 @@ def test_fetch_complex_detail(tmp_path: Path) -> None:
         assert has_data, "단지 상세 정보가 비어있습니다"
         assert detail.get("complex_id") == complex_id, "complex_id가 일치하지 않습니다"
 
-        print(f"\n✅ fetch_complex_detail() 테스트 성공!")
+        print("\n✅ fetch_complex_detail() 테스트 성공!")
         print(f"   - {len(found_fields)}개의 추가 필드 발견")
         if "pyeong_types" in detail and detail["pyeong_types"]:
             print(f"   - {len(detail['pyeong_types'])}개의 평형 정보 확인")
@@ -512,7 +512,7 @@ def test_fetch_heliocity_listings(tmp_path: Path) -> None:
 
     # 5. CSV로 저장
     if all_listings:
-        print(f"\n=== CSV 저장 ===")
+        print("\n=== CSV 저장 ===")
         csv_path = tmp_path / "heliocity_listings.csv"
         writer = CSVWriter(csv_path)
         writer.write(all_listings)
@@ -529,7 +529,7 @@ def test_fetch_heliocity_listings(tmp_path: Path) -> None:
     else:
         print("\n⚠️ 저장할 매물이 없습니다")
 
-    print(f"\n✅ fetch_complex_listings() 테스트 완료!")
+    print("\n✅ fetch_complex_listings() 테스트 완료!")
 
 
 @pytest.mark.integration
@@ -605,7 +605,7 @@ def test_fetch_complex_listings(tmp_path: Path) -> None:
             complex_name_to_test = complexes[0]["complex_name"]
 
         # 여러 단지 정보 출력 (디버깅용)
-        print(f"\n=== 크롤링된 단지 목록 (처음 5개) ===")
+        print("\n=== 크롤링된 단지 목록 (처음 5개) ===")
         for i, complex in enumerate(complexes[:5]):
             print(f"{i+1}. {complex['complex_name']} (ID: {complex['complex_id']}) - "
                   f"매물 {complex.get('total_article_count', 0)}개")
@@ -665,9 +665,9 @@ def test_fetch_complex_listings(tmp_path: Path) -> None:
             for key, value in first_listing.items():
                 print(f"{key}: {value}")
 
-            print(f"\n✅ fetch_complex_listings() 테스트 성공!")
+            print("\n✅ fetch_complex_listings() 테스트 성공!")
             print(f"   - {len(listings)}개 매물 확인")
-            print(f"   - 필수 필드 모두 존재")
+            print("   - 필수 필드 모두 존재")
 
     except Exception as e:
         print(f"\n❌ 테스트 실패: {str(e)}")
@@ -738,7 +738,7 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
         }]
     }
 
-    print(f"\n=== 전체 파이프라인 테스트 시작 ===")
+    print("\n=== 전체 파이프라인 테스트 시작 ===")
     print(f"테스트 대상: {test_district['district_name']} {test_district['dongs'][0]['dong_name']}")
 
     # 1. 기본 크롤링 실행
@@ -765,7 +765,7 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
 
     # 상세 정보 조회 (성공했을 경우에만)
     try:
-        print(f"   - 상세 정보 조회 중...")
+        print("   - 상세 정보 조회 중...")
 
         # 새 크롤러 인스턴스 사용
         detail_crawler = NaverRealEstateCrawler(config)
@@ -774,9 +774,9 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
         if detail and "error" not in detail:
             # 상세 정보로 단지 데이터 업데이트
             enriched_complexes[0].update(detail)
-            print(f"   - ✅ 상세 정보 조회 성공")
+            print("   - ✅ 상세 정보 조회 성공")
         else:
-            print(f"   - ⚠️ 상세 정보 없음 또는 에러")
+            print("   - ⚠️ 상세 정보 없음 또는 에러")
 
         # 브라우저 정리
         try:
@@ -784,7 +784,7 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
                 detail_crawler.page.close()
             if hasattr(detail_crawler, 'browser'):
                 detail_crawler.browser.close()
-        except:
+        except Exception:
             pass
 
     except Exception as e:
@@ -795,7 +795,7 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
 
     # 매물 정보 조회 (성공했을 경우에만)
     try:
-        print(f"   - 매물 목록 조회 중...")
+        print("   - 매물 목록 조회 중...")
 
         # 새 크롤러 인스턴스 사용
         listings_crawler = NaverRealEstateCrawler(config)
@@ -814,7 +814,7 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
                     else:
                         price_num = int(price_str.replace(",", ""))
                     prices.append(price_num)
-                except:
+                except Exception:
                     pass
 
             if prices:
@@ -828,7 +828,7 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
                 print(f"   - 가격 범위: {min(prices):,} ~ {max(prices):,} (평균: {int(sum(prices)/len(prices)):,})")
         else:
             enriched_complexes[0]["active_listings_count"] = 0
-            print(f"   - ⚠️ 매물 없음")
+            print("   - ⚠️ 매물 없음")
 
         # 브라우저 정리
         try:
@@ -836,7 +836,7 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
                 listings_crawler.page.close()
             if hasattr(listings_crawler, 'browser'):
                 listings_crawler.browser.close()
-        except:
+        except Exception:
             pass
 
     except Exception as e:
@@ -880,7 +880,7 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
         # 첫 번째 데이터 행 샘플 출력
         if len(lines) > 1:
             first_row = lines[1].strip()
-            print(f"\n   - 첫 번째 데이터 행 샘플:")
+            print("\n   - 첫 번째 데이터 행 샘플:")
             print(f"     {first_row[:100]}...")
 
     # 5. 데이터 검증
@@ -888,17 +888,17 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
 
     # 모든 단지에 기본 필드가 있는지 확인
     for complex in enriched_complexes:
-        assert "complex_id" in complex, f"단지에 complex_id가 없습니다"
-        assert "complex_name" in complex, f"단지에 complex_name이 없습니다"
+        assert "complex_id" in complex, "단지에 complex_id가 없습니다"
+        assert "complex_name" in complex, "단지에 complex_name이 없습니다"
         # 매물 카운트 필드가 있는지 확인
-        assert "active_listings_count" in complex, f"단지에 active_listings_count가 없습니다"
+        assert "active_listings_count" in complex, "단지에 active_listings_count가 없습니다"
 
     # 집계된 데이터 확인
     if enriched_complexes[0].get("active_listings_count", 0) > 0:
-        print(f"\n   - 매물이 있는 단지: 1개")
+        print("\n   - 매물이 있는 단지: 1개")
         print(f"     - {enriched_complexes[0]['complex_name']}: {enriched_complexes[0]['active_listings_count']}개 매물")
 
-    print(f"\n✅ test_crawl_full_pipeline 테스트 통과!")
+    print("\n✅ test_crawl_full_pipeline 테스트 통과!")
     print(f"   - 크롤링된 단지: {len(enriched_complexes)}개")
     print(f"   - 저장된 CSV: {output_path}")
     print(f"   - 확장 필드: {len(found_enriched_fields)}개")

@@ -948,13 +948,14 @@ class NaverRealEstateCrawler:
         )
 
         # Rate limiter 상태 복원
-        checkpoint = coordinator.checkpoint_manager.checkpoint
-        if checkpoint.get("rate_limiter_state"):
-            coordinator.checkpoint_manager.restore_rate_limiter_state(self.rate_limiter)
-            self.logger.info(
-                "rate_limiter_state_restored",
-                delay=self.rate_limiter.current_delay
-            )
+        if coordinator.checkpoint_manager is not None:
+            checkpoint = coordinator.checkpoint_manager.checkpoint
+            if checkpoint.get("rate_limiter_state"):
+                coordinator.checkpoint_manager.restore_rate_limiter_state(self.rate_limiter)
+                self.logger.info(
+                    "rate_limiter_state_restored",
+                    delay=self.rate_limiter.current_delay
+                )
 
         # 준비: 모든 동의 단지 정보 수집
         dong_complexes = []
@@ -972,10 +973,12 @@ class NaverRealEstateCrawler:
             for district in self.districts_data["districts"]:
                 for dong in district["dongs"]:
                     # 체크포인트에서부터 시작
-                    if coordinator.checkpoint_manager.should_skip_dong(dong["cortarNo"]):
-                        # 마지막으로 처리된 동까지는 건너뛰기
-                        if checkpoint.get("last_dong") and dong["cortarNo"] != checkpoint["last_dong"]:
-                            continue
+                    if coordinator.checkpoint_manager is not None:
+                        checkpoint = coordinator.checkpoint_manager.checkpoint
+                        if coordinator.checkpoint_manager.should_skip_dong(dong["cortarNo"]):
+                            # 마지막으로 처리된 동까지는 건너뛰기
+                            if checkpoint.get("last_dong") and dong["cortarNo"] != checkpoint["last_dong"]:
+                                continue
 
                     self.logger.info(
                         "collecting_complexes_for_dong",
@@ -1004,9 +1007,10 @@ class NaverRealEstateCrawler:
             )
 
             # 최종 체크포인트 저장에 rate limiter 상태 포함
-            coordinator.checkpoint_manager.save(
-                rate_limiter=self.rate_limiter
-            )
+            if coordinator.checkpoint_manager is not None:
+                coordinator.checkpoint_manager.save(
+                    rate_limiter=self.rate_limiter
+                )
 
             browser.close()
 

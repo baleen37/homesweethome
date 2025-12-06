@@ -337,7 +337,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             "dealPrice": 1700000000,
             "isDelete": False
         }
-        assert crawler._validate_transaction(valid_txn) == True
+        assert crawler._validate_transaction(valid_txn)
 
         # Invalid transaction (deleted)
         deleted_txn = {
@@ -346,7 +346,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             "dealPrice": 1700000000,
             "isDelete": True
         }
-        assert crawler._validate_transaction(deleted_txn) == False
+        assert not crawler._validate_transaction(deleted_txn)
 
         # Invalid transaction (missing trade date)
         no_date_txn = {
@@ -354,7 +354,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             "dealPrice": 1700000000,
             "isDelete": False
         }
-        assert crawler._validate_transaction(no_date_txn) == False
+        assert not crawler._validate_transaction(no_date_txn)
 
         # Invalid transaction (empty trade date)
         empty_date_txn = {
@@ -363,7 +363,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             "dealPrice": 1700000000,
             "isDelete": False
         }
-        assert crawler._validate_transaction(empty_date_txn) == False
+        assert not crawler._validate_transaction(empty_date_txn)
 
         # Invalid transaction (null floor)
         null_floor_txn = {
@@ -372,7 +372,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             "dealPrice": 1700000000,
             "isDelete": False
         }
-        assert crawler._validate_transaction(null_floor_txn) == False
+        assert not crawler._validate_transaction(null_floor_txn)
 
     def test_parse_transaction(self, config):
         """Test transaction parsing logic."""
@@ -412,5 +412,5 @@ class TestNaverRealEstateCrawlerWithTransactions:
         assert parsed["deposit"] == 0
         assert parsed["monthly_rent"] == 0
         assert parsed["trade_category"] == "중개거래"
-        assert parsed["is_delete"] == False
-        assert parsed["is_renew"] == False
+        assert not parsed["is_delete"]
+        assert not parsed["is_renew"]

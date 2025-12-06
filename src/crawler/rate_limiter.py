@@ -49,7 +49,7 @@ class AdaptiveRateLimiter:
         # Update last wait time
         try:
             self._last_wait_time = time.time()
-        except:
+        except Exception:
             # In test environments where time.time() is mocked to return a constant,
             # we still want to set _last_wait_time to something
             self._last_wait_time = 0
