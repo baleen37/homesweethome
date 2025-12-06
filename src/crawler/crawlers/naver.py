@@ -10,18 +10,23 @@ from crawler.rate_limiter import AdaptiveRateLimiter
 from crawler.utils.checkpoint import CheckpointManager
 from crawler.utils.browser_manager import BrowserManager
 from crawler.utils.retry import BROWSER_RETRY_CONFIG, Retryable
+from crawler.utils.logging_config import CrawlLogger
 from crawler.coordinator import CrawlCoordinator
 
 
 class NaverRealEstateCrawler:
     def __init__(self, config: CrawlerConfig) -> None:
         self.config = config
-        self.logger = structlog.get_logger()
+        self.crawl_logger = CrawlLogger("naver_real_estate")
+        self.logger = structlog.get_logger()  # 기존 호환성 유지
         self.checkpoint_manager = CheckpointManager("output/checkpoint.json")
         self.districts_data = self._load_districts_data()
         self.page: Any = None  # Playwright page object
         self.rate_limiter = AdaptiveRateLimiter()  # Initialize rate limiter
         self.browser_manager = BrowserManager(config)
+
+        # 리소스 사용량 추적
+        self.start_time = time.time()
 
     def get_url(self) -> str:
         return "https://new.land.naver.com/complexes"
@@ -72,11 +77,58 @@ class NaverRealEstateCrawler:
         Returns:
             단지 정보 리스트
         """
-        self.logger.info("starting_naver_real_estate_crawl")
+        self.crawl_logger.log_crawl_start(
+            total_items=len(self.districts_data.get("districts", [])),
+            districts_count=len(self.districts_data.get("districts", [])),
+        )
 
-        # CrawlCoordinator를 사용하여 크롤링 조정
-        coordinator = CrawlCoordinator(self.config, self)
-        return coordinator.crawl_all_districts()
+        # 리소스 사용량 초기 로깅
+        self.crawl_logger.log_resource_usage(
+            requests_made=0,
+            avg_response_time=0,
+        )
+
+        try:
+            # CrawlCoordinator를 사용하여 크롤링 조정
+            coordinator = CrawlCoordinator(self.config, self)
+            result = coordinator.crawl_all_districts()
+
+            # 크롤링 완료 로깅
+            self.crawl_logger.log_crawl_end(
+                items_processed=len(result),
+                success=True,
+                summary={
+                    "districts_crawled": len(result),
+                }
+            )
+
+            # 최종 리소스 사용량 로깅
+            self.crawl_logger.log_resource_usage(
+                requests_made=self.crawl_logger.request_count,
+                avg_response_time=0,  # TODO: 평균 응답시간 계산 추가
+            )
+
+            return result
+
+        except Exception as e:
+            # 에러 발생 시 상세 로깅
+            self.crawl_logger.error_with_context(
+                error=e,
+                context={
+                    "total_districts": len(self.districts_data.get("districts", [])),
+                    "requests_made": self.crawl_logger.request_count,
+                },
+                critical=False,
+            )
+
+            # 크롤링 실패 로깅
+            self.crawl_logger.log_crawl_end(
+                items_processed=0,
+                success=False,
+                summary={"error": str(e)},
+            )
+
+            raise
 
     def _fetch_dong_data(self, dong: dict[str, Any]) -> list[dict[str, Any]]:
         """
@@ -88,17 +140,24 @@ class NaverRealEstateCrawler:
         Returns:
             단지 정보 리스트
         """
+        start_time = time.time()
+        dong_name = dong.get("dong_name", "")
+
         # BrowserManager를 사용하여 브라우저 리소스 관리
         with self.browser_manager.managed_browser() as page:
             self.page = page  # 일시적으로 저장
 
             # 동 페이지 접속
-            self.logger.info("accessing_dong_page", dong=dong.get("dong_name", ""))
+            self.crawl_logger.log_api_call(
+                endpoint=f"/houses?cortarNo={dong['cortarNo']}",
+                params={"dong_name": dong_name},
+            )
+
             page.goto(f"https://new.land.naver.com/houses?cortarNo={dong['cortarNo']}")
             page.wait_for_load_state("networkidle")
 
             # 데이터 추출 스크립트 실행
-            self.logger.info("extracting_dong_data", dong=dong.get("dong_name", ""))
+            self.logger.info("extracting_dong_data", dong=dong_name)
 
             # 페이지에 있는 데이터 추출
             result = page.evaluate("""
@@ -131,6 +190,15 @@ class NaverRealEstateCrawler:
                 }
             """)
 
+            # 응답 시간 로깅
+            response_time = time.time() - start_time
+            self.crawl_logger.log_api_call(
+                endpoint="/houses/data_extract",
+                params={"dong_name": dong_name},
+                response_time=response_time,
+                response_size=len(str(result)),
+            )
+
             return result
 
     def fetch_dong_with_retry(self, dong: dict[str, Any], max_retries: int = 3) -> list[dict[str, Any]]:
@@ -144,6 +212,8 @@ class NaverRealEstateCrawler:
         Returns:
             단지 정보 리스트
         """
+        dong_name = dong.get("dong_name", "")
+
         for attempt in range(max_retries):
             try:
                 # Rate limiting 먼저 적용 (요청 전 대기)
@@ -152,40 +222,46 @@ class NaverRealEstateCrawler:
                 # 성공 시 rate limiter 업데이트
                 self.rate_limiter.on_success()
                 return data
-            except TimeoutError:
-                self.logger.warning(
-                    "fetch_timeout",
-                    dong=dong.get("dong_name", ""),
+            except TimeoutError as e:
+                # 타임아웃 에러 로깅
+                delay = 2**attempt  # 지수 백오프
+                self.crawl_logger.log_retry(
                     attempt=attempt + 1,
-                    max_retries=max_retries,
+                    max_attempts=max_retries,
+                    error=f"Timeout: {str(e)}",
+                    delay=delay,
+                    context={
+                        "dong_name": dong_name,
+                        "cortarNo": dong.get("cortarNo"),
+                        "error_type": "timeout",
+                    },
                 )
                 self.rate_limiter.on_error()
                 if attempt == max_retries - 1:
                     self.checkpoint_manager.add_failed_dong(dong["cortarNo"], "Timeout after retries")
                     return []
-                time.sleep(2**attempt)  # 지수 백오프
+                time.sleep(delay)
             except Exception as e:
                 error_msg = str(e)
 
                 # 429 에러인지 확인
                 if "429" in error_msg or "Too Many Requests" in error_msg:
-                    self.logger.warning(
-                        "rate_limit_error_dong",
-                        dong=dong.get("dong_name", ""),
+                    wait_time = self.rate_limiter.get_retry_delay(attempt)
+                    self.crawl_logger.log_retry(
                         attempt=attempt + 1,
-                        max_retries=max_retries,
+                        max_attempts=max_retries,
+                        error=f"Rate limit: {error_msg}",
+                        delay=wait_time,
+                        context={
+                            "dong_name": dong_name,
+                            "cortarNo": dong.get("cortarNo"),
+                            "error_type": "rate_limit",
+                        },
                     )
                     self.rate_limiter.on_rate_limit_error()
 
                     # 재시도
                     if attempt < max_retries - 1:
-                        wait_time = self.rate_limiter.get_retry_delay(attempt)
-                        self.logger.info(
-                            "retrying_dong_after_rate_limit",
-                            dong=dong.get("dong_name", ""),
-                            attempt=attempt + 1,
-                            wait_time=wait_time,
-                        )
                         time.sleep(wait_time)
                         continue
                     else:
@@ -193,10 +269,15 @@ class NaverRealEstateCrawler:
                         return []
                 else:
                     # 기타 에러
-                    self.logger.error(
-                        "fetch_error",
-                        dong=dong.get("dong_name", ""),
-                        error=error_msg,
+                    self.crawl_logger.error_with_context(
+                        error=e,
+                        context={
+                            "dong_name": dong_name,
+                            "cortarNo": dong.get("cortarNo"),
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                            "error_type": "general_error",
+                        },
                     )
                     self.rate_limiter.on_error()
                     self.checkpoint_manager.add_failed_dong(dong["cortarNo"], error_msg)
@@ -205,7 +286,10 @@ class NaverRealEstateCrawler:
 
     def fetch_complex_detail(self, complex_id: str) -> dict[str, Any]:
         """단지 상세 정보 조회 (평형, 보유세, 공시가격, 시세 등)"""
-        self.logger.info("fetching_complex_detail", complex_id=complex_id)
+        self.crawl_logger.log_api_call(
+            endpoint="/complex/detail",
+            params={"complex_id": complex_id},
+        )
 
         base_url = "https://fin.land.naver.com/front-api/v1/complex"
 
@@ -247,15 +331,38 @@ class NaverRealEstateCrawler:
                 # 각 API 엔드포인트 호출
                 for idx, endpoint_url in enumerate(endpoints):
                     endpoint_name = endpoint_url.split("/")[-1].split("?")[0]
-                    self.logger.info("fetching_endpoint", endpoint=endpoint_name, index=idx + 1, total=len(endpoints))
+                    self.crawl_logger.log_progress(
+                        current=idx + 1,
+                        total=len(endpoints),
+                        item_type="endpoints",
+                        context={
+                            "complex_id": complex_id,
+                            "endpoint": endpoint_name,
+                        },
+                    )
 
                     # 엔드포인트 호출을 재시도 로직으로 감싸기
+                    start_time = time.time()
                     response = self._fetch_endpoint_with_retry(page, endpoint_url, endpoint_name)
+                    response_time = time.time() - start_time
 
                     if response is not None:
                         detail_data[endpoint_name] = response
+                        self.crawl_logger.log_api_call(
+                            endpoint=f"/complex/{endpoint_name}",
+                            params={"complex_id": complex_id},
+                            response_time=response_time,
+                            response_size=len(str(response)),
+                            status_code=200,
+                        )
                     else:
                         detail_data[endpoint_name] = {"error": "Failed after retries"}
+                        self.crawl_logger.log_api_call(
+                            endpoint=f"/complex/{endpoint_name}",
+                            params={"complex_id": complex_id},
+                            response_time=response_time,
+                            status_code=500,
+                        )
 
                     # Rate limiting - API 호출 간 충분한 대기 (429 에러 방지)
                     if idx < len(endpoints) - 1:
@@ -301,6 +408,7 @@ class NaverRealEstateCrawler:
             API 응답 JSON 또는 None (모든 재시도 실패 시)
         """
         def fetch_endpoint():
+            start_time = time.time()
             result = page.evaluate(
                 """
                 async (url) => {
@@ -328,9 +436,12 @@ class NaverRealEstateCrawler:
                 endpoint_url,
             )
 
-            self.logger.info(
-                "endpoint_fetched_successfully",
-                endpoint=endpoint_name,
+            response_time = time.time() - start_time
+            self.crawl_logger.log_api_call(
+                endpoint=f"/api/{endpoint_name}",
+                response_time=response_time,
+                response_size=len(str(result)) if result else 0,
+                status_code=200,
             )
             return result
 
@@ -352,10 +463,15 @@ class NaverRealEstateCrawler:
             return retry_config.execute(fetch_endpoint)
 
         except Exception as e:
-            self.logger.error(
-                "endpoint_fetch_failed_final",
-                endpoint=endpoint_name,
-                error=str(e),
+            # 최종 실패 시 상세 로깅
+            self.crawl_logger.error_with_context(
+                error=e,
+                context={
+                    "endpoint": endpoint_name,
+                    "endpoint_url": endpoint_url[:100] + "..." if len(endpoint_url) > 100 else endpoint_url,
+                    "max_retries": max_retries,
+                    "error_type": "api_fetch_failed",
+                },
             )
             return None
 
@@ -409,10 +525,12 @@ class NaverRealEstateCrawler:
         Returns:
             매물 정보 리스트
         """
-        self.logger.info(
-            "fetching_complex_listings",
-            complex_id=complex_id,
-            trade_type=trade_type,
+        self.crawl_logger.log_api_call(
+            endpoint="/complex/listings",
+            params={
+                "complex_id": complex_id,
+                "trade_type": trade_type,
+            },
         )
 
         all_listings = []
@@ -434,11 +552,14 @@ class NaverRealEstateCrawler:
             max_pages = 10  # 최대 페이지 수 제한
 
             while page <= max_pages:
-                self.logger.info(
-                    "fetching_listing_page",
-                    complex_id=complex_id,
-                    trade_type=trade_type,
-                    page=page,
+                self.crawl_logger.log_progress(
+                    current=page,
+                    total=max_pages,
+                    item_type="listing_pages",
+                    context={
+                        "complex_id": complex_id,
+                        "trade_type": trade_type,
+                    },
                 )
 
                 # 모바일 API URL
@@ -452,6 +573,7 @@ class NaverRealEstateCrawler:
 
                 try:
                     # 브라우저 컨텍스트에서 API 호출
+                    start_time = time.time()
                     result = page.evaluate(
                         """
                         async (url) => {
@@ -477,6 +599,20 @@ class NaverRealEstateCrawler:
                         }
                         """,
                         api_url,
+                    )
+                    response_time = time.time() - start_time
+
+                    # API 호출 로깅
+                    self.crawl_logger.log_api_call(
+                        endpoint="/cluster/ajax/articleList",
+                        params={
+                            "complexNo": complex_id,
+                            "tradTpCd": trade_type,
+                            "page": page,
+                        },
+                        response_time=response_time,
+                        response_size=len(str(result)) if result else 0,
+                        status_code=200 if result else 500,
                     )
 
                     # 응답 파싱
@@ -505,12 +641,15 @@ class NaverRealEstateCrawler:
                     time.sleep(4)
 
                 except Exception as e:
-                    self.logger.error(
-                        "fetch_listings_error",
-                        complex_id=complex_id,
-                        trade_type=trade_type,
-                        page=page,
-                        error=str(e),
+                    self.crawl_logger.error_with_context(
+                        error=e,
+                        context={
+                            "complex_id": complex_id,
+                            "trade_type": trade_type,
+                            "page": page,
+                            "api_url": api_url[:100] + "..." if len(api_url) > 100 else api_url,
+                            "error_type": "listing_fetch_error",
+                        },
                     )
                     # 오류 발생 시 중단
                     break
