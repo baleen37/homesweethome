@@ -24,7 +24,7 @@ def test_get_url_with_config(crawler: RealEstateAPICrawler) -> None:
     """설정을 바탕으로 API URL이 올바르게 생성되는지 테스트"""
     url = crawler.get_url()
 
-    assert url.startswith("http://openapi.molit.go.kr:8081/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev")
+    assert url.startswith("http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev")
     assert "serviceKey=test_api_key" in url
     assert "LAWD_CD=11680" in url
     assert "DEAL_YMD=202501" in url

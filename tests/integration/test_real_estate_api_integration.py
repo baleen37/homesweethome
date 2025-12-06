@@ -50,7 +50,7 @@ def test_api_crawler_without_api_key():
 
     # API 키가 없어도 URL은 생성되어야 함
     url = crawler.get_url()
-    assert url.startswith("http://openapi.molit.go.kr:8081")
+    assert url.startswith("http://apis.data.go.kr/1613000")
 
 
 def test_api_crawler_with_different_regions():

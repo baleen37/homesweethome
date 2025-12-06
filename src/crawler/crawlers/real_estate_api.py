@@ -18,7 +18,7 @@ class RealEstateAPICrawler(BaseCrawler):
 
     def __init__(self, config: CrawlerConfig) -> None:
         super().__init__(config)
-        self.base_url = "http://openapi.molit.go.kr:8081/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev"
+        self.base_url = "http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev"
         self.service_key = config.api_key or ""
         self.logger = structlog.get_logger()
 
