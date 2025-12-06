@@ -121,21 +121,25 @@ class NaverRealEstateCrawler:
                     )
 
             # crawl_multiple_dongs 메서드 호출
-            result = coordinator.crawl_multiple_dongs(
+            # 래퍼 함수를 사용하여 인스턴스 메서드를 함수로 전달
+            coordinator.crawl_multiple_dongs(
                 dong_complexes=dong_complexes,
                 fetch_complex_detail=self.fetch_complex_detail,
-                fetch_transaction_history=self.fetch_transaction_history,
+                fetch_transaction_history=lambda complex_id, pyeong_type, trade_type: self.fetch_transaction_history(complex_id, pyeong_type, trade_type),
                 resume=self.checkpoint_manager.exists(),
             )
 
+            # 모든 단지 정보 수집하여 반환
+            all_complexes = []
+            for dong_data in dong_complexes:
+                all_complexes.extend(dong_data["complexes"])
+
             # 크롤링 완료 로깅
             self.crawl_logger.log_crawl_end(
-                items_processed=result["total_complexes_processed"],
+                items_processed=len(all_complexes),
                 success=True,
                 summary={
-                    "districts_crawled": result["total_dongs"],
-                    "complexes_processed": result["total_complexes_processed"],
-                    "transactions_collected": result["total_transactions_collected"],
+                    "total_complexes": len(all_complexes),
                 },
             )
 
@@ -145,8 +149,8 @@ class NaverRealEstateCrawler:
                 avg_response_time=0,  # TODO: 평균 응답시간 계산 추가
             )
 
-            # 통계 결과 반환
-            return result
+            # 단지 정보 리스트 반환
+            return all_complexes
 
         except Exception as e:
             # 에러 발생 시 상세 로깅
@@ -470,10 +474,6 @@ class NaverRealEstateCrawler:
                         current=idx + 1,
                         total=len(endpoints),
                         item_type="endpoints",
-                        context={
-                            "complex_id": complex_id,
-                            "endpoint": endpoint_name,
-                        },
                     )
 
                     # 엔드포인트 호출을 재시도 로직으로 감싸기
@@ -632,6 +632,8 @@ class NaverRealEstateCrawler:
             pyeong_data = raw_data["pyeongList"]
             if isinstance(pyeong_data, dict) and "result" in pyeong_data:
                 parsed["pyeong_info"] = pyeong_data["result"]
+                # pyeong_types 필드도 추가 (coordinator에서 사용)
+                parsed["pyeong_types"] = pyeong_data["result"]
 
         # 보유세 정보 파싱
         if "holdingTax" in raw_data:
@@ -701,7 +703,8 @@ class NaverRealEstateCrawler:
                 )
 
                 # 브라우저 컨텍스트에서 API 호출
-                result = page.evaluate("""
+                result = page.evaluate(
+                    """
                     async (url) => {
                         try {
                             const response = await fetch(url, {
@@ -723,7 +726,9 @@ class NaverRealEstateCrawler:
                             throw error;
                         }
                     }
-                """, api_url)
+                """,
+                    api_url,
+                )
 
                 # 응답 로깅
                 self.logger.info(
@@ -742,7 +747,9 @@ class NaverRealEstateCrawler:
                         "no_listings_found",
                         complex_id=complex_id,
                         current_page=current_page,
-                        response_result=result.get("result", []) if isinstance(result, dict) else result,
+                        response_result=result.get("result", [])
+                        if isinstance(result, dict)
+                        else result,
                     )
                     break
 

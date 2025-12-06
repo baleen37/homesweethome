@@ -143,7 +143,10 @@ class ComplexesCSVWriter:
         # Normalize statistics fields
         normalized = normalize_complex_data(normalized, STATISTICS_FIELDS)
 
-        return normalized
+        # Only keep fields that are in the CSV schema
+        filtered = {field: normalized.get(field) for field in self.FIELDNAMES}
+
+        return filtered
 
     def ensure_file_exists(self) -> None:
         """CSV 파일이 존재하는지 확인하고, 없으면 빈 파일을 생성합니다."""

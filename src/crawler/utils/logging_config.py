@@ -254,9 +254,7 @@ class CrawlLogger:
 
         # 요청 간격 계산
         if self.last_request_time > 0:
-            log_data["interval_since_last"] = float(
-                round(time.time() - self.last_request_time, 3)
-            )
+            log_data["interval_since_last"] = float(round(time.time() - self.last_request_time, 3))
         self.last_request_time = time.time()
 
         # 로그 레벨 결정
