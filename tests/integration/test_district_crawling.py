@@ -92,7 +92,7 @@ def test_crawl_single_district_real_api(test_config, setup_test_output):
     assert results["dongs_processed"] >= 1, "처리된 동이 1개 이상이어야 합니다"
     assert results["total_complexes_processed"] > 0, "처리된 단지가 1개 이상이어야 합니다"
 
-    print(f"\n크롤링 완료!")
+    print("\n크롤링 완료!")
     print(f"처리된 동: {results['dongs_processed']}개")
     print(f"처리된 단지: {results['total_complexes_processed']}개")
 
@@ -181,7 +181,7 @@ def test_crawl_multiple_districts_real_api(test_config):
     assert results["dongs_processed"] == 2, "2개 동이 처리되어야 합니다"
     assert results["total_complexes_processed"] > 0, "처리된 단지가 1개 이상이어야 합니다"
 
-    print(f"\n크롤링 완료!")
+    print("\n크롤링 완료!")
     print(f"처리된 동: {results['dongs_processed']}개")
     print(f"처리된 단지: {results['total_complexes_processed']}개")
 
@@ -356,7 +356,7 @@ def test_crawl_all_districts_vs_filtered(test_config):
             break
 
     assert geumcheon_district is not None, "금천구를 찾을 수 없습니다"
-    print(f"\n=== 금천구 크롤링 비교 테스트 ===")
+    print("\n=== 금천구 크롤링 비교 테스트 ===")
     print(f"금천구 동 수: {len(geumcheon_district['dongs'])}개")
 
     # 1. 금천구만 포함하도록 districts_data 설정 (방법 1)

@@ -42,11 +42,14 @@ class NaverRealEstateCrawler:
         Raises:
             ValueError: 유효하지 않은 구 이름이 있을 경우
         """
+        # 타입 어노테이션을 명시적으로 추가
+        districts: list[dict[str, Any]] = self.districts_data["districts"]
+
         if district_names is None:
-            return self.districts_data["districts"]
+            return districts
 
         # 유효성 검사
-        all_districts = {d["district_name"] for d in self.districts_data["districts"]}
+        all_districts = {d["district_name"] for d in districts}
         invalid = [name for name in district_names if name not in all_districts]
 
         if invalid:
@@ -56,7 +59,7 @@ class NaverRealEstateCrawler:
             )
 
         # 필터링
-        return [d for d in self.districts_data["districts"]
+        return [d for d in districts
                 if d["district_name"] in district_names]
 
     def _fetch_dong_data(self, dong: dict[str, Any]) -> list[dict[str, Any]]:
