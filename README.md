@@ -51,67 +51,6 @@ detail = crawler.fetch_complex_detail("138225")
 listings = crawler.fetch_complex_listings("138225", "매매")
 ```
 
-### 공공데이터 API 크롤링
-
-```bash
-# API 키 설정 (환경 변수)
-export PUBLIC_DATA_API_KEY="your_api_key_here"
-
-# 강남구 2025년 1월 데이터 크롤링
-uv run python scripts/real_estate_api_main.py --api-key $PUBLIC_DATA_API_KEY --region-code 11680 --start-date 2025-01
-
-# 여러 지역 조회
-uv run python scripts/real_estate_api_main.py --region-code 11680 --start-date 2025-01 --output gangnam_202501.csv
-uv run python scripts/real_estate_api_main.py --region-code 11650 --start-date 2025-01 --output seocho_202501.csv
-```
-
-```python
-from crawler.crawlers.real_estate_api import RealEstateAPICrawler
-from crawler.config import CrawlerConfig
-
-# 크롤러 초기화
-config = CrawlerConfig(
-    api_key="your_api_key",
-    region_code="11680",  # 강남구
-    start_date="2025-01"
-)
-crawler = RealEstateAPICrawler(config)
-
-# 데이터 크롤링
-data = crawler.crawl()
-```
-
-## 주요 법정동 코드
-
-| 지역구 | 법정동코드 |
-|--------|-----------|
-| 강남구 | 11680 |
-| 서초구 | 11650 |
-| 송파구 | 11530 |
-| 강동구 | 11545 |
-| 강북구 | 11560 |
-| 노원구 | 11350 |
-| 도봉구 | 11320 |
-| 동작구 | 11590 |
-| 마포구 | 11440 |
-| 서대문구 | 11410 |
-| 성동구 | 11140 |
-| 종로구 | 11000 |
-| 양천구 | 11710 |
-| 영등포구 | 11470 |
-| 용산구 | 11500 |
-| 은평구 | 11620 |
-
-## 네이버 vs 공공데이터 API 비교
-
-자세한 비교 분석은 [docs/analysis/naver-vs-public-data-api-comparison.md](docs/analysis/naver-vs-public-data-api-comparison.md)를 참조하세요.
-
-### 요약
-- **네이버 크롤링**: 상세 정보 풍부, 구현 복잡, 법적 리스크 있음
-- **공공데이터 API**: 기본 정보만 제공, 구현 용이, 안정적
-listings = crawler.fetch_complex_listings("138225", "A1")  # A1: 매매
-```
-
 ## 새 크롤러 추가
 
 1. `src/crawler/crawlers/` 아래에 파일 생성
