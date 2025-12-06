@@ -18,12 +18,13 @@ logger = structlog.get_logger()
 T = TypeVar("T")
 
 
-class BackoffStrategy(Enum):
-    """Backoff strategies for retries."""
-    EXPONENTIAL = "exponential"
-    LINEAR = "linear"
-    FIXED = "fixed"
-    FIBONACCI = "fibonacci"
+# Alias for backward compatibility
+BackoffStrategy = Enum('BackoffStrategy', {
+    'EXPONENTIAL': 'exponential',
+    'LINEAR': 'linear',
+    'FIXED': 'fixed',
+    'FIBONACCI': 'fibonacci'
+})
 
 
 class RetryError(Exception):
@@ -164,6 +165,37 @@ class Retryable:
 
             try:
                 result = func(*args, **kwargs)
+
+                # For browser operations that return dict, check for errors
+                if isinstance(result, dict) and result.get("error"):
+                    error_msg = result.get("error", "Unknown browser error")
+                    # Convert browser error to exception for retry logic
+                    browser_error = Exception(f"Browser operation failed: {error_msg}")
+                    state.last_exception = browser_error
+
+                    # Check if browser error is retryable
+                    if self._is_browser_error_retryable(error_msg):
+                        if state.should_retry:
+                            delay = self._calculate_delay(state.attempts - 1)
+                            self.logger.warning(
+                                "browser_error_retry",
+                                error=error_msg,
+                                attempt=state.attempts,
+                                max_attempts=self.max_attempts,
+                                delay=delay,
+                                elapsed_time=state.elapsed_time,
+                            )
+                            time.sleep(delay)
+                            continue
+                        else:
+                            self.logger.error(
+                                "browser_error_exhausted",
+                                error=error_msg,
+                                attempts=state.attempts,
+                                elapsed_time=state.elapsed_time,
+                            )
+                    raise browser_error
+
                 if state.attempts > 1:
                     self.logger.info(
                         "retry_success",
@@ -229,6 +261,22 @@ class Retryable:
             attempts=state.attempts,
             last_exception=state.last_exception,
             total_time=state.elapsed_time,
+        )
+
+    def _is_browser_error_retryable(self, error_msg: str) -> bool:
+        """Check if a browser error is retryable."""
+        error_msg = error_msg.lower()
+        # Check for rate limiting or temporary errors
+        return (
+            "429" in error_msg or
+            "too many requests" in error_msg or
+            "network error" in error_msg or
+            "timeout" in error_msg or
+            "connection" in error_msg or
+            "temporary" in error_msg or
+            "502" in error_msg or
+            "503" in error_msg or
+            "504" in error_msg
         )
 
     def _calculate_delay(self, attempt: int) -> float:
@@ -341,3 +389,15 @@ def retry_rate_limit(
         retry_on_predicate=is_rate_limit,
     )
     return retryable
+
+
+# Browser-specific retry configuration
+BROWSER_RETRY_CONFIG = Retryable(
+    max_attempts=5,
+    base_delay=2.0,
+    max_delay=60.0,
+    strategy=BackoffStrategy.EXPONENTIAL,
+    jitter=True,
+    exponential_base=2.0,
+    retry_on=Exception,
+)

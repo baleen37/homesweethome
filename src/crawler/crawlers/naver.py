@@ -9,6 +9,7 @@ from crawler.config import CrawlerConfig
 from crawler.rate_limiter import AdaptiveRateLimiter
 from crawler.utils.checkpoint import CheckpointManager
 from crawler.utils.browser_manager import BrowserManager
+from crawler.utils.retry import BROWSER_RETRY_CONFIG
 from crawler.coordinator import CrawlCoordinator
 
 
@@ -288,7 +289,7 @@ class NaverRealEstateCrawler:
         """
         API 엔드포인트를 재시도 로직과 함께 호출
 
-        429 에러 발생 시 exponential backoff를 사용하여 재시도합니다.
+        Retryable 클래스를 사용하여 재시도 로직을 처리합니다.
 
         Args:
             page: Playwright page object
@@ -299,89 +300,64 @@ class NaverRealEstateCrawler:
         Returns:
             API 응답 JSON 또는 None (모든 재시도 실패 시)
         """
-        for attempt in range(max_retries):
-            try:
-                # 재시도인 경우 추가 대기
-                if attempt > 0:
-                    backoff_time = 10 * (2 ** attempt)  # 10초, 20초, 40초
-                    self.logger.info(
-                        "retrying_endpoint",
-                        endpoint=endpoint_name,
-                        attempt=attempt + 1,
-                        max_retries=max_retries,
-                        backoff_seconds=backoff_time
-                    )
-                    time.sleep(backoff_time)
-
-                result = page.evaluate(
-                    """
-                    async (url) => {
-                        try {
-                            const response = await fetch(url, {
-                                method: 'GET',
-                                headers: {
-                                    'Accept': 'application/json, text/plain, */*',
-                                    'Accept-Language': 'ko-KR,ko;q=0.9',
-                                }
-                            });
-
-                            if (!response.ok) {
-                                const errorText = await response.text();
-                                throw new Error(`HTTP ${response.status}: ${errorText}`);
+        def fetch_endpoint():
+            result = page.evaluate(
+                """
+                async (url) => {
+                    try {
+                        const response = await fetch(url, {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json, text/plain, */*',
+                                'Accept-Language': 'ko-KR,ko;q=0.9',
                             }
+                        });
 
-                            return await response.json();
-                        } catch (error) {
-                            console.error('API call failed:', error);
-                            throw error;
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`HTTP ${response.status}: ${errorText}`);
                         }
+
+                        return await response.json();
+                    } catch (error) {
+                        console.error('API call failed:', error);
+                        throw error;
                     }
-                    """,
-                    endpoint_url,
+                }
+                """,
+                endpoint_url,
+            )
+
+            self.logger.info(
+                "endpoint_fetched_successfully",
+                endpoint=endpoint_name,
+            )
+            return result
+
+        try:
+            # Use Retryable with browser-specific configuration
+            # Override max_attempts if provided
+            retry_config = BROWSER_RETRY_CONFIG
+            if max_retries != 3:  # Default is 5 in BROWSER_RETRY_CONFIG
+                retry_config = type(BROWSER_RETRY_CONFIG)(
+                    max_attempts=max_retries,
+                    base_delay=retry_config.base_delay,
+                    max_delay=retry_config.max_delay,
+                    strategy=retry_config.strategy,
+                    jitter=retry_config.jitter,
+                    exponential_base=retry_config.exponential_base,
+                    retry_on=retry_config.retry_on,
                 )
 
-                self.logger.info(
-                    "endpoint_fetched_successfully",
-                    endpoint=endpoint_name,
-                    attempt=attempt + 1
-                )
-                return result
+            return retry_config.execute(fetch_endpoint)
 
-            except Exception as e:
-                error_msg = str(e)
-
-                # 429 에러인지 확인
-                if "429" in error_msg or "Too Many Requests" in error_msg:
-                    self.logger.warning(
-                        "rate_limit_error_endpoint",
-                        endpoint=endpoint_name,
-                        attempt=attempt + 1,
-                        max_retries=max_retries,
-                    )
-
-                    if attempt == max_retries - 1:
-                        self.logger.error(
-                            "endpoint_fetch_failed_final",
-                            endpoint=endpoint_name,
-                            error=error_msg,
-                        )
-                        return None
-
-                    # 마지막 시도가 아니면 재시도
-                    continue
-                else:
-                    # 기타 에러
-                    self.logger.error(
-                        "endpoint_fetch_error",
-                        endpoint=endpoint_name,
-                        error=error_msg,
-                        attempt=attempt + 1,
-                    )
-                    if attempt == max_retries - 1:
-                        return None
-                    continue
-
-        return None
+        except Exception as e:
+            self.logger.error(
+                "endpoint_fetch_failed_final",
+                endpoint=endpoint_name,
+                error=str(e),
+            )
+            return None
 
     def _parse_complex_detail(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """단지 상세 데이터 파싱"""
