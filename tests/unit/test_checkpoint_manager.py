@@ -13,10 +13,10 @@ def temp_checkpoint_file(tmp_path: Path) -> Path:
     return tmp_path / "checkpoint.json"
 
 
-def test_load_returns_none_when_file_does_not_exist(temp_checkpoint_file: Path) -> None:
+def test_load_returns_empty_dict_when_file_does_not_exist(temp_checkpoint_file: Path) -> None:
     manager = CheckpointManager(str(temp_checkpoint_file))
     result = manager.load()
-    assert result is None
+    assert result == {}
 
 
 def test_save_creates_checkpoint_file(temp_checkpoint_file: Path) -> None:
