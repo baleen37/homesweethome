@@ -21,6 +21,38 @@ def sample_api_response() -> dict[str, Any]:
         return json.load(f)  # type: ignore[no-any-return]
 
 
+@pytest.fixture
+def sample_districts_data() -> dict[str, Any]:
+    """테스트용 서울시 구 데이터"""
+    return {
+        "districts": [
+            {
+                "district_code": "11110",
+                "district_name": "종로구",
+                "dongs": [
+                    {"cortarNo": "1111010100", "dong_name": "사직동", "bounds": {"leftLon": 126.97, "rightLon": 126.99, "topLat": 37.58, "bottomLat": 37.56}},
+                    {"cortarNo": "1111010300", "dong_name": "삼청동", "bounds": {"leftLon": 126.98, "rightLon": 127.00, "topLat": 37.59, "bottomLat": 37.57}},
+                ]
+            },
+            {
+                "district_code": "11140",
+                "district_name": "중구",
+                "dongs": [
+                    {"cortarNo": "1114010100", "dong_name": "소공동", "bounds": {"leftLon": 126.97, "rightLon": 126.99, "topLat": 37.56, "bottomLat": 37.54}},
+                    {"cortarNo": "1114010300", "dong_name": "회현동", "bounds": {"leftLon": 126.98, "rightLon": 127.00, "topLat": 37.55, "bottomLat": 37.53}},
+                ]
+            },
+            {
+                "district_code": "11170",
+                "district_name": "용산구",
+                "dongs": [
+                    {"cortarNo": "1117010100", "dong_name": "후암동", "bounds": {"leftLon": 126.96, "rightLon": 126.98, "topLat": 37.54, "bottomLat": 37.52}},
+                ]
+            }
+        ]
+    }
+
+
 def test_get_url_returns_naver_real_estate_url(crawler_config: CrawlerConfig) -> None:
     crawler = NaverRealEstateCrawler(crawler_config)
     url = crawler.get_url()
@@ -760,3 +792,107 @@ def test_fetch_transaction_history_all_trade_types(crawler_config: CrawlerConfig
                 # Verify correct trade type in URL
                 call_args = mock_page.evaluate.call_args[0][1]
                 assert f"tradeType={trade_type}" in call_args
+
+
+# Tests for filter_districts method
+
+
+def test_filter_districts_none_returns_all(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+    """district_names이 None이면 전체 구를 반환하는지 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock districts data
+    crawler.districts_data = sample_districts_data
+
+    # Call with None
+    result = crawler.filter_districts(None)
+
+    # Should return all districts
+    assert len(result) == 3
+    assert result[0]["district_name"] == "종로구"
+    assert result[1]["district_name"] == "중구"
+    assert result[2]["district_name"] == "용산구"
+
+
+def test_filter_districts_valid_single_district(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+    """유효한 단일 구 필터링 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock districts data
+    crawler.districts_data = sample_districts_data
+
+    # Call with single district
+    result = crawler.filter_districts(["중구"])
+
+    # Should return only 중구
+    assert len(result) == 1
+    assert result[0]["district_name"] == "중구"
+    assert result[0]["district_code"] == "11140"
+
+
+def test_filter_districts_valid_multiple_districts(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+    """유효한 여러 구 필터링 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock districts data
+    crawler.districts_data = sample_districts_data
+
+    # Call with multiple districts
+    result = crawler.filter_districts(["종로구", "용산구"])
+
+    # Should return only 종로구 and 용산구 (order preserved)
+    assert len(result) == 2
+    assert result[0]["district_name"] == "종로구"
+    assert result[1]["district_name"] == "용산구"
+
+
+def test_filter_districts_invalid_district_raises_error(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+    """유효하지 않은 구 이름으로 ValueError 발생 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock districts data
+    crawler.districts_data = sample_districts_data
+
+    # Call with invalid district
+    with pytest.raises(ValueError) as exc_info:
+        crawler.filter_districts(["강남구"])  # Not in sample data
+
+    # Verify error message
+    error_msg = str(exc_info.value)
+    assert "유효하지 않은 구 이름: 강남구" in error_msg
+    assert "사용 가능한 구:" in error_msg
+    assert "종로구" in error_msg
+    assert "중구" in error_msg
+    assert "용산구" in error_msg
+
+
+def test_filter_districts_mixed_valid_invalid(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+    """유효한 구와 유효하지 않은 구가 섞여있을 때 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock districts data
+    crawler.districts_data = sample_districts_data
+
+    # Call with mix of valid and invalid districts
+    with pytest.raises(ValueError) as exc_info:
+        crawler.filter_districts(["종로구", "강남구", "서초구"])
+
+    # Verify error message includes all invalid districts
+    error_msg = str(exc_info.value)
+    assert "유효하지 않은 구 이름: 강남구, 서초구" in error_msg
+    assert "사용 가능한 구:" in error_msg
+
+
+def test_filter_districts_empty_list_returns_empty(crawler_config: CrawlerConfig, sample_districts_data: dict[str, Any]) -> None:
+    """빈 리스트 전달 시 빈 리스트 반환 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock districts data
+    crawler.districts_data = sample_districts_data
+
+    # Call with empty list
+    result = crawler.filter_districts([])
+
+    # Should return empty list
+    assert len(result) == 0
+    assert result == []

@@ -30,6 +30,35 @@ class NaverRealEstateCrawler:
             data: dict[str, Any] = json.load(f)
             return data
 
+    def filter_districts(self, district_names: list[str] | None) -> list[dict[str, Any]]:
+        """지정된 구만 필터링하여 반환
+
+        Args:
+            district_names: 구 이름 리스트 (None이면 전체)
+
+        Returns:
+            필터링된 구 리스트
+
+        Raises:
+            ValueError: 유효하지 않은 구 이름이 있을 경우
+        """
+        if district_names is None:
+            return self.districts_data["districts"]
+
+        # 유효성 검사
+        all_districts = {d["district_name"] for d in self.districts_data["districts"]}
+        invalid = [name for name in district_names if name not in all_districts]
+
+        if invalid:
+            raise ValueError(
+                f"유효하지 않은 구 이름: {', '.join(invalid)}\n"
+                f"사용 가능한 구: {', '.join(sorted(all_districts))}"
+            )
+
+        # 필터링
+        return [d for d in self.districts_data["districts"]
+                if d["district_name"] in district_names]
+
     def _fetch_dong_data(self, dong: dict[str, Any]) -> list[dict[str, Any]]:
         cortar_no = dong["cortarNo"]
         bounds = dong["bounds"]
