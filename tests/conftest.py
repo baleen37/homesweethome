@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 from crawler.config import CrawlerConfig
-from typing import Any
+from typing import Any, Dict
 
 
 def pytest_addoption(parser):
@@ -79,4 +79,20 @@ def sample_districts_data() -> dict[str, Any]:
             {"district_code": "1116500000", "district_name": "중구"},
             {"district_code": "1172000000", "district_name": "중랑구"},
         ]
+    }
+
+
+@pytest.fixture
+def naver_config() -> Dict[str, str]:
+    """네이버 부동산 API 테스트용 설정 fixture"""
+    return {
+        "base_url": "https://m.land.naver.com",
+        "sample_cortar_no": "1168010500",  # 서울 강남구 개포동
+        "sample_bounds": "37.478385,127.048329,37.513308,127.106925",  # 강남구 개포동 근처
+        "default_headers": {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "ko-KR,ko;q=0.9",
+            "Referer": "https://m.land.naver.com/",
+        },
     }

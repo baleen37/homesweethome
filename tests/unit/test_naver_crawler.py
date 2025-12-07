@@ -118,7 +118,7 @@ def test_parse_extracts_complex_data_from_api_response(
     crawler_config: CrawlerConfig, sample_api_response: dict[str, Any]
 ) -> None:
     crawler = NaverRealEstateCrawler(crawler_config)
-    results = crawler._parse_api_response(sample_api_response)
+    results = crawler._parse_complex_list_api(sample_api_response)
 
     assert len(results) == 2
     assert results[0]["complex_name"] == "테스트아파트1"
@@ -136,7 +136,7 @@ def test_parse_extracts_complex_data_from_api_response(
 
 def test_parse_handles_empty_list(crawler_config: CrawlerConfig) -> None:
     crawler = NaverRealEstateCrawler(crawler_config)
-    results = crawler._parse_api_response({"totalCount": 0, "list": []})
+    results = crawler._parse_complex_list_api({"totalCount": 0, "result": []})
 
     assert len(results) == 0
 
@@ -164,7 +164,11 @@ def test_fetch_dong_data_calls_api_with_correct_url(crawler_config: CrawlerConfi
             }
         ],
     }
-    crawler.page = mock_page
+
+    # Mock browser manager
+    mock_browser_manager = Mock()
+    mock_browser_manager.managed_browser.return_value.__enter__.return_value = mock_page
+    crawler.browser_manager = mock_browser_manager
 
     dong = {
         "cortarNo": "1168010100",
@@ -1034,3 +1038,252 @@ def test_filter_districts_empty_list_returns_empty(
     # Should return empty list
     assert len(result) == 0
     assert result == []
+
+
+# Tests for fetch_complex_list method
+
+
+def test_fetch_complex_list_calls_api_with_correct_parameters(
+    crawler_config: CrawlerConfig,
+) -> None:
+    """fetch_complex_list가 올바른 API URL과 파라미터로 호출하는지 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock browser manager
+    mock_browser_manager = Mock()
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+
+    # Mock API 응답
+    mock_response = {
+        "result": [
+            {
+                "complexNo": "1111010300001",
+                "complexName": "테스트단지",
+                "address": "서울 종로구 사직동",
+                "lat": 37.5789,
+                "lng": 126.9770,
+                "hscpCnt": 100,
+                "buildYear": "2000",
+            }
+        ]
+    }
+    mock_page.evaluate.return_value = mock_response
+
+    mock_browser_manager.managed_browser.return_value.__enter__.return_value = mock_page
+    crawler.browser_manager = mock_browser_manager
+
+    # 테스트 파라미터
+    cortar_no = "1111010300"  # 사직동 코드
+    bounds = {"leftLon": 126.97, "rightLon": 126.99, "topLat": 37.58, "bottomLat": 37.56}
+
+    # Mock rate limiter
+    with patch.object(crawler.rate_limiter, "wait"):
+        # 메서드 호출
+        complexes = crawler.fetch_complex_list(cortar_no, json.dumps(bounds))
+
+    # 결과 검증
+    assert len(complexes) == 1
+    assert complexes[0]["complexNo"] == "1111010300001"
+    assert complexes[0]["complexName"] == "테스트단지"
+
+    # API 호출 파라미터 검증
+    mock_page.evaluate.assert_called_once()
+    call_args = mock_page.evaluate.call_args[0][1]  # URL 인자
+
+    # URL에 필요한 파라미터들이 모두 포함되어 있는지 확인
+    assert "cortarNo=1111010300" in call_args
+    assert "rletTpCd=APT" in call_args
+    assert "tradTpCd=A1" in call_args
+    assert "z=17" in call_args
+    assert "lat=37.57" in call_args  # 중심 위도
+    assert "lon=126.98" in call_args  # 중심 경도
+    assert "btm=37.56" in call_args
+    assert "lft=126.97" in call_args
+    assert "top=37.58" in call_args
+    assert "rgt=126.99" in call_args
+
+
+def test_fetch_complex_list_handles_missing_bounds(crawler_config: CrawlerConfig) -> None:
+    """bounds가 없을 때 기본값을 사용하는지 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock browser manager
+    mock_browser_manager = Mock()
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+    mock_page.evaluate.return_value = {"result": []}
+
+    mock_browser_manager.managed_browser.return_value.__enter__.return_value = mock_page
+    crawler.browser_manager = mock_browser_manager
+
+    # bounds 없이 호출
+    with patch.object(crawler.rate_limiter, "wait"):
+        crawler.fetch_complex_list("1111010300", None)
+
+    # 기본 bounds 값이 사용되는지 확인
+    mock_page.evaluate.assert_called_once()
+    call_args = mock_page.evaluate.call_args[0][1]
+
+    # 기본 bounds 값 (노량진동)
+    assert "btm=37.5086" in call_args
+    assert "lft=126.9422" in call_args
+    assert "top=37.5160" in call_args
+    assert "rgt=126.9541" in call_args
+
+
+def test_fetch_complex_list_handles_invalid_bounds_json(crawler_config: CrawlerConfig) -> None:
+    """bounds JSON 파싱 오류 시 기본값을 사용하는지 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock browser manager
+    mock_browser_manager = Mock()
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+    mock_page.evaluate.return_value = {"result": []}
+
+    mock_browser_manager.managed_browser.return_value.__enter__.return_value = mock_page
+    crawler.browser_manager = mock_browser_manager
+
+    # 잘못된 JSON 형식의 bounds 전달
+    with patch.object(crawler.rate_limiter, "wait"):
+        crawler.fetch_complex_list("1111010300", "invalid_json")
+
+    # 기본 bounds 값이 사용되는지 확인
+    mock_page.evaluate.assert_called_once()
+    call_args = mock_page.evaluate.call_args[0][1]
+
+    # 기본 bounds 값 확인
+    assert "btm=37.5086" in call_args
+    assert "lft=126.9422" in call_args
+
+
+def test_fetch_complex_list_alternative_bounds_format(crawler_config: CrawlerConfig) -> None:
+    """min/max lng/lat 형식의 bounds를 처리하는지 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock browser manager
+    mock_browser_manager = Mock()
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+    mock_page.evaluate.return_value = {"result": []}
+
+    mock_browser_manager.managed_browser.return_value.__enter__.return_value = mock_page
+    crawler.browser_manager = mock_browser_manager
+
+    # min/max 형식의 bounds
+    bounds = {"min_lng": 126.97, "max_lng": 126.99, "min_lat": 37.56, "max_lat": 37.58}
+
+    with patch.object(crawler.rate_limiter, "wait"):
+        crawler.fetch_complex_list("1111010300", bounds)
+
+    # 좌표 변환이 올바르게 되었는지 확인
+    mock_page.evaluate.assert_called_once()
+    call_args = mock_page.evaluate.call_args[0][1]
+
+    # 변환된 좌표 확인
+    assert "lft=126.97" in call_args
+    assert "rgt=126.99" in call_args
+    assert "btm=37.56" in call_args
+    assert "top=37.58" in call_args
+
+
+def test_fetch_complex_list_handles_api_error(crawler_config: CrawlerConfig) -> None:
+    """API 에러 발생 시 빈 리스트를 반환하는지 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock browser manager
+    mock_browser_manager = Mock()
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+    mock_page.evaluate.return_value = {"error": "HTTP 429: Too Many Requests"}
+
+    mock_browser_manager.managed_browser.return_value.__enter__.return_value = mock_page
+    crawler.browser_manager = mock_browser_manager
+
+    with patch.object(crawler.rate_limiter, "wait"):
+        complexes = crawler.fetch_complex_list("1111010300", None)
+
+    # 에러 시 빈 리스트 반환
+    assert len(complexes) == 0
+
+
+def test_fetch_complex_list_returns_sample_data_when_no_data(crawler_config: CrawlerConfig) -> None:
+    """API에서 데이터를 반환하지 않을 때 샘플 데이터를 반환하는지 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # Mock browser manager
+    mock_browser_manager = Mock()
+    mock_page = Mock()
+    mock_page.goto.return_value = None
+    mock_page.wait_for_load_state.return_value = None
+    mock_page.evaluate.return_value = {"result": []}  # 빈 결과
+
+    mock_browser_manager.managed_browser.return_value.__enter__.return_value = mock_page
+    crawler.browser_manager = mock_browser_manager
+
+    with patch.object(crawler.rate_limiter, "wait"):
+        complexes = crawler.fetch_complex_list("1111010300", None)
+
+    # 샘플 데이터 반환 확인
+    assert len(complexes) == 1
+    assert complexes[0]["complexNo"] == "1111010300001"
+    assert complexes[0]["complexName"] == "노량진테스트아파트"
+
+
+def test_parse_complex_list_api(crawler_config: CrawlerConfig) -> None:
+    """_parse_complex_list_api가 응답을 올바르게 파싱하는지 테스트"""
+    crawler = NaverRealEstateCrawler(crawler_config)
+
+    # 테스트 응답 데이터
+    response = {
+        "result": [
+            {
+                "hscpNo": "12345",
+                "hscpNm": "테스트아파트",
+                "hscpTypeNm": "아파트",
+                "useAprvYmd": "202001",
+                "totDongCnt": 2,
+                "totHsehCnt": 200,
+                "minSpc": "59.99",
+                "maxSpc": "84.99",
+                "dealCnt": 5,
+                "leaseCnt": 3,
+                "rentCnt": 2,
+                "dealPrcMin": "<em class='txt_unit'>5억</em>",
+                "dealPrcMax": "<em class='txt_unit'>10억</em>",
+                "leasePrcMin": "<em class='txt_unit'>3억</em>",
+                "leasePrcMax": "<em class='txt_unit'>6억</em>",
+            }
+        ]
+    }
+
+    # 파싱 실행
+    complexes = crawler._parse_complex_list_api(response)
+
+    # 결과 검증
+    assert len(complexes) == 1
+    complex = complexes[0]
+
+    assert complex["complex_id"] == "12345"
+    assert complex["complex_name"] == "테스트아파트"
+    assert complex["real_estate_type"] == "아파트"
+    assert complex["completion_year_month"] == "202001"
+    assert complex["total_dong_count"] == 2
+    assert complex["total_household_count"] == 200
+    assert complex["min_area"] == "59.99"
+    assert complex["max_area"] == "84.99"
+    assert complex["deal_count"] == 5
+    assert complex["lease_count"] == 3
+    assert complex["rent_count"] == 2
+
+    # HTML 태그 제거 확인
+    assert complex["deal_price_min"] == "5억"
+    assert complex["deal_price_max"] == "10억"
+    assert complex["lease_price_min"] == "3억"
+    assert complex["lease_price_max"] == "6억"
