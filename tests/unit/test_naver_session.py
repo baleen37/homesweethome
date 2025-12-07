@@ -168,7 +168,7 @@ class TestNaverSessionManagement:
 
         # URL 확인
         mock_page.goto.assert_called_once_with(
-            "https://m.land.naver.com/complexes", wait_until="domcontentloaded", timeout=30000
+            "https://new.land.naver.com/complexes", wait_until="domcontentloaded", timeout=30000
         )
 
     @patch("crawler.crawlers.naver.BrowserManager")
@@ -321,7 +321,7 @@ class TestCookieAcquisition:
 
         # 페이지 접속 확인
         mock_page.goto.assert_called_once_with(
-            "https://m.land.naver.com/complexes", wait_until="domcontentloaded", timeout=30000
+            "https://new.land.naver.com/complexes", wait_until="domcontentloaded", timeout=30000
         )
 
         # 모바일 User-Agent 설정 확인
@@ -578,7 +578,7 @@ class TestSessionManagementIntegration:
 
         # 페이지 접속 확인
         mock_page.goto.assert_called_once_with(
-            "https://m.land.naver.com/complexes", wait_until="domcontentloaded", timeout=30000
+            "https://new.land.naver.com/complexes", wait_until="domcontentloaded", timeout=30000
         )
 
         # 대기 상태 확인

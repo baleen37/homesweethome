@@ -38,12 +38,12 @@ class TestCrawlCoordinator:
         )
 
         mock_transactions = Mock(
-            side_effect=lambda complex_id, pyeong_type, trade_type: [
+            side_effect=lambda complex_id, pyeong_type, trade_type, complex_name, pyeong_name: [
                 {
                     "complex_id": complex_id,
-                    "complex_name": "헬리오시티",
+                    "complex_name": complex_name or "헬리오시티",
                     "pyeong_type_number": pyeong_type,
-                    "pyeong_name": f"84{['A', 'B'][pyeong_type - 1]}",
+                    "pyeong_name": pyeong_name or f"84{['A', 'B'][pyeong_type - 1]}",
                     "trade_type": trade_type,
                     "trade_type_name": {"A1": "매매", "B1": "전세", "B2": "월세"}[trade_type],
                     "trade_date": "2025-11-14",
@@ -253,7 +253,7 @@ class TestCrawlCoordinator:
                 "pyeong_types": [{"pyeong_type_number": 1, "pyeong_name": "84A"}],  # 평형 추가
             }
 
-        def failing_fetch_history(complex_id, pyeong_type, trade_type):
+        def failing_fetch_history(complex_id, pyeong_type, trade_type, complex_name, pyeong_name):
             if complex_id == "111516":  # 두 번째 단지만 실패
                 raise Exception("API error")
             return []

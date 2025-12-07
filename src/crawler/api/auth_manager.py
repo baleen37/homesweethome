@@ -81,9 +81,9 @@ class NaverAuthManager:
             self.auth_state = AuthState.EXPIRED
             return False
 
-        # 쿠키가 비어있지만 인증 상태이면 통과 (테스트를 위해)
+        # 쿠키가 비어있으면 False
         if not self.cookies:
-            return self.auth_state == AuthState.AUTHENTICATED
+            return False
 
         # 쿠키 유효성 체크
         if not self.validate_cookies(self.cookies):
@@ -104,8 +104,16 @@ class NaverAuthManager:
             self.logger.warning("Empty cookies provided")
             return
 
+        # NNB 쿠키 보호 로직
+        preserved_nnb = self.cookies.get("NNB")
+
         # 기존 쿠키에 새 쿠키 병합
         self.cookies.update(new_cookies)
+
+        # NNB 쿠키가 새로운 쿠키에 없고 기존에 있었다면 복원
+        if "NNB" not in new_cookies and preserved_nnb:
+            self.cookies["NNB"] = preserved_nnb
+            self.logger.debug("NNB cookie preserved from being overwritten")
 
         # 인증 상태 업데이트
         if self.validate_cookies(self.cookies):

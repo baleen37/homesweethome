@@ -60,7 +60,7 @@ class TestNaverHeaders:
         headers = crawler._get_api_headers(api_type="complex_list", cortar_no="1111010300")
 
         assert "Referer" in headers
-        assert "m.land.naver.com" in headers["Referer"]
+        assert "new.land.naver.com" in headers["Referer"]
         assert "complex" in headers["Referer"].lower()
 
     def test_get_api_headers_includes_referer_for_complex_detail(self, crawler):
@@ -68,7 +68,7 @@ class TestNaverHeaders:
         headers = crawler._get_api_headers(api_type="complex_detail", complex_id="1111010300001")
 
         assert "Referer" in headers
-        assert "m.land.naver.com" in headers["Referer"]
+        assert "new.land.naver.com" in headers["Referer"]
         assert str(headers["Referer"]).count("/") >= 2  # 적절한 URL 형식
 
     def test_get_api_headers_includes_referer_for_article_list(self, crawler):
@@ -78,7 +78,7 @@ class TestNaverHeaders:
         )
 
         assert "Referer" in headers
-        assert "m.land.naver.com" in headers["Referer"]
+        assert "new.land.naver.com" in headers["Referer"]
 
     def test_get_api_headers_handles_optional_parameters(self, crawler):
         """선택적 파라미터가 없을 때도 헤더가 정상적으로 생성되는지 테스트"""
@@ -153,7 +153,7 @@ class TestNaverHeaders:
             "Accept": "application/json",
             "Accept-Language": "ko-KR,ko;q=0.9",
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15",
-            "Referer": "https://m.land.naver.com/complex/1111010300001",
+            "Referer": "https://new.land.naver.com/complex/1111010300001",
         }
         mock_get_headers.return_value = mock_headers
 

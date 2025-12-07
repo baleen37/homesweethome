@@ -466,7 +466,7 @@ def test_fetch_complex_listings_handles_pagination(crawler_config: CrawlerConfig
             "heatTpNm": "중앙난방",
             "mvInDt": "즉시입주",
             "tagList": "[풀옵션]",
-            "atclUrl": f"https://m.land.naver.com/article/{atcl_no}",
+            "atclUrl": f"https://new.land.naver.com/article/{atcl_no}",
             "imgCnt": 5,
             "manageCost": "15만",
             "manageCostIncld": "[수도권]",
@@ -582,7 +582,7 @@ def test_parse_complex_listings_extracts_all_fields(crawler_config: CrawlerConfi
                 "heatTpNm": "중앙난방",
                 "mvInDt": "즉시입주",
                 "tagList": "[풀옵션,역세권]",
-                "atclUrl": "https://m.land.naver.com/article/12345",
+                "atclUrl": "https://new.land.naver.com/article/12345",
                 "imgCnt": 5,
                 "manageCost": "15만",
                 "manageCostIncld": "[수도권,도시가사]비용 5만원별도",
@@ -631,7 +631,7 @@ def test_parse_complex_listings_extracts_all_fields(crawler_config: CrawlerConfi
     assert listing["heating_type"] == "중앙난방"
     assert listing["move_in_date"] == "즉시입주"
     assert listing["description"] == "[풀옵션,역세권]"
-    assert listing["article_url"] == "https://m.land.naver.com/article/12345"
+    assert listing["article_url"] == "https://new.land.naver.com/article/12345"
     assert listing["image_count"] == 5
     assert listing["manage_cost"] == "15만"
     assert listing["manage_cost_include"] == "[수도권,도시가사]비용 5만원별도"

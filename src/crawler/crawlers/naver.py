@@ -200,6 +200,9 @@ class NaverRealEstateCrawler:
             # 모바일 페이지 접속하여 세션 확보
             self.session_manager.ensure_session(page)
 
+            # 획득한 쿠키를 API 클라이언트의 AuthManager로 동기화
+            self._sync_cookies_to_api_client(page)
+
             # bounds 정보 가져오기
             bounds = dong.get(
                 "bounds",
@@ -706,6 +709,96 @@ class NaverRealEstateCrawler:
             self.logger.error("fetch_complex_list_failed", cortar_no=cortar_no, error=str(e))
             return []
 
+    def _ensure_session(self, page: Any) -> None:
+        """세션 확보 (NaverSessionManager 위임)
+
+        Args:
+            page: Playwright 페이지 객체
+        """
+        self.session_manager.ensure_session(page)
+
+    def _validate_session(self, cookies: list[dict[str, Any]]) -> bool:
+        """세션 유효성 검증 (NaverSessionManager 위임)
+
+        Args:
+            cookies: 쿠키 리스트
+
+        Returns:
+            세션이 유효하면 True, 아니면 False
+        """
+        return self.session_manager.validate_session(cookies)
+
+    def _refresh_session(self, page: Any) -> None:
+        """세션 새로고침 (NaverSessionManager 위임)
+
+        Args:
+            page: Playwright 페이지 객체
+        """
+        self.session_manager.refresh_session(page)
+
+    def _get_required_cookies(self, all_cookies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """필요한 쿠키 필터링 (NaverSessionManager 위임)
+
+        Args:
+            all_cookies: 전체 쿠키 리스트
+
+        Returns:
+            필터링된 쿠키 리스트
+        """
+        return self.session_manager.get_required_cookies(all_cookies)
+
+    def _extract_storage_data(self, page: Any) -> dict[str, dict[str, str]]:
+        """localStorage/sessionStorage 데이터 추출 (NaverSessionManager 위임)
+
+        Args:
+            page: Playwright 페이지 객체
+
+        Returns:
+            스토리지 데이터
+        """
+        return self.session_manager.extract_storage_data(page)
+
+    def _check_cookie_expiration(self, cookie: dict[str, Any]) -> bool:
+        """쿠키 만료 확인 (NaverSessionManager 위임)
+
+        Args:
+            cookie: 쿠키 객체
+
+        Returns:
+            만료되었으면 True, 아니면 False
+        """
+        return self.session_manager.check_cookie_expiration(cookie)
+
+    def _sync_cookies_to_api_client(self, page: Any) -> None:
+        """Playwright 페이지의 쿠키를 API 클라이언트의 AuthManager로 동기화
+
+        Args:
+            page: Playwright 페이지 객체
+        """
+        try:
+            # 페이지의 모든 쿠키 가져오기
+            cookies = page.context.cookies()
+
+            if cookies:
+                # 쿠키를 딕셔너리 형식으로 변환
+                cookie_dict = {
+                    c["name"]: c["value"] for c in cookies if "name" in c and "value" in c
+                }
+
+                # API 클라이언트의 AuthManager에 쿠키 업데이트
+                self.api_client.auth_manager.update_cookies(cookie_dict)
+
+                self.logger.info(
+                    "cookies_synced_to_api_client",
+                    cookie_count=len(cookie_dict),
+                    has_nnb="NNB" in cookie_dict,
+                )
+            else:
+                self.logger.warning("no_cookies_to_sync")
+
+        except Exception as e:
+            self.logger.error("failed_to_sync_cookies", error=str(e), error_type=type(e).__name__)
+
     def fetch_complex_detail(self, complex_id: str) -> dict[str, Any]:
         """단지 상세 정보 조회"""
         self.crawl_logger.log_api_call(
@@ -713,6 +806,7 @@ class NaverRealEstateCrawler:
             params={"complex_id": complex_id},
         )
 
+        # 쿠키는 _fetch_dong_data에서 이미 동기화되었음
         try:
             response = self.api_client.fetch_complex_detail(complex_id)
             return response

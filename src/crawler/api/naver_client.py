@@ -76,7 +76,7 @@ class NaverAPIClient:
             {
                 "Cache-Control": "no-cache",
                 "Pragma": "no-cache",
-                "Referer": "https://m.land.naver.com/",
+                "Referer": "https://new.land.naver.com/",
             }
         )
 

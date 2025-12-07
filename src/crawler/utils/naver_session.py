@@ -2,7 +2,7 @@
 
 import time
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import structlog
 
@@ -22,15 +22,15 @@ class NaverSessionManager:
     싱글톤 패턴을 사용하여 전역적으로 세션 상태를 관리합니다.
     """
 
-    _instance = None
+    _instance: "NaverSessionManager | None" = None
     _initialized = False
 
-    def __new__(cls):
+    def __new__(cls) -> "NaverSessionManager":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         if not self._initialized:
             self.state = SessionState.UNINITIALIZED
             self.last_check_time = 0.0
@@ -102,18 +102,12 @@ class NaverSessionManager:
         Returns:
             필터링된 쿠키 리스트
         """
-        # 네이버 관련 쿠키만 필터링
-        naver_domains = [".naver.com", "naver.com", "m.land.naver.com", "fin.land.naver.com"]
+        # 네이버 도메인 쿠키만 필터링
+        naver_domains = [".naver.com", "naver.com", ".land.naver.com", "new.land.naver.com"]
+        required = [cookie for cookie in all_cookies if cookie.get("domain", "") in naver_domains]
+        return required
 
-        required_cookies = []
-        for cookie in all_cookies:
-            domain = cookie.get("domain", "")
-            if any(nav_domain in domain for nav_domain in naver_domains):
-                required_cookies.append(cookie)
-
-        return required_cookies
-
-    def extract_storage_data(self, page: Any) -> Dict[str, Any]:
+    def extract_storage_data(self, page: Any) -> Dict[str, Dict[str, str]]:
         """localStorage 및 sessionStorage 데이터 추출
 
         Args:
@@ -124,7 +118,9 @@ class NaverSessionManager:
         """
         try:
             # JavaScript를 사용하여 스토리지 데이터 추출
-            storage_data = page.evaluate("""
+            storage_data = cast(
+                Dict[str, Dict[str, str]],
+                page.evaluate("""
             () => {
                 const data = {};
 
@@ -158,7 +154,8 @@ class NaverSessionManager:
 
                 return data;
             }
-            """)
+            """),
+            )
 
             return storage_data
 
@@ -181,7 +178,10 @@ class NaverSessionManager:
 
         # 만료 시간 확인
         current_time = time.time()
-        return cookie["expires"] < current_time
+        expires = cookie.get("expires")
+        if isinstance(expires, (int, float)):
+            return expires < current_time
+        return False
 
     def refresh_session(self, page: Any) -> None:
         """세션 새로고침
@@ -234,39 +234,86 @@ class NaverSessionManager:
         self.logger.info("acquiring_new_session", retry_count=self.retry_count)
 
         try:
-            # 네이버 부동산 모바일 메인 페이지 접속
-            self.logger.info("accessing_naver_mobile_main")
+            # 네이버 메인 페이지 접속 (NNB 쿠키 확보를 위해)
+            self.logger.info("accessing_naver_main_for_nnb")
             response = page.goto(
-                "https://m.land.naver.com/", wait_until="domcontentloaded", timeout=30000
+                "https://www.naver.com/", wait_until="domcontentloaded", timeout=30000
             )
 
             if not response or response.status >= 400:
                 self.logger.error(
-                    "failed_to_access_naver_mobile",
+                    "failed_to_access_naver_main",
                     status=response.status if response else "no_response",
                 )
                 return self._handle_acquisition_failure(page)
 
-            # 페이지 로딩 대기
+            # 페이지 완전 로딩 대기 (NNB 쿠키 설정 시간 확보)
             try:
-                page.wait_for_load_state("networkidle", timeout=10000)
-            except Exception:
-                # networkidle 시간 초과는 무시하고 진행
-                pass
+                # 1. DOM 컨텐츠 로딩 대기
+                page.wait_for_load_state("domcontentloaded", timeout=10000)
 
-            # 쿠키 확인
+                # 2. 추가 대기 시간 (NNB 쿠키 설정을 위해)
+                time.sleep(3)
+
+                # 3. 네트워크 활동 대기
+                page.wait_for_load_state("networkidle", timeout=15000)
+
+                # 4. NNB 쿠키 확보를 위한 최종 대기
+                time.sleep(2)
+
+            except Exception as e:
+                self.logger.warning("page_loading_timeout", error=str(e))
+                # 시간 초과되더라도 쿠키 확인은 계속 진행
+
+            # 쿠키 확인 및 NNB 필수 검증
             cookies = page.context.cookies()
             if not cookies:
-                self.logger.warning("no_cookies_found")
+                self.logger.error("no_cookies_found_after_naver_access")
                 return self._handle_acquisition_failure(page)
 
-            # 필수 쿠키 필터링
-            required_cookies = self.get_required_cookies(cookies)
+            # NNB 쿠키 존재 확인
+            nnb_cookies = [c for c in cookies if c.get("name") == "NNB"]
+            if not nnb_cookies:
+                self.logger.error(
+                    "nnb_cookie_not_found",
+                    available_cookies=[c.get("name") for c in cookies],
+                )
+                return self._handle_acquisition_failure(page)
+
             self.logger.info(
-                "cookies_acquired", total_count=len(cookies), required_count=len(required_cookies)
+                "nnb_cookie_acquired",
+                nnb_value=nnb_cookies[0].get("value", "")[:20] + "...",  # 보안을 위해 앞부분만 로깅
+                total_cookies=len(cookies),
             )
 
-            # 세션 유효성 검증
+            # 네이버 부동산 페이지 접속하여 부동산 관련 쿠키 확보
+            self.logger.info("accessing_naver_land")
+            land_response = page.goto(
+                "https://new.land.naver.com/", wait_until="domcontentloaded", timeout=30000
+            )
+
+            if not land_response or land_response.status >= 400:
+                self.logger.warning(
+                    "failed_to_access_naver_land",
+                    status=land_response.status if land_response else "no_response",
+                )
+                # 부동산 페이지 접속 실패해도 NNB 쿠키가 있으면 계속 진행
+
+            # 추가 대기 (부동산 페이지 쿠키 설정)
+            time.sleep(2)
+
+            # 최종 쿠키 확인
+            final_cookies = page.context.cookies()
+            required_cookies = self.get_required_cookies(final_cookies)
+
+            self.logger.info(
+                "final_cookies_acquired",
+                total_count=len(final_cookies),
+                required_count=len(required_cookies),
+                cookie_names=[c.get("name") for c in required_cookies[:10]],  # 처음 10개만 로깅
+            )
+
+            # NNB 쿠키를 포함한 세션 유효성 검증
             if self.validate_session(required_cookies):
                 self.state = SessionState.VALID
                 self.last_check_time = time.time()
@@ -283,11 +330,14 @@ class NaverSessionManager:
 
                 return True
             else:
-                self.logger.warning("session_validation_failed")
+                self.logger.error(
+                    "session_validation_failed_after_nnb_acquisition",
+                    has_nnb=len([c for c in final_cookies if c.get("name") == "NNB"]) > 0,
+                )
                 return self._handle_acquisition_failure(page)
 
         except Exception as e:
-            self.logger.error("session_acquisition_error", error=str(e))
+            self.logger.error("session_acquisition_error", error=str(e), exc_info=True)
             return self._handle_acquisition_failure(page)
 
     def _handle_acquisition_failure(self, page: Any) -> bool:

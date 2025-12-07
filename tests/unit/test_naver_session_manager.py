@@ -97,16 +97,30 @@ class TestNaverSessionManager:
         assert not session_manager.validate_session([])
 
     def test_validate_session_without_required_cookies(self, session_manager):
-        """필수 쿠키가 없는 경우"""
-        cookies = [{"name": "irwg", "value": "some_value", "domain": ".naver.com"}]
+        """필수 쿠키가 없는 경우 (NNB 없음)"""
+        cookies = [
+            {"name": "irwg", "value": "some_value", "domain": ".naver.com"},
+            {"name": "other_cookie", "value": "value", "domain": ".naver.com"},
+        ]
+        assert not session_manager.validate_session(cookies)
+
+    def test_validate_session_with_nnb_only(self, session_manager):
+        """NNB 쿠키만 있는 경우"""
+        cookies = [
+            {"name": "NNB", "value": "valid_nnb", "domain": ".naver.com"},
+        ]
+        # NNB만 있으면 충분하지 않음 (최소 5개 쿠키 필요)
         assert not session_manager.validate_session(cookies)
 
     def test_validate_session_with_all_required_cookies(self, session_manager):
         """모든 필수 쿠키가 있는 경우"""
         cookies = [
+            {"name": "NNB", "value": "valid_nnb", "domain": ".naver.com"},
             {"name": "NaverSession", "value": "valid_session", "domain": ".naver.com"},
             {"name": "nid_inf", "value": "some_value", "domain": ".naver.com"},
             {"name": "irwg", "value": "some_value", "domain": ".naver.com"},
+            {"name": "session_storage", "value": "test", "domain": ".naver.com"},
+            {"name": "localStorage", "value": "test", "domain": ".naver.com"},
         ]
         assert session_manager.validate_session(cookies)
 
@@ -114,6 +128,7 @@ class TestNaverSessionManager:
         """네이버 도메인 쿠키만 필터링"""
         all_cookies = [
             {"name": "NaverSession", "value": "session1", "domain": ".naver.com"},
+            {"name": "NNB", "value": "nnb_value", "domain": ".naver.com"},
             {"name": "google_cookie", "value": "g_cookie", "domain": ".google.com"},
             {"name": "nid_inf", "value": "info1", "domain": "naver.com"},
             {"name": "facebook", "value": "fb_cookie", "domain": ".facebook.com"},
@@ -121,9 +136,10 @@ class TestNaverSessionManager:
 
         required = session_manager.get_required_cookies(all_cookies)
 
-        assert len(required) == 2
+        assert len(required) == 3  # NaverSession, NNB, nid_inf
         assert all(cookie["domain"] in [".naver.com", "naver.com"] for cookie in required)
         assert any(cookie["name"] == "NaverSession" for cookie in required)
+        assert any(cookie["name"] == "NNB" for cookie in required)
         assert any(cookie["name"] == "nid_inf" for cookie in required)
 
     def test_extract_storage_data(self, session_manager, mock_page):
@@ -203,10 +219,17 @@ class TestNaverSessionManager:
         # Mock 응답 설정
         mock_page.goto.return_value = Mock(status=200)
         mock_page.context.cookies.return_value = [
+            {"name": "NNB", "value": "new_nnb_token", "domain": ".naver.com"},
             {"name": "NaverSession", "value": "new_session", "domain": ".naver.com"},
             {"name": "nid_inf", "value": "info", "domain": ".naver.com"},
+            {"name": "cookie1", "value": "value1", "domain": ".naver.com"},
+            {"name": "cookie2", "value": "value2", "domain": ".naver.com"},
+            {"name": "cookie3", "value": "value3", "domain": ".naver.com"},
         ]
         mock_page.evaluate.return_value = {"localStorage": {"key": "value"}}
+
+        # goto가 두 번 호출됨 (네이버 메인, 네이버 부동산)
+        mock_page.goto.side_effect = [Mock(status=200), Mock(status=200)]
 
         with patch("crawler.utils.naver_session.time.sleep"):  # sleep 실제 실행 방지
             result = session_manager._acquire_new_session(mock_page)
@@ -217,10 +240,21 @@ class TestNaverSessionManager:
 
     def test_acquire_new_session_failure_with_retry(self, session_manager, mock_page):
         """새 세션 확보 실패 후 재시도 테스트"""
-        # 첫 번째 시도는 실패, 두 번째 시도는 성공
-        mock_page.goto.side_effect = [Exception("Network error"), Mock(status=200)]
+        # 첫 번째 시도: 실패 (네이버 메인 접속 실패)
+        # 두 번째 시도: 성공 (네이버 메인 접속 성공)
+        # 세 번째 호출: 네이버 부동산 접속 성공
+        mock_page.goto.side_effect = [
+            Exception("Network error"),  # 첫 시도 실패
+            Mock(status=200),  # 두 시도 성공 (네이버 메인)
+            Mock(status=200),  # 네이버 부동산 접속
+        ]
         mock_page.context.cookies.return_value = [
-            {"name": "NaverSession", "value": "retry_session", "domain": ".naver.com"}
+            {"name": "NNB", "value": "retry_nnb", "domain": ".naver.com"},
+            {"name": "NaverSession", "value": "retry_session", "domain": ".naver.com"},
+            {"name": "cookie1", "value": "value1", "domain": ".naver.com"},
+            {"name": "cookie2", "value": "value2", "domain": ".naver.com"},
+            {"name": "cookie3", "value": "value3", "domain": ".naver.com"},
+            {"name": "cookie4", "value": "value4", "domain": ".naver.com"},
         ]
 
         with patch("crawler.utils.naver_session.time.sleep"):

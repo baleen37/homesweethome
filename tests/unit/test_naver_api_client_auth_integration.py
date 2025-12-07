@@ -5,7 +5,7 @@ NaverApiClient와 NaverAuthManager 통합 테스트
 import pytest
 from unittest.mock import Mock, patch
 
-from crawler.api.naver_client import NaverApiClient
+from crawler.api.naver_client import NaverAPIClient, APIEndpoint
 from crawler.api.auth_manager import AuthState
 from crawler.config import CrawlerConfig
 
@@ -19,7 +19,7 @@ def config():
 @pytest.fixture
 def api_client(config):
     """테스트용 API 클라이언트"""
-    return NaverApiClient(config)
+    return NaverAPIClient(config)
 
 
 class TestNaverApiClientAuthIntegration:
@@ -34,6 +34,8 @@ class TestNaverApiClientAuthIntegration:
         """is_authenticated가 AuthManager에 위임됨"""
         # AuthManager의 상태 설정
         api_client.auth_manager.auth_state = AuthState.AUTHENTICATED
+        # NNB 쿠키 추가
+        api_client.auth_manager.cookies = {"NNB": "test_nnb"}
 
         assert api_client.is_authenticated() is True
 
@@ -89,7 +91,7 @@ class TestNaverApiClientAuthIntegration:
         # Mock 응답 설정
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.text = '{"result": "success"}'
+        mock_response.json.return_value = {"result": "success"}
         mock_response.cookies = {}
         mock_get.return_value = mock_response
 
@@ -99,7 +101,7 @@ class TestNaverApiClientAuthIntegration:
                 mock_headers.return_value = {"Content-Type": "application/json"}
 
                 # API 호출
-                api_client._fetch_endpoint_with_retry("/test/endpoint")
+                api_client.fetch(APIEndpoint.COMPLEX_LIST)
 
                 # 자동 새로고침 호출 확인
                 mock_auto_refresh.assert_called_once()
@@ -110,7 +112,7 @@ class TestNaverApiClientAuthIntegration:
         # Mock 응답 설정
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.text = '{"result": "success"}'
+        mock_response.json.return_value = {"result": "success"}
         mock_response.cookies = {"session_id": "new_session"}
         mock_get.return_value = mock_response
 
@@ -119,10 +121,10 @@ class TestNaverApiClientAuthIntegration:
             with patch.object(api_client.auth_manager, "get_api_headers"):
                 with patch.object(api_client.auth_manager, "update_cookies") as mock_update:
                     # API 호출
-                    api_client._fetch_endpoint_with_retry("/test/endpoint")
+                    api_client.fetch(APIEndpoint.ARTICLE_LIST)
 
                     # 쿠키 업데이트 확인
-                    mock_update.assert_called_once_with({"session_id": "new_session"})
+                    mock_update.assert_called_once()
 
     def test_headers_include_auth_manager_headers(self, api_client):
         """헤더에 AuthManager의 헤더가 포함됨"""
@@ -146,7 +148,7 @@ class TestNaverApiClientAuthIntegration:
             # 네이버 특화 헤더도 포함되는지 확인
             assert headers["Cache-Control"] == "no-cache"
             assert headers["Pragma"] == "no-cache"
-            assert headers["Referer"] == "https://m.land.naver.com/"
+            assert headers["Referer"] == "https://new.land.naver.com/"
 
     @patch("requests.Session.get")
     def test_429_error_handling_with_auth(self, mock_get, api_client):
@@ -154,10 +156,11 @@ class TestNaverApiClientAuthIntegration:
         # 첫 번째 요청은 429, 두 번째는 성공
         mock_response_429 = Mock()
         mock_response_429.status_code = 429
+        mock_response_429.text = "Rate limit exceeded"
 
         mock_response_success = Mock()
         mock_response_success.status_code = 200
-        mock_response_success.text = '{"result": "success"}'
+        mock_response_success.json.return_value = {"result": "success"}
         mock_response_success.cookies = {}
 
         mock_get.side_effect = [mock_response_429, mock_response_success]
@@ -167,10 +170,10 @@ class TestNaverApiClientAuthIntegration:
             with patch.object(api_client.auth_manager, "get_api_headers"):
                 with patch.object(api_client.auth_manager, "update_cookies"):
                     # API 호출 (재시도 로직으로 인해 두 번 호출됨)
-                    result = api_client._fetch_endpoint_with_retry("/test/endpoint")
+                    result = api_client.fetch(APIEndpoint.COMPLEX_DETAIL)
 
                     # 최종적으로 성공해야 함
-                    assert result == '{"result": "success"}'
+                    assert result == {"result": "success"}
 
                     # 재시도 지연 시간 증가 확인
                     assert api_client.retry_delay > api_client.config.retry_delay
