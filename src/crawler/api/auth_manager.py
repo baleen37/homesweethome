@@ -34,7 +34,7 @@ class NaverAuthManager:
     """
 
     # 필수 쿠키 목록
-    REQUIRED_COOKIES = ["session_id", "auth_token"]
+    REQUIRED_COOKIES = ["NNB"]
 
     # 자동 새로고침 임계 시간 (분)
     AUTO_REFRESH_THRESHOLD_MINUTES = 10
