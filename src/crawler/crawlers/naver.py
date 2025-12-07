@@ -125,7 +125,9 @@ class NaverRealEstateCrawler:
             coordinator.crawl_multiple_dongs(
                 dong_complexes=dong_complexes,
                 fetch_complex_detail=self.fetch_complex_detail,
-                fetch_transaction_history=lambda complex_id, pyeong_type, trade_type: self.fetch_transaction_history(complex_id, pyeong_type, trade_type),
+                fetch_transaction_history=lambda complex_id,
+                pyeong_type,
+                trade_type: self.fetch_transaction_history(complex_id, pyeong_type, trade_type),
                 resume=self.checkpoint_manager.exists(),
             )
 

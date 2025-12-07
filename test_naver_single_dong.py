@@ -4,7 +4,8 @@
 from pathlib import Path
 import sys
 import os
-sys.path.insert(0, os.path.abspath('.'))
+
+sys.path.insert(0, os.path.abspath("."))
 
 import structlog
 from src.crawler.crawlers.naver import NaverRealEstateCrawler
@@ -18,6 +19,7 @@ structlog.configure(
     logger_factory=structlog.PrintLoggerFactory(),
     cache_logger_on_first_use=True,
 )
+
 
 def test_naver_crawler():
     """네이버 크롤러 테스트"""
@@ -34,14 +36,18 @@ def test_naver_crawler():
     # 첫 번째 동만 테스트
     if filtered_districts and filtered_districts[0].get("dongs"):
         test_dong = filtered_districts[0]["dongs"][0]  # 개포동
-        logger.info("테스트 동", dong_name=test_dong.get("dong_name"), cortar_no=test_dong.get("cortarNo"))
+        logger.info(
+            "테스트 동", dong_name=test_dong.get("dong_name"), cortar_no=test_dong.get("cortarNo")
+        )
 
         # dong_complexes 생성
-        dong_complexes = [{
-            "dong_code": test_dong.get("cortarNo", ""),
-            "dong_name": test_dong.get("dong_name", ""),
-            "complexes": crawler.fetch_dong_with_retry(test_dong),
-        }]
+        dong_complexes = [
+            {
+                "dong_code": test_dong.get("cortarNo", ""),
+                "dong_name": test_dong.get("dong_name", ""),
+                "complexes": crawler.fetch_dong_with_retry(test_dong),
+            }
+        ]
 
         logger.info("수집된 단지 수", count=len(dong_complexes[0]["complexes"]))
 
@@ -79,18 +85,19 @@ def test_naver_crawler():
             transactions_file = Path("output/transactions.csv")
 
             if complexes_file.exists():
-                with open(complexes_file, 'r', encoding='utf-8') as f:
+                with open(complexes_file, "r", encoding="utf-8") as f:
                     lines = f.readlines()
                     print(f"complexes.csv: {len(lines)}행 (헤더 포함)")
 
             if transactions_file.exists():
-                with open(transactions_file, 'r', encoding='utf-8') as f:
+                with open(transactions_file, "r", encoding="utf-8") as f:
                     lines = f.readlines()
                     print(f"transactions.csv: {len(lines)}행 (헤더 포함)")
         else:
             logger.error("단지 데이터가 없습니다")
     else:
         logger.error("강남구 데이터가 없습니다")
+
 
 if __name__ == "__main__":
     test_naver_crawler()

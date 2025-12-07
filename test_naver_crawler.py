@@ -17,6 +17,7 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
+
 def test_naver_crawler():
     """네이버 크롤러 테스트"""
     config = CrawlerConfig()
@@ -34,14 +35,15 @@ def test_naver_crawler():
     transactions_file = Path("output/transactions.csv")
 
     if complexes_file.exists():
-        with open(complexes_file, 'r', encoding='utf-8') as f:
+        with open(complexes_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
             print(f"complexes.csv: {len(lines)}행 (헤더 포함)")
 
     if transactions_file.exists():
-        with open(transactions_file, 'r', encoding='utf-8') as f:
+        with open(transactions_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
             print(f"transactions.csv: {len(lines)}행 (헤더 포함)")
+
 
 if __name__ == "__main__":
     test_naver_crawler()
