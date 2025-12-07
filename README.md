@@ -4,15 +4,15 @@ Python 웹 크롤링 + CSV 저장 보일러플레이트
 
 ## 현재 상태 (2025-12-07)
 
-✅ **네이버 부동산 크롤링 작동 중**
-- 모바일 API(m.land.naver.com) 기반으로 안정적인 데이터 수집
+✅ **호갱노노 부동산 크롤링 작동 중**
+- 호갱노노 API 기반으로 안정적인 데이터 수집
 - Rate Limiting: 5초 간격으로 429 에러 방지
-- 단지 목록, 상세 정보, 매물 목록, 거래내역 수집 가능
-- ⚠️ 알려진 이슈: 일부 "Event loop is closed" 경고 발생 (크롤링은 정상 동작)
+- 단지 목록, 매물 목록 수집 가능
+- 다양한 필터링 옵션 제공 (지역, 매물 유형 등)
 
 ## 현재 목표
 
-네이버 부동산 매물 데이터 점진적 크롤링 구현 완료 ✅
+호갱노노 부동산 매물 데이터 크롤링 구현 완료 ✅
 
 ## 설치
 
@@ -39,24 +39,21 @@ uv run python scripts/main.py
 uv run python scripts/main.py --output results/data.csv
 ```
 
-### 네이버 부동산 크롤링
+### 호갱노노 부동산 크롤링
 
 ```python
-from crawler.crawlers.naver import NaverRealEstateCrawler
+from crawler.crawlers.hogangnono import HogangnonoCrawler
 from crawler.config import CrawlerConfig
 
-# 크롤러 초기화
-config = CrawlerConfig(timeout=30, headless=True)
-crawler = NaverRealEstateCrawler(config)
+# 환경 변수에서 설정 로드 (기본: 호갱노노)
+config = CrawlerConfig.from_env()
+crawler = HogangnonoCrawler(config)
 
-# 기본 단지 목록 크롤링
-complexes = crawler.crawl()
+# 단지 목록 크롤링
+complexes = crawler.fetch_complexes()
 
-# 단지 상세 정보 조회
-detail = crawler.fetch_complex_detail("138225")
-
-# 단지 매물 목록 조회
-listings = crawler.fetch_complex_listings("138225", "매매")
+# 매물 목록 조회
+listings = crawler.fetch_listings("강남구", property_type="apartment")
 ```
 
 ### 실행 방법
@@ -66,28 +63,22 @@ listings = crawler.fetch_complex_listings("138225", "매매")
 uv run python scripts/main.py
 
 # 2. 특정 구만 크롤링
-uv run python scripts/main.py --districts 강남구 서초구 송파구
+uv run python scripts/main.py --district 강남구,서초구,송파구
 
-# 3. 특정 구의 법정동만 크롤링
-uv run python scripts/main.py --districts 강남구 --dongs 청담동 삼성동
+# 3. 이어서 크롤링 (중단된 경우)
+uv run python scripts/main.py --resume
 
 # 4. 출력 파일 지정
-uv run python scripts/main.py --output results/naver_data_20251207.csv
-
-# 5. 상세 모드 (단지 상세 정보, 매물 정보 포함)
-uv run python scripts/main.py --detail
-
-# 6. 이어서 크롤링 (중단된 경우)
-uv run python scripts/main.py --resume
+uv run python scripts/main.py --output results/hogangnono_data_20251207.csv
 ```
 
 ### 출력 데이터
 
 크롤링 결과는 CSV 파일로 저장되며 다음 필드를 포함합니다:
-- **기본 정보**: 단지명, 주소, 건축일, 세대수, 면적
-- **가격 정보**: 매매/전세/월세 가격대
-- **상세 정보**: 평형별 정보, 보유세, 공시가격 (상세 모드)
-- **매물 정보**: 실제 매물 데이터 (매물 수 제한)
+- **거래내역**: `output/transactions.csv`
+  - 단지ID, 건물명, 전용면적, 층, 거래가, 계약일 등
+- **단지 정보**: `output/complexes.csv`
+  - 단지ID, 단지명, 주소, 건축년도, 세대수, 동 수 등
 
 ### 주의사항
 - API 호출 간 5초 간격으로 Rate Limiting 준수
@@ -113,9 +104,6 @@ uv run pytest tests/unit/ -v
 
 # 통합 테스트만
 uv run pytest tests/integration/ -v
-
-# 네이버 통합 테스트
-uv run pytest tests/integration/test_naver_integration.py -v -s
 ```
 
 ### 코드 품질 검사

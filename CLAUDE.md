@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 HomeSweetHome Crawler Boilerplate는 Python 기반 웹 크롤링 보일러플레이트입니다. 정적/동적 사이트 크롤링을 지원하며, 크롤링한 데이터를 CSV 파일로 저장합니다.
 
-**현재 목표**: 네이버 부동산 매물 데이터 크롤링
+**현재 목표**: 호갱노노 부동산 매물 데이터 크롤링
 
-**중요**: 이 프로젝트는 **네이버 부동산 크롤링만** 수행합니다. 국토교통부 공공데이터 API는 사용하지 않습니다.
+**중요**: 이 프로젝트는 **호갱노노 부동산 크롤링만** 수행합니다. 국토교통부 공공데이터 API는 사용하지 않습니다.
 
 ## 기술 스택
 
@@ -36,7 +36,8 @@ homesweethome/
 │   │   ├── base.py              # BaseCrawler (추상 베이스 클래스)
 │   │   ├── static.py            # StaticCrawler (requests 기반)
 │   │   ├── dynamic.py           # DynamicCrawler (Playwright 기반)
-│   │   └── naver.py             # NaverRealEstateCrawler (네이버 부동산 크롤러)
+│   │   ├── api.py               # APICrawler (API 기반)
+│   │   └── hogangnono.py        # HogangnonoCrawler (호갱노노 부동산 크롤러)
 │   ├── parsers/                  # HTML 파싱 유틸
 │   │   └── __init__.py
 │   ├── utils/                    # 유틸리티 모듈
@@ -148,10 +149,10 @@ uv run pytest tests/unit/ -v
 uv run pytest tests/integration/ -v
 
 # 특정 테스트 파일 실행
-uv run pytest tests/unit/test_naver_crawler.py -v
+uv run pytest tests/unit/test_hogangnono_crawler.py -v
 
 # 특정 테스트 함수 실행
-uv run pytest tests/unit/test_naver_crawler.py::test_fetch_complex_list -v
+uv run pytest tests/unit/test_hogangnono_crawler.py::test_fetch_complexes -v
 ```
 
 ### 디버깅 테스트
@@ -180,8 +181,8 @@ uv run ruff format .
 uv run ruff format --check .
 
 # 특정 파일만 검사
-uv run ruff check src/crawler/naver.py
-uv run ruff format src/crawler/naver.py
+uv run ruff check src/crawler/hogangnono.py
+uv run ruff format src/crawler/hogangnono.py
 ```
 
 ### MyPy (Type Checking)
@@ -190,7 +191,7 @@ uv run ruff format src/crawler/naver.py
 uv run mypy src/
 
 # 특정 모듈만 체크
-uv run mypy src/crawler/naver.py
+uv run mypy src/crawler/hogangnono.py
 
 # 상세한 오류 정보 표시
 uv run mypy src/ --show-error-codes
@@ -261,34 +262,27 @@ class BaseCrawler(ABC):
         return self.parse(html)
 ```
 
-## 네이버 부동산 크롤러 상세
+## 호갱노노 부동산 크롤러 상세
 
 ### 주요 기능
 
 1. **지역별 단지 목록 조회**
-   - `fetch_complex_list(cortar_no, bounds)`
-   - 법정동(cortar_no) 및 좌표 기반 조회
+   - `fetch_complexes(district)`
+   - 지역(구) 기반 단지 목록 조회
 
-2. **단지 상세 정보 조회**
-   - `fetch_complex_detail(complex_id)`
-   - 평형, 보유세, 공시가격, 시세 정보
+2. **매물 목록 조회**
+   - `fetch_listings(district, property_type, page)`
+   - 페이지네이션 지원
+   - 다양한 필터링 옵션 (매물 유형, 가격대 등)
 
-3. **단지별 매물 목록 조회**
-   - `fetch_complex_listings(complex_id, trade_type, page)`
-   - 페이지네이션 지원 (페이지당 20개)
-   - 거래 유형: 매매(A1), 전세(B1), 월세(B2)
-
-4. **점진적 크롤링**
+3. **점진적 크롤링**
    - 각 동 완료 시마다 CSV 저장
    - 중단 시 재시작 지원
    - 실패한 동 기록 및 후속 재시도
 
 ### API 엔드포인트
 
-- **기본 URL**: `https://m.land.naver.com`
-- **단지 목록**: `/cluster/ajax/complexList`
-- **단지 상세**: `/cluster/ajax/complexDetail`
-- **매물 목록**: `/cluster/ajax/articleList`
+- **기본 URL**: `https://hogangnono.com`
 
 ### 데이터 저장
 

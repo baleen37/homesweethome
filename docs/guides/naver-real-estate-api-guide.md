@@ -25,8 +25,9 @@
 7. [주의사항 및 제한](#7-주의사항-및-제한)
 8. [구별 크롤링 전략](#8-구별-크롤링-전략)
 9. [FAQ](#9-faq)
-10. [부록](#10-부록)
-11. [변경 이력](#11-변경-이력)
+10. [데이터 출력 형식](#10-데이터-출력-형식)
+11. [부록](#11-부록)
+12. [변경 이력](#12-변경-이력)
 
 ---
 
@@ -232,9 +233,26 @@ playwright install chromium
 
 ---
 
-## 3. 기본 원리: Playwright 내 API 호출
+## 3. API 호출 방식: 직접 fetch와 브라우저 컨텍스트
 
-### 3.1 기본 코드 템플릿
+### 3.1 왜 직접 API 호출이 필요한가?
+
+네이버 부동산은 보안 정책으로 인해 **직접 API 호출을 차단**합니다. 프로젝트는 브라우저 컨텍스트 내에서 fetch API를 사용하여 이 제약을 우회합니다:
+
+**직접 API 호출의 문제점:**
+- ❌ CORS(Cross-Origin Resource Sharing) 제약으로 브라우저 외부 호출 차단
+- ❌ 인증 쿠키/세션 필요
+- ❌ User-Agent 검증
+- ❌ Rate Limiting (429 에러)
+
+**프로젝트의 해결책:**
+- ✅ 브라우저 컨텍스트 내에서 fetch 호출
+- ✅ 자동 세션 관리 (쿠키/인증)
+- ✅ 모바일 User-Agent 자동 설정
+- ✅ 내장 Rate Limiting 및 재시도 로직
+- ✅ 구조화된 에러 핸들링
+
+### 3.2 API 호출 기본 코드 템플릿
 
 ```python
 from playwright.sync_api import sync_playwright
@@ -244,14 +262,15 @@ import csv
 from datetime import datetime
 
 class NaverRealEstateCrawler:
-    def __init__(self, headless: bool = True):
+    def __init__(self, config: CrawlerConfig):
+        self.config = config
         self.browser = None
         self.page = None
-        self.headless = headless
+        self.rate_limiter = AdaptiveRateLimiter()
 
     def __enter__(self):
         self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=self.headless)
+        self.browser = self.playwright.chromium.launch(headless=self.config.headless)
         self.page = self.browser.new_page()
         return self
 
@@ -260,60 +279,176 @@ class NaverRealEstateCrawler:
             self.browser.close()
         self.playwright.stop()
 
-    def fetch_api(self, url: str):
+    def _fetch_api_in_context(self, url: str, headers: dict = None) -> dict:
         """브라우저 컨텍스트 내에서 API 호출"""
-        js_code = f"""
-            async () => {{
-                try {{
-                    const response = await fetch('{url}', {{
+        if not headers:
+            headers = self._get_api_headers()
+
+        result = self.page.evaluate("""
+            async (url, headers) => {
+                try {
+                    const response = await fetch(url, {
                         method: 'GET',
                         credentials: 'same-origin',
-                        headers: {{
-                            'Accept': 'application/json, text/plain, */*',
-                            'Accept-Language': 'ko-KR,ko;q=0.9'
-                        }}
-                    }});
+                        headers: headers
+                    });
 
-                    if (!response.ok) {{
-                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
-                    }}
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errorText}`);
+                    }
 
                     return await response.json();
-                }} catch (error) {{
-                    console.error('Fetch error:', error);
-                    return {{ error: error.message }};
-                }}
-            }}
-        """
-        return self.page.evaluate(js_code)
+                } catch (error) {
+                    console.error('API call failed:', error);
+                    return { error: error.message };
+                }
+            }
+        """, url, headers)
 
-    def wait_for_load(self, seconds: int = 3):
-        """페이지 로딩 대기"""
-        time.sleep(seconds)
-```
+        return result
 
-### 3.2 MCP Playwright용 JavaScript
-
-```javascript
-// Claude Code에서 사용할 JavaScript 함수
-async function fetchNaverAPI(url) {
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            credentials: 'same-origin'
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    def _get_api_headers(self) -> dict:
+        """API 호출에 필요한 헤더 반환"""
+        return {
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'ko-KR,ko;q=0.9',
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
         }
 
-        return await response.json();
-    } catch (error) {
-        console.error('API 호출 실패:', error);
-        return { error: error.message };
-    }
-}
+    def _ensure_session(self, url: str = None):
+        """세션 확보를 위해 페이지 로드"""
+        if url:
+            self.page.goto(url)
+        else:
+            self.page.goto("https://m.land.naver.com/complexes")
+        self.page.wait_for_load_state('networkidle')
+        time.sleep(2)
 ```
+
+### 3.3 실제 프로젝트에서의 API 호출
+
+프로젝트에서는 `NaverRealEstateCrawler`가 다음과 같은 패턴으로 API를 호출합니다:
+
+```python
+def _fetch_dong_data(self, dong: dict[str, Any]) -> list[dict[str, Any]]:
+    """법정동별 단지 데이터 수집 (실제 프로젝트 코드)"""
+    cortar_no = dong["cortarNo"]
+    bounds = dong["bounds"]
+    dong_name = dong["dong_name"]
+
+    # 브라우저 페이지 가져오기
+    page = self.browser_manager.get_page()
+
+    # 모바일 페이지 접속하여 세션 확보
+    self.session_manager.ensure_session(page)
+
+    # 중심 좌표 계산
+    center_lon = (bounds["leftLon"] + bounds["rightLon"]) / 2
+    center_lat = (bounds["topLat"] + bounds["bottomLat"]) / 2
+
+    # API URL 생성
+    api_url = (
+        f"https://m.land.naver.com/cluster/ajax/complexList?"
+        f"cortarNo={cortar_no}&"
+        f"rletTpCd=APT&"
+        f"tradTpCd=A1&"
+        f"z=17&"
+        f"lat={center_lat}&"
+        f"lon={center_lon}&"
+        f"btm={bounds['bottomLat']}&"
+        f"lft={bounds['leftLon']}&"
+        f"top={bounds['topLat']}&"
+        f"rgt={bounds['rightLon']}"
+    )
+
+    # 브라우저 컨텍스트에서 API 호출
+    result = page.evaluate(
+        """
+        async (url) => {
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json, text/plain, */*',
+                        'Accept-Language': 'ko-KR,ko;q=0.9',
+                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('API call failed:', error);
+                return { error: error.message };
+            }
+        }
+        """,
+        api_url,
+    )
+
+    # 응답 시간 로깅
+    response_time = time.time() - start_time
+    self.crawl_logger.log_api_call(
+        endpoint="/cluster/ajax/complexList",
+        params={"cortarNo": cortar_no, "dong_name": dong_name},
+        response_time=response_time,
+        response_size=len(str(result)) if result else 0,
+        status_code=200 if result and not result.get("error") else 500,
+    )
+
+    # 에러 핸들링
+    if result and result.get("error"):
+        if "429" in str(result["error"]):
+            self.logger.warning(
+                "rate_limit_hit",
+                dong_name=dong_name,
+                error=result["error"]
+            )
+            # Rate limiter 적용
+            wait_time = self.rate_limiter.get_retry_delay(0)
+            time.sleep(wait_time)
+        else:
+            self.logger.error(
+                "api_call_failed",
+                dong_name=dong_name,
+                error=result["error"]
+            )
+        return []
+
+    # 성공 시 rate limiter 업데이트
+    self.rate_limiter.on_success()
+    self.rate_limiter.wait()  # 다음 호출까지 대기
+
+    return self._parse_complex_list_api(result)
+```
+
+### 3.4 주요 컴포넌트 설명
+
+#### 1. SessionManager
+- 역할: 네이버 로그인 세션 관리
+- 기능: 쿠키 유지, 세션 만료 시 재접속
+- 사용법: `session_manager.ensure_session(page)`
+
+#### 2. BrowserManager
+- 역할: Playwright 브라우저 리소스 관리
+- 기능: 브라우저 생성/관리, 페이지 할당
+- 사용법: `browser_manager.get_page()`
+
+#### 3. AdaptiveRateLimiter
+- 역할: 동적 요청 간격 조절
+- 기능: 성공 시 감소, 429 에러 시 증가
+- 설정: 기본 5초 (최소 1.5초, 최대 10초)
+
+#### 4. CrawlLogger
+- 역할: 구조화된 로깅
+- 기능: API 호출 시간, 응답 크기, 상태 코드 기록
+- 사용법: `crawl_logger.log_api_call(...)`
 
 ### 3.3 네트워크 인터셉트 방식 (고급)
 
@@ -610,6 +745,17 @@ def _fetch_dong_data(self, dong: dict[str, Any]) -> list[dict[str, Any]]:
     """법정동별 단지 데이터 수집 (실제 프로젝트 코드)"""
     cortar_no = dong["cortarNo"]
     bounds = dong["bounds"]
+    dong_name = dong["dong_name"]
+    start_time = time.time()
+
+    # Rate limiting 먼저 적용 (요청 전 대기)
+    self.rate_limiter.wait()
+
+    # 브라우저 페이지 가져오기
+    page = self.browser_manager.get_page()
+
+    # 모바일 페이지 접속하여 세션 확보
+    self.session_manager.ensure_session(page)
 
     # 중심 좌표 계산
     center_lon = (bounds["leftLon"] + bounds["rightLon"]) / 2
@@ -631,25 +777,73 @@ def _fetch_dong_data(self, dong: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
     # 브라우저 컨텍스트에서 API 호출
-    result = self.page.evaluate(
+    result = page.evaluate(
         """
         async (url) => {
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json, text/plain, */*',
-                    'Accept-Language': 'ko-KR,ko;q=0.9',
-                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json, text/plain, */*',
+                        'Accept-Language': 'ko-KR,ko;q=0.9',
+                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
-            });
-            return await response.json();
+
+                return await response.json();
+            } catch (error) {
+                console.error('API call failed:', error);
+                return { error: error.message };
+            }
         }
         """,
         api_url,
     )
 
+    # 응답 시간 로깅
+    response_time = time.time() - start_time
+    status_code = 200 if result and not result.get("error") else 500
+
+    # API 호출 결과 상세 로깅
+    self.crawl_logger.log_api_call(
+        endpoint="/cluster/ajax/complexList",
+        params={"cortarNo": cortar_no, "dong_name": dong_name},
+        response_time=response_time,
+        response_size=len(str(result)) if result else 0,
+        status_code=status_code,
+    )
+
+    # 에러 핸들링
+    if result and result.get("error"):
+        if "429" in str(result["error"]):
+            self.logger.warning(
+                "rate_limit_hit",
+                dong_name=dong_name,
+                error=result["error"]
+            )
+            # Rate limiter 적용
+            wait_time = self.rate_limiter.get_retry_delay(0)
+            time.sleep(wait_time)
+        else:
+            self.logger.error(
+                "api_call_failed",
+                dong_name=dong_name,
+                error=result["error"]
+            )
+        return []
+
+    # 성공 시 rate limiter 업데이트
+    self.rate_limiter.on_success()
+    self.rate_limiter.wait()  # 다음 호출까지 대기
+
     # 응답 파싱
-    return self._parse_api_response(result)
+    return self._parse_complex_list_api(result)
 
 def _parse_api_response(self, response: dict[str, Any]) -> list[dict[str, Any]]:
     """API 응답 파싱 (실제 프로젝트 코드)"""
@@ -719,40 +913,39 @@ def fetch_complex_listings(self, complex_id: str, trade_type: str = "A1") -> lis
         trade_type=trade_type,
     )
 
-    # 페이지가 없으면 새로 생성
-    if not self.page:
-        browser = sync_playwright().start()
-        self.page = browser.chromium.launch(headless=self.config.headless).new_page()
-        self.page.goto("https://m.land.naver.com/complexes")
-        self.page.wait_for_load_state("networkidle")
-        time.sleep(2)
+    # 브라우저 페이지 가져오기
+    page = self.browser_manager.get_page()
 
-    # 먼저 단지 페이지에 접속하여 세션 확보
-    self.page.goto(f"https://m.land.naver.com/complex/{complex_id}")
-    self.page.wait_for_load_state("networkidle")
+    # 단지 페이지에 접속하여 세션 확보
+    page.goto(f"https://m.land.naver.com/complex/{complex_id}")
+    page.wait_for_load_state("networkidle")
     time.sleep(2)
 
     all_listings = []
-    page = 1
+    page_num = 1
     max_pages = 10  # 최대 페이지 수 제한
 
-    while page <= max_pages:
+    while page_num <= max_pages:
+        # Rate limiting 적용
+        self.rate_limiter.wait()
+
         # 모바일 API URL
         api_url = (
             f"https://m.land.naver.com/cluster/ajax/articleList?"
             f"complexNo={complex_id}&"
             f"tradTpCd={trade_type}&"
-            f"page={page}&"
+            f"page={page_num}&"
             f"showR0=N"
         )
 
         # 브라우저 컨텍스트에서 API 호출
-        result = self.page.evaluate(
+        result = page.evaluate(
             """
             async (url) => {
                 try {
                     const response = await fetch(url, {
                         method: 'GET',
+                        credentials: 'same-origin',
                         headers: {
                             'Accept': 'application/json, text/plain, */*',
                             'Accept-Language': 'ko-KR,ko;q=0.9',
@@ -788,10 +981,10 @@ def fetch_complex_listings(self, complex_id: str, trade_type: str = "A1") -> lis
             # 한 페이지에 20개 미만이면 마지막 페이지로 간주
             break
 
-        page += 1
+        page_num += 1
 
-        # Rate limiting - 페이지별 4초 대기 (429 에러 방지)
-        time.sleep(4)
+        # 성공 시 rate limiter 업데이트
+        self.rate_limiter.on_success()
 
     return all_listings
 
@@ -986,17 +1179,12 @@ def fetch_complex_detail(self, complex_id: str) -> dict[str, Any]:
     detail_data = {"complex_id": complex_id}
 
     try:
-        # 페이지가 없으면 새로 생성
-        if not self.page:
-            browser = sync_playwright().start()
-            self.page = browser.chromium.launch(headless=self.config.headless).new_page()
-            self.page.goto("https://fin.land.naver.com/complexes")
-            self.page.wait_for_load_state("networkidle")
-            time.sleep(3)
+        # 브라우저 페이지 가져오기
+        page = self.browser_manager.get_page()
 
         # 단지 상세 페이지에 먼저 접속하여 세션 확보
-        self.page.goto(f"https://fin.land.naver.com/complexes/{complex_id}")
-        self.page.wait_for_load_state("networkidle")
+        page.goto(f"https://fin.land.naver.com/complexes/{complex_id}")
+        page.wait_for_load_state("networkidle")
         time.sleep(5)  # 페이지 로딩 및 세션 안정화
 
         # 각 API 엔드포인트 호출
@@ -1004,33 +1192,19 @@ def fetch_complex_detail(self, complex_id: str) -> dict[str, Any]:
             endpoint_name = endpoint_url.split("/")[-1].split("?")[0]
             self.logger.info("fetching_endpoint", endpoint=endpoint_name)
 
+            # Rate limiting 적용
+            self.rate_limiter.wait()
+
+            # 동적 헤더 생성
+            headers = self._get_api_headers(api_type="complex_detail", complex_id=complex_id)
+
             # 엔드포인트 호출
-            response = self.page.evaluate(
-                """
-                async (url) => {
-                    try {
-                        const response = await fetch(url, {
-                            method: 'GET',
-                            headers: {
-                                'Accept': 'application/json, text/plain, */*',
-                                'Accept-Language': 'ko-KR,ko;q=0.9'
-                            }
-                        });
-
-                        if (!response.ok) {
-                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                        }
-
-                        return await response.json();
-                    } catch (error) {
-                        if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                            throw new Error('Network error: Failed to fetch');
-                        }
-                        throw error;
-                    }
-                }
-                """,
-                endpoint_url,
+            response = self._fetch_endpoint_with_retry(
+                page=page,
+                endpoint_url=endpoint_url,
+                endpoint_name=endpoint_name,
+                max_retries=3,
+                complex_id=complex_id
             )
 
             if response is not None:
@@ -1038,9 +1212,8 @@ def fetch_complex_detail(self, complex_id: str) -> dict[str, Any]:
             else:
                 detail_data[endpoint_name] = {"error": "Failed after retries"}
 
-            # Rate limiting - API 호출 간 6초 대기
-            if idx < len(endpoints) - 1:
-                time.sleep(6)
+            # 성공 시 rate limiter 업데이트
+            self.rate_limiter.on_success()
 
         # 데이터 파싱
         parsed_detail = self._parse_complex_detail(detail_data)
@@ -1406,23 +1579,150 @@ def safe_fetch_api(self, url: str, max_retries: int = 3):
 
 ### 7.1 Rate Limiting (★★★ 중요)
 
-실제 테스트 결과:
+#### 7.1.1 AdaptiveRateLimiter의 동작 방식
 
-- **fin.land.naver.com**: 비교적 관대 (10회 연속 호출 가능)
-- **new.land.naver.com**: 더 엄격한 제한 (429 에러 발생 가능성)
-- **권장 대기 시간**: API 호출 간 2-3초
-- **복잡한 요청**: 파라미터가 많은 API는 더 많은 시간 필요
+프로젝트는 `AdaptiveRateLimiter`를 사용하여 동적으로 요청 간격을 조절합니다:
+
+- **초기 대기 시간**: 5초
+- **최소 대기 시간**: 1.5초
+- **최대 대기 시간**: 10초
 
 ```python
-# 좋은 예
-result1 = crawler.fetch_api(url1)
-time.sleep(2)
-result2 = crawler.fetch_api(url2)
+class AdaptiveRateLimiter:
+    """API 요청 빈도를 동적으로 조절하는 적응형 Rate Limiter"""
 
-# 나쁜 예
-for i in range(100):
-    result = crawler.fetch_api(urls[i])  # 연속 호출 - 429 에러 가능성
+    def __init__(self) -> None:
+        self.current_delay: float = 5.0  # 초기 대기 시간 (초)
+        self.min_delay: float = 1.5      # 최소 대기 시간
+        self.max_delay: float = 10.0     # 최대 대기 시간
+        self.success_count: int = 0      # 연속 성공 횟수
+        self.error_count: int = 0        # 연속 429 에러 횟수
 ```
+
+#### 7.1.2 성공/실패에 따른 동적 대기 시간 조절
+
+**성공 시 (`on_success()`)**:
+- 연속 10회 성공 시 대기 시간 10% 감소
+- 최소 대기 시간(1.5초)보다 작아지지 않음
+- 에러 카운트 초기화
+
+```python
+def on_success(self) -> None:
+    self.success_count += 1
+    self.error_count = 0
+
+    if self.success_count >= 10:
+        # 10% 감소
+        self.current_delay = max(self.min_delay, self.current_delay * 0.9)
+        self.success_count = 0
+```
+
+**HTTP 429 에러 시 (`on_rate_limit_error()`)**:
+- 대기 시간 즉시 2배 증가
+- 최대 대기 시간(10초)을 넘지 않음
+- 성공 카운트 초기화
+
+```python
+def on_rate_limit_error(self) -> None:
+    self.error_count += 1
+    self.success_count = 0
+
+    # 2배 증가
+    self.current_delay = min(self.max_delay, self.current_delay * 2)
+```
+
+**일반 에러 시 (`on_error()`)**:
+- 성공 카운트만 초기화
+- 대기 시간은 변경하지 않음
+
+#### 7.1.3 실제 프로젝트에서의 사용 예제
+
+```python
+# 네이버 부동산 크롤러에서의 Rate Limiter 사용
+from crawler.rate_limiter import AdaptiveRateLimiter
+
+class NaverRealEstateCrawler:
+    def __init__(self, config: CrawlerConfig):
+        self.rate_limiter = AdaptiveRateLimiter()
+
+    def fetch_transaction_history(self, complex_id: str, ...):
+        all_transactions = []
+
+        while page <= max_pages:
+            # 1. Rate limiter 적용
+            self.rate_limiter.wait()
+
+            try:
+                # 2. API 호출
+                response = self.page.evaluate(...)
+
+                # 3. 성공 시 rate limiter 업데이트
+                self.rate_limiter.on_success()
+
+                # 4. 데이터 처리
+                all_transactions.extend(transactions)
+
+            except Exception as e:
+                # 5. 429 에러 처리
+                if "429" in str(e):
+                    self.logger.warning(
+                        "rate_limit_error",
+                        complex_id=complex_id,
+                        current_delay=self.rate_limiter.current_delay
+                    )
+                    self.rate_limiter.on_rate_limit_error()
+                    break
+                else:
+                    # 6. 일반 에러 처리
+                    self.rate_limiter.on_error()
+```
+
+#### 7.1.4 Rate Limiting 모니터링 및 로깅
+
+Rate Limiter는 모든 상태 변경을 구조화된 로그로 기록:
+
+```python
+# 성공으로 인한 지연 시간 감소
+logger.info(
+    "rate_limiting_delay_reduced",
+    old_delay=5.0,
+    new_delay=4.5,
+    reason="10_consecutive_successes",
+)
+
+# 429 에러로 인한 지연 시간 증가
+logger.warning(
+    "rate_limiting_delay_increased",
+    old_delay=5.0,
+    new_delay=10.0,
+    error_count=1,
+    reason="http_429_error",
+)
+```
+
+#### 7.1.5 실제 운영 팁
+
+1. **API 호출 전략**:
+   - 항상 `rate_limiter.wait()` 호출 후 API 요청
+   - 성공 시 `rate_limiter.on_success()` 호출
+   - 429 에러 즉시 `rate_limiter.on_rate_limit_error()` 호출
+
+2. **초기 설정**:
+   ```python
+   # 기본값 사용 권장
+   rate_limiter = AdaptiveRateLimiter()
+   # 초기 대기: 5초
+   ```
+
+3. **모니터링 지표**:
+   - `current_delay`: 현재 대기 시간
+   - `success_count`: 연속 성공 횟수
+   - `error_count`: 연속 429 에러 횟수
+
+4. **팁**:
+   - 네이버의 Rate Limiting은 매우 엄격함
+   - API 호출 간 5초 이상 대기하는 것이 안전
+   - 429 에러 발생 시 즉시 중단하고 대기 시간 증가
 
 ### 7.2 인증 및 세션
 
@@ -1882,9 +2182,323 @@ if __name__ == "__main__":
     main()
 ```
 
+## 10. 데이터 출력 형식
+
+### 10.1 CSV 파일 구조
+
+프로젝트는 크롤링된 데이터를 2개의 주요 CSV 파일에 저장합니다:
+
+- **complexes.csv**: 단지 기본 정보와 통계 정보
+- **transactions.csv**: 상세 거래내역
+
+### 10.2 complexes.csv 필드 정의
+
+```python
+COMPLEXES_CSV_FIELDNAMES = [
+    # 기본 정보 필드
+    "complex_id",              # 단지 ID (네이버 고유 ID)
+    "complex_name",            # 단지명
+    "real_estate_type",        # 부동산 유형 (예: "아파트")
+    "completion_year_month",   # 사용승인일 (YYYYMM 형식)
+    "total_dong_count",        # 총 동 수
+    "total_household_count",   # 총 세대수
+    "min_area",                # 최소 전용면적 (㎡)
+    "max_area",                # 최대 전용면적 (㎡)
+    "deal_count",              # 현재 매매 매물 수
+    "lease_count",             # 현재 전세 매물 수
+    "rent_count",              # 현재 월세 매물 수
+
+    # 추가 정보 필드
+    "pyeong_types",            # 평형 타입 정보 (JSON 문자열)
+    "fetched_at",              # 데이터 수집 시각 (ISO 8601)
+
+    # 통계 필드 (거래내역 기반 계산)
+    "total_transaction_count", # 총 거래 건수
+    "latest_deal_price",       # 최신 매매가 (만원 단위)
+    "latest_deal_date",        # 최신 거래일 (YYYY-MM-DD)
+    "avg_deal_price_1year",    # 최근 1년 평균 매매가 (만원 단위)
+    "deal_count_1year",        # 최근 1년 매매 건수
+    "lease_count_1year",       # 최근 1년 전세 건수
+    "rent_count_1year",        # 최근 1년 월세 건수
+]
+```
+
+**데이터 예시:**
+```csv
+complex_id,complex_name,real_estate_type,completion_year_month,total_dong_count,total_household_count,min_area,max_area,deal_count,lease_count,rent_count,pyeong_types,fetched_at,total_transaction_count,latest_deal_price,latest_deal_date,avg_deal_price_1year,deal_count_1year,lease_count_1year,rent_count_1year
+112581,힐스테이트 서울숲,아파트,201512,3,652,59,84,0,10,5,"[{'pyeong_name': '59A', 'exclusive_area': 59.84}, {'pyeong_name': '84B', 'exclusive_area': 84.89}]",2025-12-07T10:30:00Z,125,185000,2024-11-15,178500,23,45,8
+```
+
+### 10.3 transactions.csv 필드 정의
+
+```python
+TRANSACTIONS_FIELDNAMES = [
+    "complex_id",           # 단지 ID
+    "complex_name",         # 단지명
+    "pyeong_type_number",   # 평형 타입 번호 (1, 2, 3...)
+    "pyeong_name",          # 평형명 (예: "59A", "84B")
+    "trade_type",           # 거래 유형 코드 (A1: 매매, B1: 전세, B2: 월세)
+    "trade_type_name",      # 거래 유형명 ("매매", "전세", "월세")
+    "trade_date",           # 거래일 (YYYY-MM-DD)
+    "trade_year",           # 거래년도 (YYYY)
+    "floor",                # 층 수
+    "deal_price",           # 매매가 (만원 단위)
+    "deposit",              # 보증금 (만원 단위)
+    "monthly_rent",         # 월세 (만원 단위)
+    "trade_category",       # 거래 카테고리 (예: "아파트")
+    "is_delete",            # 삭제 여부 (boolean)
+    "is_renew",             # 갱신 여부 (boolean)
+]
+```
+
+**데이터 예시:**
+```csv
+complex_id,complex_name,pyeong_type_number,pyeong_name,trade_type,trade_type_name,trade_date,trade_year,floor,deal_price,deposit,monthly_rent,trade_category,is_delete,is_renew
+112581,힐스테이트 서울숲,1,59A,A1,매매,2024-11-15,2024,15,185000,0,0,아파트,False,False
+112581,힐스테이트 서울숲,1,59A,B1,전세,2024-10-20,2024,8,0,75000,0,아파트,False,False
+112581,힐스테이트 서울숲,2,84B,B2,월세,2024-09-05,2024,12,0,100000,350,아파트,False,True
+```
+
+### 10.4 체크포인트 파일(checkpoint.json) 구조
+
+체크포인트는 크롤링 중단 시 재시작을 위해 현재 상태를 저장합니다:
+
+```json
+{
+    "last_dong": "1168010500",                      // 마지막으로 처리된 동 코드
+    "last_complex": "112581",                       // 마지막으로 처리된 단지 ID
+    "total_complexes_processed": 1250,             // 처리된 총 단지 수
+    "total_transactions_collected": 15680,         // 수집된 총 거래내역 수
+    "started_at": "2025-12-07T10:00:00Z",          // 크롤링 시작 시각
+    "last_updated_at": "2025-12-07T12:30:00Z",    // 마지막 업데이트 시각
+    "failed_dongs": [                              // 실패한 동 목록
+        {
+            "dong_code": "1165010300",
+            "error": "Rate limit exceeded",
+            "timestamp": "2025-12-07T11:45:00Z"
+        }
+    ],
+    "rate_limiter_state": {                         // Rate Limiter 상태
+        "current_delay": 3.5,
+        "success_count": 5,
+        "error_count": 0
+    }
+}
+```
+
+### 10.5 CheckpointManager 사용법
+
+```python
+from crawler.utils.checkpoint import CheckpointManager
+
+# 체크포인트 매니저 초기화
+checkpoint_manager = CheckpointManager("output/checkpoint.json")
+
+# 기본 사용법
+with checkpoint_manager._lock:
+    # 상태 저장
+    checkpoint_manager.save(
+        last_dong="1168010500",
+        last_complex="112581",
+        increment_complexes=True,
+        increment_transactions=50
+    )
+
+    # 실패한 동 기록
+    checkpoint_manager.add_failed_dong(
+        dong_code="1165010300",
+        error="Network timeout"
+    )
+
+    # 진행 상황 확인
+    progress = checkpoint_manager.get_progress_summary()
+    print(f"처리된 단지: {progress['total_complexes_processed']}")
+    print(f"수집된 거래내역: {progress['total_transactions_collected']}")
+
+# 새 API 사용법 (더 유연한 키-값 저장)
+checkpoint_manager.update("custom_key", {"data": "value"})
+data = checkpoint_manager.get("custom_key")
+```
+
+### 10.6 데이터 저장 및 재시작 방법
+
+#### 10.6.1 점진적 저장 (Incremental Write)
+
+```python
+from crawler.writers import ComplexesCSVWriter, TransactionCSVWriter
+
+# CSV Writer 초기화
+complexes_writer = ComplexesCSVWriter("output/complexes.csv")
+transactions_writer = TransactionCSVWriter("output/transactions.csv")
+
+# 점진적 저장 - 각 동 처리 후 저장
+for dong in districts:
+    # 1. 단지 정보 수집
+    complexes = fetch_complexes_for_dong(dong)
+
+    # 2. 단지 정보 CSV에 즉시 저장
+    complexes_writer.append(complexes)
+
+    # 3. 각 단지의 거래내역 수집 및 저장
+    for complex in complexes:
+        transactions = fetch_transactions(complex['complex_id'])
+
+        # 4. 거래내역 CSV에 즉시 저장
+        transactions_writer.append(transactions)
+
+        # 5. 체크포인트 업데이트
+        checkpoint_manager.save(
+            last_dong=dong['cortarNo'],
+            last_complex=complex['complex_id'],
+            increment_complexes=True,
+            increment_transactions=len(transactions)
+        )
+```
+
+#### 10.6.2 중단 후 재시작
+
+```python
+# --resume 옵션으로 재시작
+resume = True
+
+if resume and checkpoint_manager.exists():
+    # 체크포인트 로드
+    checkpoint = checkpoint_manager.load_checkpoint()
+
+    # 마지막 처리 위치 확인
+    last_dong = checkpoint.get("last_dong")
+
+    # Rate Limiter 상태 복원
+    checkpoint_manager.restore_rate_limiter_state(rate_limiter)
+
+    # last_dong 이후부터 처리 시작
+    start_index = find_dong_index(districts, last_dong)
+
+    for dong in districts[start_index:]:
+        if checkpoint_manager.should_skip_dong(dong['cortarNo']):
+            continue  # 이미 처리된 동은 건너뛰기
+
+        # 정상 크롤링 진행
+        process_dong(dong)
+```
+
+#### 10.6.3 데이터 무결성 보장
+
+```python
+# 원자적 파일 쓰기 (임시 파일 + rename)
+def _atomic_write(data: Dict[str, Any]) -> None:
+    # 1. 임시 파일에 쓰기
+    fd, temp_path = tempfile.mkstemp(suffix=".tmp", prefix="checkpoint_")
+
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())  # 디스크 동기화
+
+        # 2. 원자적 rename (POSIX 시스템에서 원자성 보장)
+        os.replace(temp_path, checkpoint_path)
+    except Exception:
+        # 3. 실패 시 임시 파일 삭제
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
+```
+
+#### 10.6.4 통계 자동 계산
+
+```python
+from crawler.utils.statistics import calculate_statistics_from_transactions
+
+# 단지 정보와 거래내역으로 통계 자동 계산
+complex_data = {
+    "complex_id": "112581",
+    "complex_name": "힐스테이트 서울숲",
+    # ... 기본 정보
+}
+
+transactions = [
+    {"trade_date": "2024-11-15", "deal_price": 185000, "trade_type": "A1"},
+    {"trade_date": "2024-10-20", "deposit": 75000, "trade_type": "B1"},
+    # ... 더 많은 거래내역
+]
+
+# 통계 계산 및 저장
+complex_with_stats = calculate_statistics_from_transactions(complex_data, transactions)
+complexes_writer.append_with_statistics(complex_data, transactions)
+```
+
+### 10.7 파일 경로 및 구조
+
+```
+output/
+├── complexes.csv          # 단지 정보 (점진적 저장)
+├── transactions.csv       # 거래내역 (점진적 저장)
+├── checkpoint.json        # 체크포인트 파일 (원자적 쓰기)
+└── .backup/               # 손상된 파일 백업 디렉토리
+    ├── checkpoint.json.backup
+    └── checkpoint.json.backup.1701934200
+```
+
 ---
 
-## 11. 변경 이력
+## 11. 부록
+
+### 부록 A: 지역 코드 (서울)
+
+| 구 | 코드 | 풀네임 |
+|:---|:-----:|:-------|
+| 강남구 | 1168000000 | 서울특별시 강남구 |
+| 강동구 | 1171000000 | 서울특별시 강동구 |
+| 강북구 | 1130500000 | 서울특별시 강북구 |
+| 강서구 | 1156000000 | 서울특별시 강서구 |
+| 관악구 | 1162000000 | 서울특별시 관악구 |
+| 광진구 | 1121500000 | 서울특별시 광진구 |
+| 구로구 | 1153000000 | 서울특별시 구로구 |
+| 금천구 | 1154500000 | 서울특별시 금천구 |
+| 노원구 | 1135000000 | 서울특별시 노원구 |
+| 도봉구 | 1132000000 | 서울특별시 도봉구 |
+| 동대문구 | 1126000000 | 서울특별시 동대문구 |
+| 동작구 | 1159000000 | 서울특별시 동작구 |
+| 마포구 | 1144000000 | 서울특별시 마포구 |
+| 서대문구 | 1141000000 | 서울특별시 서대문구 |
+| 서초구 | 1165000000 | 서울특별시 서초구 |
+| 성동구 | 1120000000 | 서울특별시 성동구 |
+| 성북구 | 1129000000 | 서울특별시 성북구 |
+| 송파구 | 1169000000 | 서울특별시 송파구 |
+| 양천구 | 1147000000 | 서울특별시 양천구 |
+| 영등포구 | 1150000000 | 서울특별시 영등포구 |
+| 용산구 | 1117000000 | 서울특별시 용산구 |
+| 은평구 | 1138000000 | 서울특별시 은평구 |
+| 종로구 | 1111000000 | 서울특별시 종로구 |
+| 중구 | 1114000000 | 서울특별시 중구 |
+| 중랑구 | 1126000000 | 서울특별시 중랑구 |
+
+### 부록 B: 거래 유형 코드
+
+| 코드 | 의미 | 설명 |
+|:----|:-----:|:-----|
+| A1 | 매매 | 소유권 이전 |
+| A2 | 분양권 | 분양권 매매 |
+| B1 | 전세 | 보증금 기반 임대 |
+| B2 | 월세 | 보증금 + 월세 |
+| B3 | 단기임대 | 1년 미만 임대 |
+
+### 부록 C: 부동산 유형 코드
+
+| 코드 | 의미 | 설명 |
+|:----|:-----:|:-----|
+| APT | 아파트 | 공동주택 |
+| ABYG | 연립/다세대 | 저층 공동주택 |
+| JGC | 주상복합 | 상업+주거 |
+| PRE | 분양권 | 분양권 |
+| OPST | 오피스텔 | 업무시설+주거 |
+
+---
+
+## 12. 변경 이력
 
 - **2025-12-07**: v5.1 출시 - 현재 작동 버전
   - ✅ 모바일 API(m.land.naver.com) 기반 크롤링 정상 작동 확인
@@ -1929,11 +2543,47 @@ if __name__ == "__main__":
 
 이 가이드는 실제 프로젝트 `src/crawler/crawlers/naver.py`의 구현을 기반으로 작성되었습니다. 주요 특징:
 
-1. **모바일 API 사용**: `m.land.naver.com/cluster/ajax/` 기반
-2. **법정동 기반 크롤링**: cortarNo와 bounds 사용
-3. **AdaptiveRateLimiter**: 동적 대기 시간 조절
-4. **CheckpointManager**: 중단된 크롤링 재개
-5. **CrawlCoordinator**: 대규모 크롤링 관리
+1. **직접 API 호출**: 브라우저 컨텍스트 내에서 fetch API 직접 사용
+   - `NaverAPIClient`는 현재 구현 중 (import만 존재)
+   - `page.evaluate()`를 사용한 JavaScript fetch 호출
+
+2. **모바일 API 사용**: `m.land.naver.com/cluster/ajax/` 기반
+   - 법정동 코드(cortarNo)와 좌표(bounds) 사용
+   - User-Agent 및 헤더 자동 설정
+
+3. **핵심 컴포넌트**:
+   - **BrowserManager**: Playwright 브라우저 리소스 관리
+   - **SessionManager**: 네이버 세션(쿠키) 관리
+   - **AdaptiveRateLimiter**: 동적 대기 시간 조절 (기본 5초)
+   - **CheckpointManager**: 중단된 크롤링 재개
+   - **CrawlCoordinator**: 대규모 크롤링 관리
+
+4. **API 호출 패턴**:
+   ```python
+   # 1. 브라우저 페이지 확보
+   page = browser_manager.get_page()
+
+   # 2. 세션 확보
+   session_manager.ensure_session(page)
+
+   # 3. Rate limiting 적용
+   rate_limiter.wait()
+
+   # 4. API 호출
+   result = page.evaluate("""
+       async (url) => {
+           const response = await fetch(url, {
+               method: 'GET',
+               credentials: 'same-origin',
+               headers: { /* 모바일 헤더 */ }
+           });
+           return await response.json();
+       }
+   """, api_url)
+
+   # 5. 성공 시 rate limiter 업데이트
+   rate_limiter.on_success()
+   ```
 
 ### 12.2 주요 클래스 및 메서드
 
@@ -1974,3 +2624,396 @@ python scripts/main.py --districts 강남구 서초구
 - **거래내역**: 거래일, 가격, 층, 거래유형
 
 **이 가이드는 실제 프로젝트와 완전히 동일한 방식으로 작성되었으며, 모든 코드 예제는 프로젝트에서 실제 동작하는 코드입니다.**
+
+---
+
+## 13. 아키텍처
+
+### 13.1 전체 아키텍처 개요
+
+네이버 부동산 크롤러는 계층 구조로 설계되어 있으며, 각 컴포넌트가 명확한 역할을 수행합니다:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Layer                        │
+├─────────────────────────────────────────────────────────────┤
+│  NaverRealEstateCrawler (메인 크롤러 클래스)                │
+│  - 크롤링 조정 및 데이터 통합                               │
+│  - 지역 필터링 및 동 단위 데이터 수집                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                Coordination Layer                           │
+├─────────────────────────────────────────────────────────────┤
+│  CrawlCoordinator (크롤링 조정자)                           │
+│  - 동 단위 점진적 저장 관리                                 │
+│  - 체크포인트 기반 재시작 지원                              │
+│  - 진행 상황 추적                                           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Service Layer                              │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌─────────────────────────────────┐  │
+│  │ NaverAPIClient   │  │    AdaptiveRateLimiter          │  │
+│  │ - API 호출 래퍼  │  │ - 동적 대기 시간 조절           │  │
+│  │ - 세션 관리      │  │ - 429 에러 처리                 │  │
+│  └──────────────────┘  └─────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────────┐  ┌─────────────────────────────────┐  │
+│  │ BrowserManager   │  │    CheckpointManager           │  │
+│  │ - 브라우저 리소스│  │ - 중단 지점 저장/복원           │  │
+│  │   관리           │  │ - 원자적 파일 쓰기              │  │
+│  └──────────────────┘  └─────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Data Layer                                 │
+├─────────────────────────────────────────────────────────────┤
+│  ComplexesCSVWriter │ TransactionCSVWriter                 │
+│  (단지 정보 저장)     │  (거래내역 저장)                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 13.2 주요 클래스 상세
+
+#### 13.2.1 NaverRealEstateCrawler
+
+**역할**: 메인 크롤러 클래스로 전체 크롤링 프로세스를 조정
+
+**주요 책임**:
+- 서울시 구/동 데이터 로드 및 필터링
+- 동 단위 단지 목록 수집 (`_fetch_dong_data`)
+- 단지 상세 정보 조회 (`fetch_complex_detail`)
+- 거래내역 수집 (`fetch_transaction_history`)
+- CrawlCoordinator를 통한 대규모 크롤링 관리
+
+**초기화 과정**:
+```python
+def __init__(self, config: CrawlerConfig, output_dir: Path | str = "output"):
+    # 1. 기본 설정
+    self.config = config
+    self.output_dir = Path(output_dir)
+
+    # 2. 로깅 설정
+    self.crawl_logger = CrawlLogger("naver_real_estate")
+    self.logger = structlog.get_logger()
+
+    # 3. 핵심 컴포넌트 초기화
+    self.checkpoint_manager = CheckpointManager(self.output_dir / "checkpoint.json")
+    self.rate_limiter = AdaptiveRateLimiter()
+    self.browser_manager = BrowserManager(config)
+
+    # 4. 세션 및 API 클라이언트
+    self.session_manager = get_session_manager()
+    self.api_client = NaverAPIClient(config)
+
+    # 5. 데이터 로드
+    self.districts_data = self._load_districts_data()
+```
+
+**의존성 주입**:
+- `CrawlerConfig`: 크롤링 설정 (headless 모드, 타임아웃 등)
+- `CheckpointManager`: 체크포인트 관리
+- `AdaptiveRateLimiter`: Rate limiting
+- `BrowserManager`: 브라우저 리소스 관리
+
+#### 13.2.2 NaverAPIClient
+
+**역할**: 네이버 API 호출을 추상화하는 클라이언트
+
+**주요 기능**:
+- 모바일 API 엔드포인트 관리
+- 세션 유지 및 쿠키 관리
+- API 응답 파싱 및 에러 핸들링
+
+**API 엔드포인트**:
+```python
+# 단지 목록 API (m.land.naver.com)
+COMPLEX_LIST_URL = "https://m.land.naver.com/cluster/ajax/complexList"
+
+# 매물 목록 API (m.land.naver.com)
+ARTICLE_LIST_URL = "https://m.land.naver.com/cluster/ajax/articleList"
+
+# 단지 상세 API (fin.land.naver.com)
+COMPLEX_DETAIL_BASE = "https://fin.land.naver.com/front-api/v1/complex"
+```
+
+#### 13.2.3 AdaptiveRateLimiter
+
+**역할**: 동적으로 API 요청 간격을 조절하는 Rate Limiter
+
+**동작 원리**:
+```python
+class AdaptiveRateLimiter:
+    def __init__(self):
+        self.current_delay = 5.0  # 초기 5초
+        self.min_delay = 1.5      # 최소 1.5초
+        self.max_delay = 10.0     # 최대 10초
+        self.success_count = 0    # 연속 성공 횟수
+        self.error_count = 0      # 연속 에러 횟수
+
+    def wait(self):
+        """현재 설정된 지연 시간만큼 대기"""
+        time.sleep(self.current_delay)
+
+    def on_success(self):
+        """성공 시: 10회 연속 성공하면 지연 시간 감소"""
+        self.success_count += 1
+        if self.success_count >= 10:
+            self.current_delay = max(self.min_delay, self.current_delay * 0.9)
+            self.success_count = 0
+
+    def on_rate_limit_error(self):
+        """429 에러 시: 즉시 지연 시간 2배 증가"""
+        self.current_delay = min(self.max_delay, self.current_delay * 2)
+```
+
+#### 13.2.4 CheckpointManager
+
+**역할**: 중단된 크롤링을 재개하기 위한 체크포인트 관리
+
+**주요 기능**:
+- 원자적 파일 쓰기 (임시 파일 후 rename)
+- 스레드 세이프한 동시성 제어 (RLock)
+- 처리된 동/단지 추적
+
+**체크포인트 구조**:
+```json
+{
+    "last_dong": "1168010500",
+    "last_complex": "112581",
+    "total_complexes_processed": 1250,
+    "total_transactions_collected": 15680,
+    "started_at": "2025-12-07T10:00:00Z",
+    "last_updated_at": "2025-12-07T12:30:00Z",
+    "failed_dongs": ["1165010300"],
+    "rate_limiter_state": {
+        "current_delay": 3.5,
+        "success_count": 5
+    }
+}
+```
+
+#### 13.2.5 CrawlCoordinator
+
+**역할**: 동 단위 크롤링을 조정하고 점진적 저장을 관리
+
+**주요 책임**:
+- 각 동의 크롤링 진행 상황 추적
+- 단지 상세 정보 및 거래내역 수집 조정
+- CSV 파일에 점진적 데이터 저장
+- 실패한 동 재시도 관리
+
+**핵심 메서드**:
+```python
+def crawl_multiple_dongs(
+    self,
+    dong_complexes: List[Dict],
+    fetch_complex_detail: Callable,
+    fetch_transaction_history: Callable,
+    resume: bool = False
+):
+    """여러 동 크롤링 조정
+
+    Args:
+        dong_complexes: 동별 단지 정보
+        fetch_complex_detail: 단지 상세 조회 함수
+        fetch_transaction_history: 거래내역 조회 함수
+        resume: 이어하기 여부
+    """
+```
+
+### 13.3 클래스 간 상호작용
+
+#### 13.3.1 초기화 흐름
+
+```
+App -> NaverRealEstateCrawler.__init__(config, output_dir)
+NaverRealEstateCrawler -> CheckpointManager(checkpoint_path)
+NaverRealEstateCrawler -> AdaptiveRateLimiter()
+NaverRealEstateCrawler -> BrowserManager(config)
+NaverRealEstateCrawler -> NaverAPIClient(config)
+NaverRealEstateCrawler -> _load_districts_data()
+NaverRealEstateCrawler -> App: 초기화 완료
+```
+
+#### 13.3.2 크롤링 실행 흐름
+
+```
+NaverRealEstateCrawler -> filter_districts(district_names)
+NaverRealEstateCrawler -> CrawlCoordinator(output_dir)
+
+Loop 각 동 처리:
+    NaverRealEstateCrawler -> BrowserManager.managed_browser()
+    BrowserManager -> NaverRealEstateCrawler: page context
+    NaverRealEstateCrawler -> NaverAPIClient.fetch_dong_complexes(dong)
+    NaverAPIClient -> AdaptiveRateLimiter.wait()
+    NaverAPIClient -> NaverRealEstateCrawler: complexes list
+    NaverRealEstateCrawler -> CrawlCoordinator: dong_complexes append
+
+CrawlCoordinator -> crawl_multiple_dongs()
+
+Loop 각 동의 단지 처리:
+    CrawlCoordinator -> NaverRealEstateCrawler.fetch_complex_detail()
+    NaverRealEstateCrawler -> NaverAPIClient.fetch_complex_detail()
+    NaverAPIClient -> AdaptiveRateLimiter.wait()
+    NaverAPIClient -> NaverRealEstateCrawler: detail info
+    NaverRealEstateCrawler -> CrawlCoordinator: detail info
+
+    CrawlCoordinator -> NaverRealEstateCrawler.fetch_transaction_history()
+    NaverRealEstateCrawler -> NaverAPIClient.fetch_transaction_history()
+    NaverAPIClient -> AdaptiveRateLimiter.on_success() / on_error()
+    NaverAPIClient -> NaverRealEstateCrawler: transactions
+    NaverRealEstateCrawler -> CrawlCoordinator: transactions
+
+    CrawlCoordinator -> CSVWriter.save_complex_data()
+    CrawlCoordinator -> CSVWriter.save_transaction_data()
+```
+
+### 13.4 데이터 흐름 (크롤링 파이프라인)
+
+#### 13.4.1 전체 파이프라인
+
+```
+1. 초기화 단계
+   ├─ Load districts data (seoul_districts.json)
+   ├─ Initialize components (RateLimiter, CheckpointManager, etc.)
+   └─ Filter target districts (if specified)
+
+2. 데이터 수집 단계
+   ├─ For each district
+   │   ├─ For each dong
+   │   │   ├─ BrowserManager.get_browser()
+   │   │   ├─ NaverAPIClient.fetch_dong_complexes()
+   │   │   │   └─ AdaptiveRateLimiter.wait()
+   │   │   └─ Return complexes list
+   │   └─ Collect all dong complexes
+   └─ Pass to CrawlCoordinator
+
+3. 상세 정보 수집 단계 (CrawlCoordinator)
+   ├─ For each dong
+   │   ├─ Fetch complex details
+   │   │   ├─ NaverAPIClient.fetch_complex_detail()
+   │   │   └─ Parse pyeong types, tax info
+   │   ├─ Fetch transaction history
+   │   │   ├─ For each pyeong type
+   │   │   │   ├─ NaverAPIClient.fetch_transaction_history()
+   │   │   │   └─ AdaptiveRateLimiter.on_success/on_error()
+   │   │   └─ Paginate through all transactions
+   │   └─ Save incrementally
+
+4. 저장 단계
+   ├─ ComplexesCSVWriter.save_complexes()
+   ├─ TransactionCSVWriter.save_transactions()
+   ├─ CheckpointManager.update_checkpoint()
+   └─ ProgressTracker.log_progress()
+```
+
+#### 13.4.2 데이터 형식 변환
+
+```python
+# 1. API 응답 (모바일 API)
+{
+    "result": [
+        {
+            "hscpNo": "112581",
+            "hscpNm": "힐스테이트 서울숲",
+            "dealCnt": 0,
+            "leaseCnt": 10,
+            ...
+        }
+    ]
+}
+
+# 2. 내부 데이터 모델
+[
+    {
+        "complex_id": "112581",
+        "complex_name": "힐스테이트 서울숲",
+        "deal_count": 0,
+        "lease_count": 10,
+        "cortar_no": "1168010500",
+        "dong_name": "청담동"
+    }
+]
+
+# 3. CSV 출력
+complex_id,complex_name,dong_name,deal_count,lease_count
+112581,힐스테이트 서울숲,청담동,0,10
+```
+
+### 13.5 에러 처리 및 회복
+
+#### 13.5.1 에러 처리 전략
+
+```python
+# 1. 재시도 로직 (BrowserManager)
+@retry_with_backoff(
+    max_attempts=3,
+    base_delay=2.0,
+    max_delay=10.0,
+    exceptions=(PlaywrightTimeoutError, NetworkError)
+)
+def managed_browser(self):
+    """재시도 가능한 브라우저 관리"""
+
+# 2. Rate Limiting 에러 처리
+try:
+    result = api_client.fetch_data(url)
+    rate_limiter.on_success()
+except HTTP429Error:
+    rate_limiter.on_rate_limit_error()
+    # 재시도 또는 건너뛰기
+
+# 3. 체크포인트 기반 회복
+if resume and checkpoint_manager.exists():
+    checkpoint = checkpoint_manager.load()
+    last_dong = checkpoint["last_dong"]
+    # 마지막 처리 위치부터 재개
+```
+
+#### 13.5.2 실패 격리
+
+- **동 단위 격리**: 한 동에서 실패해도 다른 동에는 영향 없음
+- **단지 단위 격리**: 단지 상세 정보 조회 실패 시 다른 단지는 계속 처리
+- **거래내역 격리**: 특정 평형의 거래내역 실패 시 다른 평형은 계속
+
+### 13.6 성능 최적화 전략
+
+#### 13.6.1 리소스 관리
+
+```python
+# 1. 브라우저 리소스 풀링 (BrowserManager)
+class BrowserManager:
+    def __init__(self, config):
+        self.browser_pool = []  # 브라우저 인스턴스 풀
+        self.max_browsers = 3   # 최대 동시 브라우저 수
+
+    @contextmanager
+    def managed_browser(self):
+        browser = self._get_browser()
+        try:
+            yield browser
+        finally:
+            self._return_browser(browser)
+
+# 2. 메모리 효율적 처리
+def process_transactions(transactions: List[Dict]):
+    """스트림 방식으로 거래내역 처리"""
+    batch_size = 1000
+    for i in range(0, len(transactions), batch_size):
+        batch = transactions[i:i + batch_size]
+        yield from process_batch(batch)
+```
+
+#### 13.6.2 병렬 처리 제약
+
+- **현재**: 순차 처리 (안정성 우선)
+- **제약**: Playwright의 싱글 스레드 특성
+- **고려사항**:
+  - 다중 프로세스로 구별 병렬 처리 가능
+  - Rate Limiting으로 전체 요청량 조절 필요
