@@ -38,7 +38,7 @@ class NaverAPIClient:
             retry_config: 재시도 설정
         """
         self.config = config or CrawlerConfig.from_env()
-        self.base_url = "https://m.land.naver.com"
+        self.base_url = "https://new.land.naver.com"
         self.timeout = self.config.timeout
         self._session: Optional[requests.Session] = None
 
