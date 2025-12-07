@@ -79,13 +79,19 @@ class NaverSessionManager:
         # 필수 쿠키 확인
         required_cookies = self.get_required_cookies(cookies)
 
-        # NaverSession 쿠키가 있는지 확인
+        # NaverSession 쿠키가 있는지 확인 (있으면 좋지만 필수는 아님)
         has_naver_session = any(c.get("name") == "NaverSession" for c in required_cookies)
 
         # 만료되지 않은 쿠키가 있는지 확인
         valid_cookies = [c for c in required_cookies if not self.check_cookie_expiration(c)]
 
-        return has_naver_session and len(valid_cookies) > 0
+        # 세션 유효성 판단 기준 완화:
+        # 1. NaverSession이 있거나
+        # 2. NNB 쿠키가 있고(네이버 기본 식별자), 다른 유효한 쿠키들이 충분히 있으면 통과
+        has_nnb = any(c.get("name") == "NNB" for c in valid_cookies)
+        has_required_cookies = len(valid_cookies) >= 5  # 최소 5개 이상의 유효한 쿠키 필요
+
+        return (has_naver_session and len(valid_cookies) > 0) or (has_nnb and has_required_cookies)
 
     def get_required_cookies(self, all_cookies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """필요한 쿠키만 필터링하여 반환
