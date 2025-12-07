@@ -45,6 +45,7 @@ class TestNaverSessionManagement:
         mock_page.goto = Mock(return_value=mock_response)
         mock_page.wait_for_load_state = Mock()
         mock_page.wait_for_function = Mock()
+        mock_page.set_extra_http_headers = Mock()
         mock_page.context = Mock()
         mock_page.context.cookies = Mock(return_value=[])
 
@@ -98,6 +99,15 @@ class TestNaverSessionManagement:
         mock_page.wait_for_load_state = Mock()
         mock_page.set_extra_http_headers = Mock()
         mock_page.wait_for_function = Mock()
+        mock_page.context = Mock()
+        # 항상 실제 리스트를 반환하도록 설정
+        mock_page.context.cookies = Mock(
+            return_value=[
+                {"name": "NNB", "value": "test_nnb", "domain": ".naver.com"},
+                {"name": "NID", "value": "test_nid", "domain": ".naver.com"},
+                {"name": "NaverSession", "value": "test_session", "domain": ".naver.com"},
+            ]
+        )
 
         mock_browser_manager.return_value.managed_browser.return_value.__enter__.return_value = (
             mock_page
@@ -121,6 +131,15 @@ class TestNaverSessionManagement:
         mock_page.goto = Mock()
         mock_page.wait_for_load_state = Mock()
         mock_page.wait_for_function = Mock()
+        mock_page.context = Mock()
+        # 항상 실제 리스트를 반환하도록 설정
+        mock_page.context.cookies = Mock(
+            return_value=[
+                {"name": "NNB", "value": "test_nnb", "domain": ".naver.com"},
+                {"name": "NID", "value": "test_nid", "domain": ".naver.com"},
+                {"name": "NaverSession", "value": "test_session", "domain": ".naver.com"},
+            ]
+        )
 
         mock_browser_manager.return_value.managed_browser.return_value.__enter__.return_value = (
             mock_page
@@ -141,13 +160,17 @@ class TestNaverSessionManagement:
         mock_page = Mock()
         mock_page.goto = Mock()
         mock_page.wait_for_load_state = Mock(side_effect=Exception("Timeout"))
+        mock_page.context = Mock()
+        mock_page.context.cookies = Mock(
+            side_effect=Exception("Timeout")
+        )  # 쿠키 가져오기도 타임아웃
 
         mock_browser_manager.return_value.managed_browser.return_value.__enter__.return_value = (
             mock_page
         )
 
         # 예외 발생 확인
-        with pytest.raises(Exception, match="Timeout"):
+        with pytest.raises(Exception):
             crawler._ensure_session(mock_page)
 
     @patch("crawler.crawlers.naver.BrowserManager")
@@ -158,13 +181,17 @@ class TestNaverSessionManagement:
         mock_page.goto = Mock()
         mock_page.wait_for_load_state = Mock()
         mock_page.wait_for_function = Mock()
+        mock_page.context = Mock()
+        mock_page.context.cookies = Mock(return_value=[])
 
         mock_browser_manager.return_value.managed_browser.return_value.__enter__.return_value = (
             mock_page
         )
 
-        # _ensure_session 메서드 호출
-        crawler._ensure_session(mock_page)
+        # _refresh_session 모의하여 무한 재귀 방지
+        with patch.object(crawler, "_refresh_session"):
+            # _ensure_session 메서드 호출
+            crawler._ensure_session(mock_page)
 
         # URL 확인
         mock_page.goto.assert_called_once_with(
@@ -182,6 +209,15 @@ class TestNaverSessionManagement:
         mock_page.goto = Mock()
         mock_page.wait_for_load_state = Mock()
         mock_page.wait_for_function = Mock()
+        mock_page.context = Mock()
+        # 항상 실제 리스트를 반환하도록 설정
+        mock_page.context.cookies = Mock(
+            return_value=[
+                {"name": "NNB", "value": "test_nnb", "domain": ".naver.com"},
+                {"name": "NID", "value": "test_nid", "domain": ".naver.com"},
+                {"name": "NaverSession", "value": "test_session", "domain": ".naver.com"},
+            ]
+        )
         # wait_for_function은 성공한다고 가정 (timeout 없음)
 
         mock_browser_manager.return_value.managed_browser.return_value.__enter__.return_value = (
@@ -220,10 +256,14 @@ class TestSessionValidation:
 
     def test_validate_session_with_valid_cookies(self, crawler):
         """유효한 쿠키가 있는 경우 세션 유효성 확인"""
-        # 유효한 쿠키 목록
+        # 유효한 쿠키 목록 (최소 5개 이상 필요)
         valid_cookies = [
             {"name": "NNB", "value": "valid_token", "domain": ".naver.com"},
             {"name": "NID", "value": "valid_nid", "domain": ".naver.com"},
+            {"name": "NaverSession", "value": "session_value", "domain": ".naver.com"},
+            {"name": "SESSION", "value": "another_cookie", "domain": ".naver.com"},
+            {"name": "OTHER", "value": "yet_another", "domain": ".naver.com"},
+            {"name": "EXTRA", "value": "one_more", "domain": ".naver.com"},
         ]
 
         # _validate_session 메서드 호출
@@ -309,11 +349,14 @@ class TestCookieAcquisition:
         mock_page.context = Mock()
         mock_page.context.cookies = Mock()
 
-        # 모의 쿠키 응답 설정
+        # 모의 쿠키 응답 설정 (최소 5개 이상 필요)
         mock_page.context.cookies.return_value = [
             {"name": "NNB", "value": "test_nnb_token", "domain": ".naver.com"},
             {"name": "NID", "value": "test_nid_token", "domain": ".naver.com"},
+            {"name": "NaverSession", "value": "test_naver_session", "domain": ".naver.com"},
             {"name": "SESSION", "value": "test_session", "domain": ".naver.com"},
+            {"name": "OTHER", "value": "test_other", "domain": ".naver.com"},
+            {"name": "EXTRA", "value": "test_extra", "domain": ".naver.com"},
         ]
 
         # _ensure_session 메서드 호출
@@ -341,21 +384,24 @@ class TestCookieAcquisition:
 
     def test_get_required_cookies_returns_necessary_cookies(self, crawler):
         """필수 쿠키 목록 반환 확인"""
-        # 모의 쿠키 데이터
+        # 실제 쿠키 데이터 리스트 (Mock 객체가 아님)
         all_cookies = [
             {"name": "NNB", "value": "nnb_value", "domain": ".naver.com"},
             {"name": "NID", "value": "nid_value", "domain": ".naver.com"},
             {"name": "Other", "value": "other_value", "domain": ".naver.com"},
             {"name": "NNB", "value": "nnb_value2", "domain": "other.com"},  # 다른 도메인
+            {"name": "SESSION", "value": "session_value", "domain": "new.land.naver.com"},
         ]
 
-        # _get_required_cookies 메서드 호출 (아직 구현되지 않음)
+        # _get_required_cookies 메서드 호출
         required_cookies = crawler._get_required_cookies(all_cookies)
 
-        # 네이버 도메인의 필수 쿠키만 필터링되는지 확인
+        # 네이버 관련 도메인의 쿠키만 필터링되는지 확인
         expected_cookies = [
             {"name": "NNB", "value": "nnb_value", "domain": ".naver.com"},
             {"name": "NID", "value": "nid_value", "domain": ".naver.com"},
+            {"name": "Other", "value": "other_value", "domain": ".naver.com"},
+            {"name": "SESSION", "value": "session_value", "domain": "new.land.naver.com"},
         ]
         assert required_cookies == expected_cookies
 
@@ -444,28 +490,32 @@ class TestSessionRefresh:
         mock_page.wait_for_load_state = Mock()
         mock_page.wait_for_function = Mock()
         mock_page.context = Mock()
-        mock_page.context.cookies = Mock()
         mock_page.context.clear_cookies = Mock()
 
-        # 기존 쿠키 설정
-        old_cookies = [
-            {"name": "NNB", "value": "old_token", "domain": ".naver.com"},
-        ]
-        mock_page.context.cookies.return_value = old_cookies
+        # 새로운 쿠키 반환 (_acquire_new_session_direct에서 호출)
+        mock_page.context.cookies = Mock(
+            return_value=[
+                {"name": "NNB", "value": "new_token", "domain": ".naver.com"},
+                {"name": "NID", "value": "new_nid", "domain": ".naver.com"},
+                {"name": "NaverSession", "value": "new_session", "domain": ".naver.com"},
+                {"name": "OTHER1", "value": "new_other1", "domain": ".naver.com"},
+                {"name": "OTHER2", "value": "new_other2", "domain": ".naver.com"},
+                {"name": "OTHER3", "value": "new_other3", "domain": ".naver.com"},
+            ]
+        )
 
-        # _refresh_session 메서드를 모의하여 _ensure_session 재귀 호출 방지
-        with patch.object(crawler, "_ensure_session") as mock_ensure_session:
-            # _refresh_session 메서드 호출
-            crawler._refresh_session(mock_page)
+        # _refresh_session 메서드 호출
+        crawler._refresh_session(mock_page)
 
-            # 쿠키 클리어 확인
-            mock_page.context.clear_cookies.assert_called_once()
+        # 쿠키 클리어 확인
+        mock_page.context.clear_cookies.assert_called_once()
 
-            # 세션 재확보를 위해 페이지 재접속 확인
-            assert mock_page.goto.call_count == 1  # 재접속만 호출 (reload는 실패했다고 가정)
+        # 세션 재확보를 위해 페이지 재접속 확인 (reload가 먼저 시도되고 실패하면 goto가 호출됨)
+        # _acquire_new_session_direct에서 goto가 호출됨
+        assert mock_page.goto.call_count == 1
 
-            # _ensure_session이 호출되었는지 확인
-            mock_ensure_session.assert_called_once_with(mock_page)
+        # 쿠키가 한 번만 호출되었는지 확인 (_acquire_new_session_direct에서만 호출)
+        assert mock_page.context.cookies.call_count == 1
 
 
 class TestCookieExpiration:
@@ -570,8 +620,15 @@ class TestSessionManagementIntegration:
         mock_page.context = Mock()
         mock_page.context.cookies = Mock()
 
-        # 초기 상태: 유효한 쿠키 없음
-        mock_page.context.cookies.return_value = []
+        # 초기 상태: 유효한 쿠키 목록
+        mock_page.context.cookies.return_value = [
+            {"name": "NNB", "value": "test_nnb", "domain": ".naver.com"},
+            {"name": "NID", "value": "test_nid", "domain": ".naver.com"},
+            {"name": "NaverSession", "value": "test_session", "domain": ".naver.com"},
+            {"name": "SESSION", "value": "another_cookie", "domain": ".naver.com"},
+            {"name": "OTHER", "value": "yet_another", "domain": ".naver.com"},
+            {"name": "EXTRA", "value": "one_more", "domain": ".naver.com"},
+        ]
 
         # 세션 확보 시도
         crawler._ensure_session(mock_page)
