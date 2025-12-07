@@ -646,7 +646,7 @@ def test_fetch_complex_listings(tmp_path: Path) -> None:
         print("\n=== 크롤링된 단지 목록 (처음 5개) ===")
         for i, complex in enumerate(complexes[:5]):
             print(
-                f"{i+1}. {complex['complex_name']} (ID: {complex['complex_id']}) - "
+                f"{i + 1}. {complex['complex_name']} (ID: {complex['complex_id']}) - "
                 f"매물 {complex.get('total_article_count', 0)}개"
             )
 
@@ -868,7 +868,7 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
             print(f"   - ✅ 매물 {len(listings)}개 조회 성공")
             if prices:
                 print(
-                    f"   - 가격 범위: {min(prices):,} ~ {max(prices):,} (평균: {int(sum(prices)/len(prices)):,})"
+                    f"   - 가격 범위: {min(prices):,} ~ {max(prices):,} (평균: {int(sum(prices) / len(prices)):,})"
                 )
         else:
             enriched_complexes[0]["active_listings_count"] = 0
