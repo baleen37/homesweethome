@@ -11,7 +11,7 @@ def main() -> None:
         "--output",
         type=Path,
         default=None,
-        help="출력 파일 경로 (기본: output/seoul_apartments_{timestamp}.csv)",
+        help="출력 디렉토리 경로 (기본: output)",
     )
     parser.add_argument(
         "--resume",
@@ -33,13 +33,13 @@ def main() -> None:
         # 쉼표로 구분된 문자열을 리스트로 변환
         district_filter = [d.strip() for d in args.district.split(",") if d.strip()]
 
-    # 출력 파일명 생성
-    output_file = None
+    # 출력 디렉토리 설정
+    output_dir = Path("output")
     if args.output is not None:
-        output_file = str(args.output)
+        output_dir = args.output
 
     try:
-        config = CrawlerConfig.from_env(output_file=output_file)
+        config = CrawlerConfig.from_env()
     except ValueError as e:
         print(f"설정 오류: {e}")
         exit(1)
@@ -50,7 +50,7 @@ def main() -> None:
     if district_filter:
         print(f"대상 구: {', '.join(district_filter)}")
 
-    crawler = NaverRealEstateCrawler(config)
+    crawler = NaverRealEstateCrawler(config, output_dir=output_dir)
 
     try:
         stats = crawler.crawl(district_filter=district_filter)
@@ -72,8 +72,8 @@ def main() -> None:
     print(f"  - 수집된 거래내역: {stats['total_transactions_collected']}건")
     print(f"  - 소요 시간: {stats['duration_seconds']:.1f}초")
     print("\n결과 파일:")
-    print("  - 거래내역: output/transactions.csv")
-    print("  - 단지 정보: output/complexes.csv")
+    print(f"  - 거래내역: {output_dir}/transactions.csv")
+    print(f"  - 단지 정보: {output_dir}/complexes.csv")
 
     # 실패 리포트
     failed = crawler.checkpoint_manager.checkpoint.get("failed_dongs", [])

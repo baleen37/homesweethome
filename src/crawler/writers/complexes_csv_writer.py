@@ -22,14 +22,14 @@ class ComplexesCSVWriter:
     # 정의된 CSV 스키마
     FIELDNAMES = COMPLEXES_CSV_FIELDNAMES
 
-    def __init__(self, output_path: Path) -> None:
+    def __init__(self, output_path: Path | str) -> None:
         """ComplexesCSVWriter 초기화
 
         Args:
-            output_path: CSV 파일 출력 경로 (예: Path("output/complexes.csv"))
+            output_path: CSV 파일 출력 경로 (예: Path("output/complexes.csv") 또는 "output/complexes.csv")
         """
-        self.output_path = output_path
-        self._file_exists = output_path.exists()
+        self.output_path = Path(output_path) if isinstance(output_path, str) else output_path
+        self._file_exists = self.output_path.exists()
 
     def write_header(self) -> None:
         """CSV 파일에 헤더만 작성합니다. 새 파일 생성 시 사용됩니다."""
@@ -67,6 +67,14 @@ class ComplexesCSVWriter:
             writer.writerows(normalized_data)
 
         self._file_exists = True
+
+    def write_row(self, row: dict[str, Any]) -> None:
+        """단일 행을 CSV 파일에 추가합니다.
+
+        Args:
+            row: 추가할 단지 정보 데이터
+        """
+        self.append([row])
 
     def append(self, data: List[dict[str, Any]]) -> None:
         """기존 파일에 데이터를 추가합니다. 점진적 저장에 사용됩니다.
@@ -152,3 +160,7 @@ class ComplexesCSVWriter:
         """CSV 파일이 존재하는지 확인하고, 없으면 빈 파일을 생성합니다."""
         if not self._file_exists:
             self.write_header()
+
+    def close(self) -> None:
+        """CSV writer를 종료합니다. 현재는 아무 작업도 하지 않습니다."""
+        pass

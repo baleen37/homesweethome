@@ -13,6 +13,7 @@ class CrawlerConfig(BaseModel):
     timeout: int = Field(default=30, description="요청 타임아웃 (초)")
     headless: bool = Field(default=True, description="헤드리스 모드 사용 여부")
     output_file: str | None = Field(default=None, description="출력 파일 경로")
+    output_dir: str = Field(default="output", description="출력 디렉토리 경로")
 
     # API 관련 설정
     api_key: str | None = Field(default=None, description="API 키")
@@ -137,6 +138,7 @@ class CrawlerConfig(BaseModel):
             "timeout": int(os.getenv("CRAWLER_TIMEOUT", "30")),
             "headless": os.getenv("CRAWLER_HEADLESS", "true").lower() == "true",
             "output_file": os.getenv("CRAWLER_OUTPUT_FILE"),
+            "output_dir": os.getenv("OUTPUT_DIR", "output"),
             "api_key": os.getenv("CRAWLER_API_KEY"),
             "region_code": os.getenv("CRAWLER_REGION_CODE"),
             "start_date": os.getenv("CRAWLER_START_DATE"),

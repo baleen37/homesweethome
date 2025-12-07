@@ -191,6 +191,22 @@ class CrawlCoordinator:
                 # 유효한 평형 타입 번호가 있는 경우에만 거래내역 조회
                 if pyeong_type_numbers:
                     for pyeong_type_number in pyeong_type_numbers:
+                        # pyeong_name 찾기
+                        pyeong_name = ""
+                        if isinstance(pyeong_types, list):
+                            for pyeong in pyeong_types:
+                                if isinstance(pyeong, dict):
+                                    pyeong_no = pyeong.get("pyeongTypeNumber") or pyeong.get(
+                                        "pyeong_type_number"
+                                    )
+                                    if pyeong_no == int(pyeong_type_number):
+                                        pyeong_name = (
+                                            pyeong.get("pyeongName")
+                                            or pyeong.get("pyeong_name")
+                                            or ""
+                                        )
+                                        break
+
                         # 모든 거래 유형 조회 (매매, 전세, 월세)
                         for trade_type in self.TRADE_TYPES:
                             self.rate_limiter.wait()
@@ -199,6 +215,8 @@ class CrawlCoordinator:
                                 complex_id,
                                 int(pyeong_type_number),  # 문자열일 수 있으므로 정수로 변환
                                 trade_type,
+                                complex.get("complex_name", ""),  # complex_name 전달
+                                pyeong_name,  # pyeong_name 전달
                             )
 
                             if transactions:
