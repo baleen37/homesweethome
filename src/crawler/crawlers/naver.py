@@ -442,10 +442,10 @@ class NaverRealEstateCrawler:
             f"{base_url}/holdingTax?complexNumber={complex_id}&pyeongTypeNumber=1",
             # 공시가격 정보 (pyeongTypeNumber=1 필요)
             f"{base_url}/declaredValue/pyeongType?complexNumber={complex_id}&pyeongTypeNumber=1",
-            # 매물 가격 분포 (추가 파라미터 필요)
-            f"{base_url}/askingPrice?complexNumber={complex_id}&pyeongTypeNumber=1&realEstateType=A01",
             # 최근 시세 (추가 파라미터 필요)
             f"{base_url}/marketPrice/recent?complexNumber={complex_id}&pyeongTypeNumber=1&realEstateType=A01",
+            # 주의: askingPrice 엔드포인트는 현재 네이버에서 제공하지 않음 (404 에러)
+            # f"{base_url}/marketPrice/askingPrice?complexNumber={complex_id}&pyeongTypeNumber=1",
         ]
 
         detail_data: dict[str, Any] = {
@@ -633,9 +633,28 @@ class NaverRealEstateCrawler:
         if "pyeongList" in raw_data:
             pyeong_data = raw_data["pyeongList"]
             if isinstance(pyeong_data, dict) and "result" in pyeong_data:
-                parsed["pyeong_info"] = pyeong_data["result"]
-                # pyeong_types 필드도 추가 (coordinator에서 사용)
-                parsed["pyeong_types"] = pyeong_data["result"]
+                result_data = pyeong_data["result"]
+                parsed["pyeong_info"] = result_data
+
+                # pyeong_types 필드 추가 (coordinator에서 사용)
+                # result_data가 유효한 리스트 또는 딕셔너리인지 확인
+                if isinstance(result_data, (list, dict)):
+                    parsed["pyeong_types"] = result_data
+                else:
+                    self.logger.warning(
+                        "invalid_pyeong_types_data",
+                        complex_id=raw_data.get("complex_id"),
+                        data_type=type(result_data),
+                        data=str(result_data)[:200] if result_data else None,
+                    )
+                    parsed["pyeong_types"] = []  # 빈 리스트로 초기화하여 오류 방지
+            else:
+                self.logger.warning(
+                    "invalid_pyeong_data_structure",
+                    complex_id=raw_data.get("complex_id"),
+                    pyeong_data_type=type(pyeong_data),
+                )
+                parsed["pyeong_types"] = []  # 빈 리스트로 초기화
 
         # 보유세 정보 파싱
         if "holdingTax" in raw_data:
@@ -891,144 +910,59 @@ class NaverRealEstateCrawler:
                 # Rate limiting 적용
                 self.rate_limiter.wait()
 
-                # GraphQL API URL (모든 거래내용 조회)
+                # REST API URL (API 가이드에 따른 올바른 엔드포인트)
                 api_url = (
-                    f"https://fin.land.naver.com/graphql"
-                    f"?complexNo={complex_id}"
-                    f"&pyeongTypeNumber={pyeong_type_number}"
-                    f"&tradeTypeCode={trade_type}"
-                    f"&page={page}"
+                    f"https://fin.land.naver.com/front-api/v1/complex/pyeong/realPrice?"
+                    f"complexNumber={complex_id}&"
+                    f"pyeongTypeNumber={pyeong_type_number}&"
+                    f"tradeType={trade_type}&"
+                    f"page={page}&"
+                    f"size=20"
                 )
 
                 try:
-                    # GraphQL 쿼리 실행
+                    # REST API 호출
                     result = page_obj.evaluate(
                         """
                         async (url) => {
-                            const variables = {
-                                first: 20,
-                                after: "",
-                                tradeTypeCode: "",
-                                complexNo: "",
-                                pyeongTypeNumber: 0,
-                                isMine: false,
-                                realEstateTypeCode: "",
-                                orderTypeCode: "RECENT"
-                            };
-
-                            // URL에서 파라미터 추출
-                            const urlParams = new URLSearchParams(url.split('?')[1]);
-                            if (urlParams.has('complexNo')) {
-                                variables.complexNo = urlParams.get('complexNo');
-                            }
-                            if (urlParams.has('pyeongTypeNumber')) {
-                                variables.pyeongTypeNumber = parseInt(urlParams.get('pyeongTypeNumber'));
-                            }
-                            if (urlParams.has('tradeTypeCode')) {
-                                variables.tradeTypeCode = urlParams.get('tradeTypeCode');
-                            }
-
-                            // 페이지네이션을 위한 cursor 설정
-                            if (page > 1) {
-                                // 이전 페이지의 마지막 항목으로 cursor 설정 (실제로는 API에서 제공하는 cursor 사용)
-                                variables.after = btoa(`arrayconnection:${(page - 1) * 19}`);
-                            }
-
-                            const query = `
-                                query DealHistories(
-                                    $first: Int!,
-                                    $after: String,
-                                    $tradeTypeCode: String!,
-                                    $complexNo: String!,
-                                    $pyeongTypeNumber: Int!,
-                                    $isMine: Boolean!,
-                                    $realEstateTypeCode: String,
-                                    $orderTypeCode: String!
-                                ) {
-                                    dealHistories(
-                                        first: $first,
-                                        after: $after,
-                                        tradeTypeCode: $tradeTypeCode,
-                                        complexNo: $complexNo,
-                                        pyeongTypeNumber: $pyeongTypeNumber,
-                                        isMine: $isMine,
-                                        realEstateTypeCode: $realEstateTypeCode,
-                                        orderTypeCode: $orderTypeCode
-                                    ) {
-                                        totalCount
-                                        edges {
-                                            node {
-                                                tradeType
-                                                exclusivePyeong
-                                                dealYear
-                                                dealMonth
-                                                dealDay
-                                                dealAmount
-                                                floor
-                                                buildingName
-                                                cancelDealType
-                                                agentName
-                                                __typename
-                                            }
-                                            cursor
-                                            __typename
-                                        }
-                                        pageInfo {
-                                            hasNextPage
-                                            endCursor
-                                            __typename
-                                        }
-                                        __typename
-                                    }
-                                }
-                            `;
-
-                            const response = await fetch('https://fin.land.naver.com/graphql', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                    query: query,
-                                    variables: variables
-                                })
-                            });
-
-                            if (!response.ok) {
-                                const errorText = await response.text();
-                                throw new Error(`HTTP ${response.status}: ${errorText}`);
-                            }
-
-                            const responseText = await response.text();
-
-                            // 응답이 JSON인지 확인
-                            if (responseText.trim().startsWith('<')) {
-                                throw new Error('Received HTML instead of JSON - likely blocked or redirected');
-                            }
-
                             try {
-                                return JSON.parse(responseText);
-                            } catch (parseError) {
-                                throw new Error(`Invalid JSON response: ${parseError.message}. Response starts with: ${responseText.substring(0, 100)}`);
+                                const response = await fetch(url, {
+                                    method: 'GET',
+                                    headers: {
+                                        'Accept': 'application/json, text/plain, */*',
+                                        'Accept-Language': 'ko-KR,ko;q=0.9'
+                                    }
+                                });
+
+                                if (!response.ok) {
+                                    const errorText = await response.text();
+                                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                                }
+
+                                return await response.json();
+                            } catch (error) {
+                                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                                    throw new Error('Network error: Failed to fetch');
+                                }
+                                throw error;
                             }
                         }
                         """,
                         api_url,
                     )
 
-                    # 응답 확인
-                    if "data" not in result or "dealHistories" not in result["data"]:
+                    # 응답 확인 (REST API 형식)
+                    if not result.get("isSuccess") or "result" not in result:
                         self.logger.error(
                             "invalid_transaction_response",
                             result=result,
                         )
                         break
 
-                    deal_histories = result["data"]["dealHistories"]
-                    edges = deal_histories.get("edges", [])
+                    api_result = result["result"]
+                    transactions_list = api_result.get("list", [])
 
-                    if not edges:
+                    if not transactions_list:
                         self.logger.info(
                             "no_more_transactions",
                             complex_id=complex_id,
@@ -1038,27 +972,26 @@ class NaverRealEstateCrawler:
 
                     # 데이터 파싱
                     page_transactions = []
-                    for edge in edges:
-                        node = edge.get("node", {})
-                        if not node:
+                    for txn in transactions_list:
+                        if not txn:
                             continue
 
                         try:
+                            # API 가이드에 따른 필드 매핑
                             transaction = {
                                 "complex_id": complex_id,
                                 "complex_name": complex_name,
                                 "pyeong_type_number": pyeong_type_number,
                                 "pyeong_name": pyeong_name,
-                                "trade_type": node.get("tradeType"),
-                                "exclusive_pyeong": node.get("exclusivePyeong"),
-                                "deal_year": node.get("dealYear"),
-                                "deal_month": node.get("dealMonth"),
-                                "deal_day": node.get("dealDay"),
-                                "deal_amount": node.get("dealAmount"),
-                                "floor": node.get("floor"),
-                                "building_name": node.get("buildingName"),
-                                "cancel_deal_type": node.get("cancelDealType"),
-                                "agent_name": node.get("agentName"),
+                                "trade_date": txn.get("tradeDate"),
+                                "trade_year": txn.get("tradeYear"),
+                                "deal_price": txn.get("dealPrice"),
+                                "deposit": txn.get("deposit"),
+                                "monthly_rent": txn.get("monthlyRent"),
+                                "floor": txn.get("floor"),
+                                "trade_category": txn.get("tradeCategory"),
+                                "is_delete": txn.get("isDelete"),
+                                "is_renew": txn.get("isRenew"),
                                 "fetched_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                             }
                             page_transactions.append(transaction)
@@ -1066,7 +999,7 @@ class NaverRealEstateCrawler:
                             self.logger.warning(
                                 "failed_to_parse_transaction",
                                 error=str(e),
-                                node=node,
+                                transaction=txn,
                             )
 
                     all_transactions.extend(page_transactions)
@@ -1076,12 +1009,10 @@ class NaverRealEstateCrawler:
                         complex_id=complex_id,
                         page=page,
                         count=len(page_transactions),
-                        total_count=deal_histories.get("totalCount", 0),
                     )
 
                     # 다음 페이지 확인
-                    page_info = deal_histories.get("pageInfo", {})
-                    if not page_info.get("hasNextPage", False):
+                    if not api_result.get("hasNextPage", False):
                         self.logger.info(
                             "reached_last_transaction_page",
                             complex_id=complex_id,

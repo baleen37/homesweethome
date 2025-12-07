@@ -26,7 +26,7 @@ class AdaptiveRateLimiter:
 
     def __init__(self) -> None:
         """Initialize rate limiter with default values."""
-        self.current_delay: float = 2.5  # Initial delay in seconds
+        self.current_delay: float = 5.0  # Initial delay in seconds
         self.min_delay: Final[float] = 1.5  # Minimum allowed delay
         self.max_delay: Final[float] = 10.0  # Maximum allowed delay
         self.error_count: int = 0  # Consecutive 429 error count
@@ -126,7 +126,7 @@ class AdaptiveRateLimiter:
 
     def reset(self) -> None:
         """Reset rate limiter to initial state."""
-        self.current_delay = 2.5
+        self.current_delay = 5.0
         self.error_count = 0
         self.success_count = 0
         self._last_wait_time = None
