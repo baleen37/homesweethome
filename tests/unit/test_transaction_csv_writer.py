@@ -180,15 +180,16 @@ class TestTransactionCSVWriter(TestCase):
         ]
 
         for i, case in enumerate(test_cases):
-            normalized = self.writer._normalize_transaction(case)
+            normalized = self.writer._normalize_transaction(case)  # type: ignore[arg-type]
+            case_dict: dict[str, Any] = case  # type: ignore[assignment]
             self.assertEqual(
                 normalized["is_delete"],
-                True if str(case.get("is_delete", "")).lower() in ("true", "1") else False,
+                True if str(case_dict.get("is_delete", "")).lower() in ("true", "1") else False,
                 f"Test case {i} failed for is_delete",
             )
             self.assertEqual(
                 normalized["is_renew"],
-                True if str(case.get("is_renew", "")).lower() in ("true", "1") else False,
+                True if str(case_dict.get("is_renew", "")).lower() in ("true", "1") else False,
                 f"Test case {i} failed for is_renew",
             )
 

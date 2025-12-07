@@ -3,35 +3,26 @@
 import pytest
 from pathlib import Path
 from crawler.config import CrawlerConfig
-from typing import Any
+from typing import Any, Dict
 
 
 def pytest_addoption(parser):
     """pytest 커맨드 라인 옵션 추가"""
-    parser.addoption(
-        "--run-slow",
-        action="store_true",
-        default=False,
-        help="run slow tests"
-    )
+    parser.addoption("--run-slow", action="store_true", default=False, help="run slow tests")
     parser.addoption(
         "--run-integration",
         action="store_true",
         default=False,
-        help="run integration tests with real API calls"
+        help="run integration tests with real API calls",
     )
 
 
 def pytest_configure(config):
     """pytest 설정 초기화"""
     config.addinivalue_line(
-        "markers",
-        "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
     )
-    config.addinivalue_line(
-        "markers",
-        "integration: marks tests as integration tests"
-    )
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -54,11 +45,7 @@ def test_config(tmp_path: Path) -> CrawlerConfig:
     """테스트용 CrawlerConfig fixture"""
     output_dir = tmp_path / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
-    return CrawlerConfig(
-        headless=True,
-        timeout=30,
-        output_dir=str(output_dir)
-    )
+    return CrawlerConfig(headless=True, timeout=30, output_dir=str(output_dir))
 
 
 @pytest.fixture
@@ -90,6 +77,22 @@ def sample_districts_data() -> dict[str, Any]:
             {"district_code": "1117000000", "district_name": "은평구"},
             {"district_code": "1114000000", "district_name": "종로구"},
             {"district_code": "1116500000", "district_name": "중구"},
-            {"district_code": "1172000000", "district_name": "중랑구"}
+            {"district_code": "1172000000", "district_name": "중랑구"},
         ]
+    }
+
+
+@pytest.fixture
+def naver_config() -> Dict[str, str]:
+    """네이버 부동산 API 테스트용 설정 fixture"""
+    return {
+        "base_url": "https://m.land.naver.com",
+        "sample_cortar_no": "1168010500",  # 서울 강남구 개포동
+        "sample_bounds": "37.478385,127.048329,37.513308,127.106925",  # 강남구 개포동 근처
+        "default_headers": {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "ko-KR,ko;q=0.9",
+            "Referer": "https://m.land.naver.com/",
+        },
     }

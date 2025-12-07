@@ -1,6 +1,7 @@
 """Tests for statistics calculation utilities."""
 
 from datetime import datetime
+from typing import Any
 
 from crawler.utils.statistics import (
     _filter_transactions_by_date,
@@ -19,11 +20,9 @@ class TestStatisticsCalculation:
             "complex_id": "111515",
             "complex_name": "헬리오시티",
         }
-        transactions = []
+        transactions: list[dict[str, Any]] = []
 
-        result = calculate_statistics_from_transactions(
-            complex_data, transactions
-        )
+        result = calculate_statistics_from_transactions(complex_data, transactions)
 
         # Check that all statistics fields are present with defaults
         assert result["total_transaction_count"] == 0
@@ -89,9 +88,7 @@ class TestStatisticsCalculation:
 
         # Use a fixed current date for predictable results
         current_date = datetime(2025, 12, 6)
-        result = calculate_statistics_from_transactions(
-            complex_data, transactions, current_date
-        )
+        result = calculate_statistics_from_transactions(complex_data, transactions, current_date)
 
         # Check total transaction count (excluding deleted)
         assert result["total_transaction_count"] == 4
@@ -135,9 +132,7 @@ class TestStatisticsCalculation:
         ]
 
         current_date = datetime(2025, 12, 6)
-        result = calculate_statistics_from_transactions(
-            complex_data, transactions, current_date
-        )
+        result = calculate_statistics_from_transactions(complex_data, transactions, current_date)
 
         # Still has total count
         assert result["total_transaction_count"] == 2
@@ -278,9 +273,7 @@ class TestStatisticsCalculation:
         ]
 
         current_date = datetime(2025, 12, 6)
-        result = calculate_statistics_from_transactions(
-            complex_data, transactions, current_date
-        )
+        result = calculate_statistics_from_transactions(complex_data, transactions, current_date)
 
         # Check average calculation: (1500 + 1600 + 1700) / 3 = 1600
         assert result["avg_deal_price_1year"] == 1600000000
@@ -308,9 +301,7 @@ class TestStatisticsCalculation:
         ]
 
         current_date = datetime(2025, 12, 6)
-        result = calculate_statistics_from_transactions(
-            complex_data, transactions, current_date
-        )
+        result = calculate_statistics_from_transactions(complex_data, transactions, current_date)
 
         # Latest deal price should be 0 since latest transaction is not 매매
         assert result["latest_deal_price"] == 0

@@ -26,7 +26,7 @@ class TestNaverCrawlerIntegration:
             "tradeDate": "2025-11-14",
             "floor": 21,
             "dealPrice": 1700000000,
-            "isDelete": False
+            "isDelete": False,
         }
         assert crawler._validate_transaction(valid_txn) is True
 
@@ -35,25 +35,16 @@ class TestNaverCrawlerIntegration:
             "tradeDate": "2025-11-14",
             "floor": 21,
             "dealPrice": 1700000000,
-            "isDelete": True
+            "isDelete": True,
         }
         assert crawler._validate_transaction(deleted_txn) is False
 
         # Invalid transaction (missing fields)
-        incomplete_txn = {
-            "floor": 21,
-            "dealPrice": 1700000000,
-            "isDelete": False
-        }
+        incomplete_txn = {"floor": 21, "dealPrice": 1700000000, "isDelete": False}
         assert crawler._validate_transaction(incomplete_txn) is False
 
         # Invalid transaction (empty trade date)
-        empty_date_txn = {
-            "tradeDate": "",
-            "floor": 21,
-            "dealPrice": 1700000000,
-            "isDelete": False
-        }
+        empty_date_txn = {"tradeDate": "", "floor": 21, "dealPrice": 1700000000, "isDelete": False}
         assert crawler._validate_transaction(empty_date_txn) is False
 
     def test_parse_transaction_method(self, config):
@@ -69,7 +60,7 @@ class TestNaverCrawlerIntegration:
             "monthlyRent": 0,
             "isDelete": False,
             "tradeCategory": "중개거래",
-            "isRenew": False
+            "isRenew": False,
         }
 
         parsed = crawler._parse_transaction(
@@ -78,7 +69,7 @@ class TestNaverCrawlerIntegration:
             complex_name="테스트단지",
             pyeong_type_number=1,
             pyeong_name="84A",
-            trade_type="A1"
+            trade_type="A1",
         )
 
         # Verify all fields are properly set
@@ -111,7 +102,7 @@ class TestNaverCrawlerIntegration:
             "monthlyRent": 0,
             "isDelete": False,
             "tradeCategory": "중개거래",
-            "isRenew": False
+            "isRenew": False,
         }
 
         # Test 매매 (A1)
@@ -121,7 +112,7 @@ class TestNaverCrawlerIntegration:
             complex_name="테스트단지",
             pyeong_type_number=1,
             pyeong_name="84A",
-            trade_type="A1"
+            trade_type="A1",
         )
         assert parsed_a1["trade_type_name"] == "매매"
 
@@ -132,7 +123,7 @@ class TestNaverCrawlerIntegration:
             complex_name="테스트단지",
             pyeong_type_number=1,
             pyeong_name="84A",
-            trade_type="B1"
+            trade_type="B1",
         )
         assert parsed_b1["trade_type_name"] == "전세"
 
@@ -143,16 +134,12 @@ class TestNaverCrawlerIntegration:
             complex_name="테스트단지",
             pyeong_type_number=1,
             pyeong_name="84A",
-            trade_type="B2"
+            trade_type="B2",
         )
         assert parsed_b2["trade_type_name"] == "월세"
 
-    @patch('crawler.crawlers.naver.sync_playwright')
-    def test_fetch_transaction_history_with_mock_browser(
-        self,
-        mock_playwright,
-        config
-    ):
+    @patch("crawler.crawlers.naver.sync_playwright")
+    def test_fetch_transaction_history_with_mock_browser(self, mock_playwright, config):
         """Test fetch_transaction_history with properly mocked browser."""
         # Mock response data
         mock_response = {
@@ -169,11 +156,11 @@ class TestNaverCrawlerIntegration:
                         "isDelete": False,
                         "tradeCategory": "중개거래",
                         "propertyType": "NORMAL",
-                        "isRenew": False
+                        "isRenew": False,
                     }
                 ],
-                "hasNextPage": False
-            }
+                "hasNextPage": False,
+            },
         }
 
         # Setup proper browser mock
@@ -195,7 +182,7 @@ class TestNaverCrawlerIntegration:
         mock_playwright.return_value = mock_cm
 
         # Mock Path for data file
-        with patch('crawler.crawlers.naver.Path') as mock_path:
+        with patch("crawler.crawlers.naver.Path") as mock_path:
             mock_path_instance = Mock()
             mock_path_instance.exists.return_value = True
             mock_path.return_value = mock_path_instance
@@ -218,7 +205,7 @@ class TestNaverCrawlerIntegration:
                 pyeong_type_number=1,
                 trade_type="A1",
                 complex_name="테스트단지",
-                pyeong_name="84A"
+                pyeong_name="84A",
             )
 
             # Verify results
@@ -235,15 +222,18 @@ class TestNaverCrawlerIntegration:
         from crawler.crawlers.naver import NaverRealEstateCrawler
 
         # Verify the method exists and has correct signature
-        assert hasattr(NaverRealEstateCrawler, 'crawl')
+        assert hasattr(NaverRealEstateCrawler, "crawl")
         import inspect
+
         sig = inspect.signature(NaverRealEstateCrawler.crawl)
-        assert 'self' in sig.parameters
+        assert "self" in sig.parameters
         assert len(sig.parameters) == 1  # Only self parameter
 
         # Verify helper method exists
-        assert hasattr(NaverRealEstateCrawler, '_fetch_transaction_history_with_details')
-        helper_sig = inspect.signature(NaverRealEstateCrawler._fetch_transaction_history_with_details)
-        expected_params = ['self', 'complex_id', 'pyeong_type_number', 'trade_type']
+        assert hasattr(NaverRealEstateCrawler, "_fetch_transaction_history_with_details")
+        helper_sig = inspect.signature(
+            NaverRealEstateCrawler._fetch_transaction_history_with_details
+        )
+        expected_params = ["self", "complex_id", "pyeong_type_number", "trade_type"]
         actual_params = list(helper_sig.parameters.keys())
         assert actual_params == expected_params

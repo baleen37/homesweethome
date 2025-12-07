@@ -25,6 +25,7 @@ class TestProgressTracker:
         """테스트 메서드 실행 후 정리"""
         # 임시 파일 정리
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_init(self):
@@ -173,7 +174,7 @@ class TestProgressTracker:
         assert "elapsed_time_formatted" in summary
         assert "eta_formatted" in summary
 
-    @patch('sys.stdout')
+    @patch("sys.stdout")
     def test_print_progress_report(self, mock_stdout):
         """진행 상황 리포트 출력 테스트"""
         self.tracker.start_crawling(total_dongs=10, total_complexes=100)

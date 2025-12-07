@@ -13,9 +13,11 @@ class TestAdaptiveRateLimiterIntegration:
         """Test rate limiter behavior during successful API calls."""
         limiter = AdaptiveRateLimiter()
 
-        with patch('time.sleep') as mock_sleep, \
-             patch('time.time', return_value=0), \
-             patch('crawler.rate_limiter.logger.info'):  # Mock structlog to avoid interference
+        with (
+            patch("time.sleep") as mock_sleep,
+            patch("time.time", return_value=0),
+            patch("crawler.rate_limiter.logger.info"),
+        ):  # Mock structlog to avoid interference
             # Simulate 15 successful API calls
             for _ in range(15):
                 # Each API call starts with waiting
@@ -41,9 +43,11 @@ class TestAdaptiveRateLimiterIntegration:
         """Test rate limiter behavior with HTTP 429 errors."""
         limiter = AdaptiveRateLimiter()
 
-        with patch('time.sleep') as mock_sleep, \
-             patch('crawler.rate_limiter.logger.info'):  # Mock structlog
-            with patch('time.time', return_value=0):  # Mock time to be constant
+        with (
+            patch("time.sleep") as mock_sleep,
+            patch("crawler.rate_limiter.logger.info"),
+        ):  # Mock structlog
+            with patch("time.time", return_value=0):  # Mock time to be constant
                 # Start with some successes
                 for _ in range(5):
                     limiter.wait()
@@ -73,9 +77,11 @@ class TestAdaptiveRateLimiterIntegration:
         """Test realistic mixed scenario with errors and recovery."""
         limiter = AdaptiveRateLimiter()
 
-        with patch('time.sleep') as mock_sleep, \
-             patch('crawler.rate_limiter.logger.info'):  # Mock structlog
-            with patch('time.time', return_value=0):  # Mock time to be constant
+        with (
+            patch("time.sleep") as mock_sleep,
+            patch("crawler.rate_limiter.logger.info"),
+        ):  # Mock structlog
+            with patch("time.time", return_value=0):  # Mock time to be constant
                 # Phase 1: Initial successes
                 for _ in range(5):
                     limiter.wait()
@@ -115,8 +121,7 @@ class TestAdaptiveRateLimiterIntegration:
         limiter = AdaptiveRateLimiter()
         limiter.current_delay = 10.0  # Start at max delay
 
-        with patch('time.sleep') as mock_sleep, \
-             patch('time.time', return_value=0):
+        with patch("time.sleep") as mock_sleep, patch("time.time", return_value=0):
             # Even with 429 errors, delay shouldn't exceed max
             for _ in range(3):
                 limiter.wait()
@@ -131,8 +136,7 @@ class TestAdaptiveRateLimiterIntegration:
         limiter = AdaptiveRateLimiter()
         limiter.current_delay = 1.5  # Start at min delay
 
-        with patch('time.sleep') as mock_sleep, \
-             patch('time.time', return_value=0):
+        with patch("time.sleep") as mock_sleep, patch("time.time", return_value=0):
             # Even with many successes, delay shouldn't go below min
             for _ in range(20):  # Two cycles of 10 successes
                 limiter.wait()
@@ -146,9 +150,11 @@ class TestAdaptiveRateLimiterIntegration:
         """Test resetting rate limiter during active session."""
         limiter = AdaptiveRateLimiter()
 
-        with patch('time.sleep'), \
-             patch('time.time', return_value=0), \
-             patch('crawler.rate_limiter.logger.info'):  # Mock structlog
+        with (
+            patch("time.sleep"),
+            patch("time.time", return_value=0),
+            patch("crawler.rate_limiter.logger.info"),
+        ):  # Mock structlog
             # Build up some state
             for _ in range(15):
                 limiter.wait()
@@ -175,15 +181,14 @@ class TestAdaptiveRateLimiterIntegration:
 
         call_results = []
 
-        with patch('time.sleep') as mock_sleep, \
-             patch('time.time', return_value=0):
+        with patch("time.sleep") as mock_sleep, patch("time.time", return_value=0):
             # Simulate fetching data with varying success rates
             scenarios = [
-                ("batch1", "success", 8),    # 8 successes
-                ("batch2", "rate_limit", 1), # 1 rate limit error
-                ("batch3", "success", 12),   # 12 successes
-                ("batch4", "error", 2),      # 2 general errors
-                ("batch5", "success", 5),    # 5 more successes
+                ("batch1", "success", 8),  # 8 successes
+                ("batch2", "rate_limit", 1),  # 1 rate limit error
+                ("batch3", "success", 12),  # 12 successes
+                ("batch4", "error", 2),  # 2 general errors
+                ("batch5", "success", 5),  # 5 more successes
             ]
 
             for batch_name, result_type, count in scenarios:

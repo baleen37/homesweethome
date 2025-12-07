@@ -18,11 +18,7 @@ from crawler.crawlers.naver import NaverRealEstateCrawler
 @pytest.fixture
 def test_config(tmp_path: Path) -> CrawlerConfig:
     """테스트용 CrawlerConfig fixture"""
-    return CrawlerConfig(
-        headless=True,
-        timeout=30,
-        output_dir=str(tmp_path / "output")
-    )
+    return CrawlerConfig(headless=True, timeout=30, output_dir=str(tmp_path / "output"))
 
 
 @pytest.fixture
@@ -76,11 +72,13 @@ def test_crawl_single_district_real_api(test_config, setup_test_output):
 
     # districts_data를 강남구의 첫 번째 동만으로 수정
     crawler.districts_data = {
-        "districts": [{
-            "district_name": districts[0]["district_name"],
-            "district_code": districts[0]["district_code"],
-            "dongs": [test_dong]  # 첫 번째 동만
-        }]
+        "districts": [
+            {
+                "district_name": districts[0]["district_name"],
+                "district_code": districts[0]["district_code"],
+                "dongs": [test_dong],  # 첫 번째 동만
+            }
+        ]
     }
 
     # 크롤러 실행
@@ -123,14 +121,20 @@ def test_crawl_single_district_real_api(test_config, setup_test_output):
     assert checkpoint_path.exists(), "체크포인트 파일이 생성되지 않았습니다"
     with open(checkpoint_path, encoding="utf-8") as f:
         checkpoint = json.load(f)
-        assert checkpoint.get("district_filter") == ["강남구"], "체크포인트에 district_filter가 올바르게 저장되지 않았습니다"
+        assert checkpoint.get("district_filter") == [
+            "강남구"
+        ], "체크포인트에 district_filter가 올바르게 저장되지 않았습니다"
         assert "last_dong" in checkpoint, "체크포인트에 last_dong이 없습니다"
 
     print("\n✅ test_crawl_single_district_real_api 테스트 통과!")
     print(f"   - 처리된 동: {results['dongs_processed']}개")
     print(f"   - 처리된 단지: {results['total_complexes_processed']}개")
-    print(f"   - complexes.csv: {len(Path(test_config.output_dir, 'complexes.csv').read_text(encoding='utf-8').splitlines())} 라인")
-    print(f"   - transactions.csv: {len(Path(test_config.output_dir, 'transactions.csv').read_text(encoding='utf-8').splitlines())} 라인")
+    print(
+        f"   - complexes.csv: {len(Path(test_config.output_dir, 'complexes.csv').read_text(encoding='utf-8').splitlines())} 라인"
+    )
+    print(
+        f"   - transactions.csv: {len(Path(test_config.output_dir, 'transactions.csv').read_text(encoding='utf-8').splitlines())} 라인"
+    )
 
 
 @pytest.mark.slow
@@ -190,7 +194,9 @@ def test_crawl_multiple_districts_real_api(test_config):
     with open(checkpoint_path, encoding="utf-8") as f:
         checkpoint = json.load(f)
         saved_filter = checkpoint.get("district_filter", [])
-        assert set(saved_filter) == set(target_districts), "체크포인트에 district_filter가 올바르게 저장되지 않았습니다"
+        assert set(saved_filter) == set(
+            target_districts
+        ), "체크포인트에 district_filter가 올바르게 저장되지 않았습니다"
 
     print("\n✅ test_crawl_multiple_districts_real_api 테스트 통과!")
 
@@ -289,11 +295,13 @@ def test_resume_with_different_district_filter(test_config):
     districts = crawler.filter_districts(["강남구"])
     first_dong = districts[0]["dongs"][0]
     crawler.districts_data = {
-        "districts": [{
-            "district_name": districts[0]["district_name"],
-            "district_code": districts[0]["district_code"],
-            "dongs": [first_dong]
-        }]
+        "districts": [
+            {
+                "district_name": districts[0]["district_name"],
+                "district_code": districts[0]["district_code"],
+                "dongs": [first_dong],
+            }
+        ]
     }
 
     # 크롤링 실행하여 체크포인트 생성
@@ -313,7 +321,7 @@ def test_resume_with_different_district_filter(test_config):
     crawler2 = NaverRealEstateCrawler(test_config)
 
     # validate_resume 메서드가 있는 경우 테스트
-    if hasattr(crawler2, 'validate_resume'):
+    if hasattr(crawler2, "validate_resume"):
         is_valid = crawler2.validate_resume(["서초구"])
         assert not is_valid, "다른 구 필터로 resume은 불가능해야 합니다"
         print("validate_resume: False (올바름)")
@@ -324,8 +332,9 @@ def test_resume_with_different_district_filter(test_config):
 
         # 에러 종류 확인 (구현에 따라 다를 수 있음)
         error_message = str(exc_info.value).lower()
-        assert any(keyword in error_message for keyword in ["district", "filter", "mismatch", "different"]), \
-            "구 필터 불일치 에러가 발생해야 합니다"
+        assert any(
+            keyword in error_message for keyword in ["district", "filter", "mismatch", "different"]
+        ), "구 필터 불일치 에러가 발생해야 합니다"
         print(f"에러 발생: {str(exc_info.value)}")
 
     print("\n✅ test_resume_with_different_district_filter 테스트 통과!")
@@ -387,8 +396,9 @@ def test_crawl_all_districts_vs_filtered(test_config):
     print(f"\n두 방법의 단지 수 차이: {difference}개")
 
     # 허용 가능한 차이 (네트워크 타이밍에 따라 약간의 차이는 있을 수 있음)
-    assert difference <= max(complexes_count1, complexes_count2) * 0.1, \
-        f"두 방법의 결과 차이가 너무 큽니다: {difference}"
+    assert (
+        difference <= max(complexes_count1, complexes_count2) * 0.1
+    ), f"두 방법의 결과 차이가 너무 큽니다: {difference}"
 
     print("\n✅ test_crawl_all_districts_vs_filtered 테스트 통과!")
     print(f"   - 방법 1 (직접 설정): {complexes_count1}개 단지")

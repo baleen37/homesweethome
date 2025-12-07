@@ -76,12 +76,18 @@ class ProgressTracker:
         """파일 로깅 설정"""
         if self.log_file:
             # JSON 형식으로 구조화된 로그 기록
-            self.log_file.write(json.dumps({
-                "timestamp": time.time(),
-                "level": "INFO",
-                "event": "progress_tracking_started",
-                "output_dir": str(self.output_dir),
-            }, ensure_ascii=False) + "\n")
+            self.log_file.write(
+                json.dumps(
+                    {
+                        "timestamp": time.time(),
+                        "level": "INFO",
+                        "event": "progress_tracking_started",
+                        "output_dir": str(self.output_dir),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
             self.log_file.flush()
 
     def start_crawling(
@@ -95,11 +101,13 @@ class ProgressTracker:
             total_dongs: 전체 동 수
             total_complexes: 전체 단지 수
         """
-        self.stats.update({
-            "start_time": time.time(),
-            "total_dongs": total_dongs,
-            "total_complexes": total_complexes,
-        })
+        self.stats.update(
+            {
+                "start_time": time.time(),
+                "total_dongs": total_dongs,
+                "total_complexes": total_complexes,
+            }
+        )
 
         self.logger.info(
             "crawling_started",
@@ -129,14 +137,20 @@ class ProgressTracker:
 
         # 파일 로그에도 기록
         if self.log_file:
-            self.log_file.write(json.dumps({
-                "timestamp": time.time(),
-                "level": "INFO",
-                "event": "dong_started",
-                "dong_code": dong_code,
-                "dong_name": dong_name,
-                "complex_count": complex_count,
-            }, ensure_ascii=False) + "\n")
+            self.log_file.write(
+                json.dumps(
+                    {
+                        "timestamp": time.time(),
+                        "level": "INFO",
+                        "event": "dong_started",
+                        "dong_code": dong_code,
+                        "dong_name": dong_name,
+                        "complex_count": complex_count,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
             self.log_file.flush()
 
     def complete_dong(
@@ -165,18 +179,22 @@ class ProgressTracker:
         self.stats["errors"].extend(errors)
 
         # 타이밍 기록 (평균 속도 계산용)
-        self.timings.append({
-            "type": "dong",
-            "duration": duration,
-            "complexes": complexes_processed,
-            "transactions": transactions_collected,
-            "timestamp": time.time(),
-        })
+        self.timings.append(
+            {
+                "type": "dong",
+                "duration": duration,
+                "complexes": complexes_processed,
+                "transactions": transactions_collected,
+                "timestamp": time.time(),
+            }
+        )
 
         # 최근 10개의 동 타이밍으로 평균 계산
         recent_dong_timings = [t for t in self.timings if t["type"] == "dong"][-10:]
         if recent_dong_timings:
-            self.stats["avg_dong_time"] = sum(t["duration"] for t in recent_dong_timings) / len(recent_dong_timings)
+            self.stats["avg_dong_time"] = sum(t["duration"] for t in recent_dong_timings) / len(
+                recent_dong_timings
+            )
 
         self.logger.info(
             "dong_processing_completed",
@@ -230,17 +248,21 @@ class ProgressTracker:
         self.stats["collected_transactions"] += transactions_collected
 
         # 타이밍 기록
-        self.timings.append({
-            "type": "complex",
-            "duration": duration,
-            "transactions": transactions_collected,
-            "timestamp": time.time(),
-        })
+        self.timings.append(
+            {
+                "type": "complex",
+                "duration": duration,
+                "transactions": transactions_collected,
+                "timestamp": time.time(),
+            }
+        )
 
         # 최근 50개의 단지 타이밍으로 평균 계산
         recent_complex_timings = [t for t in self.timings if t["type"] == "complex"][-50:]
         if recent_complex_timings:
-            self.stats["avg_complex_time"] = sum(t["duration"] for t in recent_complex_timings) / len(recent_complex_timings)
+            self.stats["avg_complex_time"] = sum(
+                t["duration"] for t in recent_complex_timings
+            ) / len(recent_complex_timings)
 
         # 디버그 레벨로 로그
         self.logger.debug(
@@ -272,12 +294,18 @@ class ProgressTracker:
 
         # 파일 로그에도 기록
         if self.log_file:
-            self.log_file.write(json.dumps({
-                "timestamp": time.time(),
-                "level": "ERROR",
-                "event": "error_occurred",
-                "error": error,
-            }, ensure_ascii=False) + "\n")
+            self.log_file.write(
+                json.dumps(
+                    {
+                        "timestamp": time.time(),
+                        "level": "ERROR",
+                        "event": "error_occurred",
+                        "error": error,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
             self.log_file.flush()
 
     def get_progress_summary(self) -> Dict[str, Any]:
@@ -290,8 +318,16 @@ class ProgressTracker:
         elapsed = current_time - self.stats["start_time"]
 
         # 진행률 계산
-        dong_progress = (self.stats["completed_dongs"] / self.stats["total_dongs"] * 100) if self.stats["total_dongs"] > 0 else 0
-        complex_progress = (self.stats["completed_complexes"] / self.stats["total_complexes"] * 100) if self.stats["total_complexes"] > 0 else 0
+        dong_progress = (
+            (self.stats["completed_dongs"] / self.stats["total_dongs"] * 100)
+            if self.stats["total_dongs"] > 0
+            else 0
+        )
+        complex_progress = (
+            (self.stats["completed_complexes"] / self.stats["total_complexes"] * 100)
+            if self.stats["total_complexes"] > 0
+            else 0
+        )
 
         # 남은 시간 예측
         remaining_dongs = self.stats["total_dongs"] - self.stats["completed_dongs"]
@@ -310,39 +346,38 @@ class ProgressTracker:
 
         # 에러율
         total_operations = self.stats["completed_complexes"] + self.stats["completed_dongs"]
-        error_rate = (self.stats["error_count"] / total_operations * 100) if total_operations > 0 else 0
+        error_rate = (
+            (self.stats["error_count"] / total_operations * 100) if total_operations > 0 else 0
+        )
 
         return {
             "elapsed_time_seconds": elapsed,
             "elapsed_time_formatted": self._format_duration(elapsed),
             "eta_seconds": eta_seconds,
-            "eta_formatted": self._format_duration(eta_seconds) if eta_seconds > 0 else "계산 중...",
-
+            "eta_formatted": self._format_duration(eta_seconds)
+            if eta_seconds > 0
+            else "계산 중...",
             # 진행률
             "dong_progress_percent": round(dong_progress, 1),
             "completed_dongs": self.stats["completed_dongs"],
             "total_dongs": self.stats["total_dongs"],
             "remaining_dongs": remaining_dongs,
-
             "complex_progress_percent": round(complex_progress, 1),
             "completed_complexes": self.stats["completed_complexes"],
             "total_complexes": self.stats["total_complexes"],
-            "remaining_complexes": self.stats["total_complexes"] - self.stats["completed_complexes"],
-
+            "remaining_complexes": self.stats["total_complexes"]
+            - self.stats["completed_complexes"],
             # 수집된 데이터
             "collected_transactions": self.stats["collected_transactions"],
-
             # 성능 지표
             "avg_complex_time_seconds": round(self.stats["avg_complex_time"], 1),
             "avg_dong_time_seconds": round(self.stats["avg_dong_time"], 1),
             "complexes_per_hour": round(avg_complexes_per_hour, 1),
             "transactions_per_hour": round(avg_transactions_per_hour, 1),
-
             # 현재 상태
             "rate_limiter_delay": round(self.stats["rate_limiter_delay"], 1),
             "error_count": self.stats["error_count"],
             "error_rate_percent": round(error_rate, 1),
-
             # 마지막 업데이트 시간
             "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
@@ -362,13 +397,17 @@ class ProgressTracker:
         summary = self.get_progress_summary()
 
         # 콘솔 출력 (깔끔한 형식)
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print(f"[{summary['last_updated']}] 크롤링 진행 상황")
-        print("="*60)
+        print("=" * 60)
 
         # 진행률
-        print(f"동: {summary['completed_dongs']}/{summary['total_dongs']} ({summary['dong_progress_percent']}%)")
-        print(f"단지: {summary['completed_complexes']}/{summary['total_complexes']} ({summary['complex_progress_percent']}%)")
+        print(
+            f"동: {summary['completed_dongs']}/{summary['total_dongs']} ({summary['dong_progress_percent']}%)"
+        )
+        print(
+            f"단지: {summary['completed_complexes']}/{summary['total_complexes']} ({summary['complex_progress_percent']}%)"
+        )
         print(f"거래내역: {summary['collected_transactions']:,}건 수집")
 
         # 시간 정보
@@ -382,22 +421,30 @@ class ProgressTracker:
         print(f"  - 평균 Rate Limit: {summary['rate_limiter_delay']:.1f}초")
 
         # 에러 정보
-        if summary['error_count'] > 0:
-            print(f"\n⚠️  에러: {summary['error_count']}건 (에러율: {summary['error_rate_percent']}%)")
+        if summary["error_count"] > 0:
+            print(
+                f"\n⚠️  에러: {summary['error_count']}건 (에러율: {summary['error_rate_percent']}%)"
+            )
 
-        print("="*60)
+        print("=" * 60)
         sys.stdout.flush()
 
         self.last_report_time = current_time
 
         # 파일 로그에도 기록
         if self.log_file:
-            self.log_file.write(json.dumps({
-                "timestamp": current_time,
-                "level": "INFO",
-                "event": "progress_report",
-                "summary": summary,
-            }, ensure_ascii=False) + "\n")
+            self.log_file.write(
+                json.dumps(
+                    {
+                        "timestamp": current_time,
+                        "level": "INFO",
+                        "event": "progress_report",
+                        "summary": summary,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
             self.log_file.flush()
 
     def _check_report_interval(self) -> None:
@@ -453,12 +500,18 @@ class ProgressTracker:
 
         # 파일 로그 마무리
         if self.log_file:
-            self.log_file.write(json.dumps({
-                "timestamp": time.time(),
-                "level": "INFO",
-                "event": "crawling_finished",
-                "final_summary": final_summary,
-            }, ensure_ascii=False) + "\n")
+            self.log_file.write(
+                json.dumps(
+                    {
+                        "timestamp": time.time(),
+                        "level": "INFO",
+                        "event": "crawling_finished",
+                        "final_summary": final_summary,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
             self.log_file.close()
             self.log_file = None
 

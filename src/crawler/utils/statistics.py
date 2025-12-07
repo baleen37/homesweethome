@@ -27,10 +27,7 @@ def calculate_statistics_from_transactions(
         current_date = datetime.now()
 
     # Filter out deleted transactions
-    active_transactions = [
-        t for t in transactions
-        if not t.get("is_delete", False)
-    ]
+    active_transactions = [t for t in transactions if not t.get("is_delete", False)]
 
     # Calculate statistics
     one_year_ago = current_date - timedelta(days=365)
@@ -65,7 +62,9 @@ def calculate_statistics_from_transactions(
         # For lease/rent, we don't fill latest_deal_price (keep as 0)
 
     # Calculate statistics for the last year
-    recent_transactions = _filter_transactions_by_date(active_transactions, one_year_ago, current_date)
+    recent_transactions = _filter_transactions_by_date(
+        active_transactions, one_year_ago, current_date
+    )
 
     if recent_transactions:
         # Count by trade type

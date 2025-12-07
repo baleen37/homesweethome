@@ -1,10 +1,8 @@
 import argparse
-from datetime import datetime
 from pathlib import Path
 
 from crawler.config import CrawlerConfig
 from crawler.crawlers.naver import NaverRealEstateCrawler
-from crawler.writers.csv_writer import CSVWriter
 
 
 def main() -> None:
@@ -36,13 +34,15 @@ def main() -> None:
         district_filter = [d.strip() for d in args.district.split(",") if d.strip()]
 
     # 출력 파일명 생성
-    if args.output is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = Path(f"output/seoul_apartments_{timestamp}.csv")
-    else:
-        output_path = args.output
+    output_file = None
+    if args.output is not None:
+        output_file = str(args.output)
 
-    config = CrawlerConfig.from_env()
+    try:
+        config = CrawlerConfig.from_env(output_file=output_file)
+    except ValueError as e:
+        print(f"설정 오류: {e}")
+        exit(1)
 
     print("네이버 부동산 크롤링 시작...")
     if args.resume:
@@ -53,29 +53,38 @@ def main() -> None:
     crawler = NaverRealEstateCrawler(config)
 
     try:
-        results = crawler.crawl(district_filter=district_filter)
+        stats = crawler.crawl(district_filter=district_filter)
     except ValueError as e:
         print(f"\n오류: {e}")
         print("\n사용 가능한 구 목록을 확인하려면 다음 명령을 실행하세요:")
-        print("python -c \"from crawler.crawlers.naver import NaverRealEstateCrawler; from crawler.config import CrawlerConfig; c = NaverRealEstateCrawler(CrawlerConfig.from_env()); districts = [d['district_name'] for d in c.districts_data['districts']]; print(', '.join(sorted(districts)))\"")
+        print(
+            "python -c \"from crawler.crawlers.naver import NaverRealEstateCrawler; from crawler.config import CrawlerConfig; c = NaverRealEstateCrawler(CrawlerConfig.from_env()); districts = [d['district_name'] for d in c.districts_data['districts']]; print(', '.join(sorted(districts)))\""
+        )
+        exit(1)
+    except RuntimeError as e:
+        print(f"\n크롤링 실패: {e}")
         exit(1)
 
-    writer = CSVWriter(output_path)
-
-    # 첫 실행이면 write, 재개면 append
-    if args.resume and output_path.exists():
-        writer.append(results)
-    else:
-        writer.write(results)
-
-    print(f"{len(results)}개 아파트 단지 정보를 {output_path}에 저장했습니다.")
+    # 결과 출력 (CSV는 CrawlCoordinator에서 이미 저장됨)
+    print("\n크롤링 완료!")
+    print(f"  - 처리된 동: {stats['dongs_processed']}/{stats['total_dongs']}")
+    print(f"  - 처리된 단지: {stats['total_complexes_processed']}/{stats['total_complexes']}")
+    print(f"  - 수집된 거래내역: {stats['total_transactions_collected']}건")
+    print(f"  - 소요 시간: {stats['duration_seconds']:.1f}초")
+    print("\n결과 파일:")
+    print("  - 거래내역: output/transactions.csv")
+    print("  - 단지 정보: output/complexes.csv")
 
     # 실패 리포트
     failed = crawler.checkpoint_manager.checkpoint.get("failed_dongs", [])
     if failed:
         print(f"\n실패한 동: {len(failed)}개")
         for fail in failed[:5]:  # 최대 5개만 출력
-            print(f"  - {fail['dong_name']} ({fail['cortarNo']}): {fail['error']}")
+            # 다양한 데이터 형식을 지원하도록 안전한 처리
+            dong_name = fail.get("dong_name", fail.get("name", "알 수 없음"))
+            dong_code = fail.get("dong_code", fail.get("cortarNo", fail.get("code", "알 수 없음")))
+            error = fail.get("error", "알 수 없는 오류")
+            print(f"  - {dong_name} ({dong_code}): {error}")
 
 
 if __name__ == "__main__":

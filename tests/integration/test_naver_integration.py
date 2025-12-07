@@ -54,14 +54,18 @@ def test_crawl_complexes_basic(tmp_path: Path) -> None:
 
     # districts_data를 금천구의 첫 번째 동만으로 수정
     crawler.districts_data = {
-        "districts": [{
-            "district_name": test_district["district_name"],
-            "district_code": test_district["district_code"],
-            "dongs": [test_district["dongs"][0]]  # 첫 번째 동만
-        }]
+        "districts": [
+            {
+                "district_name": test_district["district_name"],
+                "district_code": test_district["district_code"],
+                "dongs": [test_district["dongs"][0]],  # 첫 번째 동만
+            }
+        ]
     }
 
-    print(f"\n테스트 대상: {test_district['district_name']} {test_district['dongs'][0]['dong_name']}")
+    print(
+        f"\n테스트 대상: {test_district['district_name']} {test_district['dongs'][0]['dong_name']}"
+    )
 
     # 크롤러 실행
     results = crawler.crawl()
@@ -80,7 +84,7 @@ def test_crawl_complexes_basic(tmp_path: Path) -> None:
         "total_dong_count",
         "total_household_count",
         "min_area",
-        "max_area"
+        "max_area",
     ]
 
     for field in required_fields:
@@ -254,7 +258,9 @@ def test_real_crawl_with_checkpoint(tmp_path: Path) -> None:
 
     # 두 번째 크롤링에서는 첫 번째 동을 건너뛰고 나머지 2개 동만 크롤링해야 함
     # 따라서 총 결과 수는 첫 번째 크롤링 결과 + 두 번째 크롤링 결과가 되어야 함
-    print(f"\n총 크롤링된 단지 수: 첫 번째 {len(results1)}개 + 두 번째 {len(results2)}개 = {len(results1) + len(results2)}개")
+    print(
+        f"\n총 크롤링된 단지 수: 첫 번째 {len(results1)}개 + 두 번째 {len(results2)}개 = {len(results1) + len(results2)}개"
+    )
 
 
 @pytest.mark.integration
@@ -293,11 +299,13 @@ def test_fetch_complex_detail(tmp_path: Path) -> None:
 
     # 첫 번째 동만 설정
     crawler1.districts_data = {
-        "districts": [{
-            "district_name": test_district["district_name"],
-            "district_code": test_district["district_code"],
-            "dongs": [test_district["dongs"][0]]  # 첫 번째 동만
-        }]
+        "districts": [
+            {
+                "district_name": test_district["district_name"],
+                "district_code": test_district["district_code"],
+                "dongs": [test_district["dongs"][0]],  # 첫 번째 동만
+            }
+        ]
     }
 
     print(f"\n테스트 동: {test_district['dongs'][0]['dong_name']}")
@@ -350,15 +358,25 @@ def test_fetch_complex_detail(tmp_path: Path) -> None:
         if "pyeong_types" in detail and detail["pyeong_types"]:
             print(f"평형 정보: {len(detail['pyeong_types'])}개")
             for i, pyeong in enumerate(detail["pyeong_types"][:3]):  # 처음 3개만
-                print(f"  - {pyeong.get('pyeong_name', 'N/A')}: "
-                      f"전용 {pyeong.get('exclusive_area', 'N/A')}㎡ / "
-                      f"공급 {pyeong.get('supply_area', 'N/A')}㎡")
+                print(
+                    f"  - {pyeong.get('pyeong_name', 'N/A')}: "
+                    f"전용 {pyeong.get('exclusive_area', 'N/A')}㎡ / "
+                    f"공급 {pyeong.get('supply_area', 'N/A')}㎡"
+                )
 
         # 기타 필드들 (있을 수도 있고 없을 수도 있음)
         other_fields = [
-            "road_address", "jibun_address", "complex_name", "building_type",
-            "total_household_count", "completion_date", "maintenance_cost",
-            "parking_count", "heating_type", "move_in_date", "total_dong_count"
+            "road_address",
+            "jibun_address",
+            "complex_name",
+            "building_type",
+            "total_household_count",
+            "completion_date",
+            "maintenance_cost",
+            "parking_count",
+            "heating_type",
+            "move_in_date",
+            "total_dong_count",
         ]
 
         print("\n=== 기타 필드 확인 ===")
@@ -371,12 +389,11 @@ def test_fetch_complex_detail(tmp_path: Path) -> None:
 
         # 최소한 pyeong_types나 주소 정보 중 하나는 있어야 함
         has_data = (
-            "pyeong_types" in detail and detail["pyeong_types"]
-        ) or (
-            detail.get("road_address") is not None or
-            detail.get("jibun_address") is not None
-        ) or (
-            "error" not in detail  # 에러가 없다는 것 자체가 성공
+            ("pyeong_types" in detail and detail["pyeong_types"])
+            or (detail.get("road_address") is not None or detail.get("jibun_address") is not None)
+            or (
+                "error" not in detail  # 에러가 없다는 것 자체가 성공
+            )
         )
 
         assert has_data, "단지 상세 정보가 비어있습니다"
@@ -423,9 +440,11 @@ def test_fetch_heliocity_listings(tmp_path: Path) -> None:
 
         if sale_listings:
             first_sale = sale_listings[0]
-            print(f"   - 첫 번째 매물: {first_sale.get('complex_name', 'N/A')} "
-                  f"{first_sale.get('area', 'N/A')}㎡ "
-                  f"{first_sale.get('floor', 'N/A')}층")
+            print(
+                f"   - 첫 번째 매물: {first_sale.get('complex_name', 'N/A')} "
+                f"{first_sale.get('area', 'N/A')}㎡ "
+                f"{first_sale.get('floor', 'N/A')}층"
+            )
 
             # 필드 검증
             required_fields = ["article_id", "complex_id", "trade_type", "price"]
@@ -440,6 +459,7 @@ def test_fetch_heliocity_listings(tmp_path: Path) -> None:
         if "rate" in str(e).lower() or "limit" in str(e).lower():
             print("   - 레이트 리밋: 2초 대기 후 재시도...")
             import time
+
             time.sleep(2)
             sale_listings = crawler.fetch_complex_listings(HELIO_CITY_ID, "A1")
             assert sale_listings is not None, "재시도 후에도 매매 매물을 가져오지 못했습니다"
@@ -454,9 +474,11 @@ def test_fetch_heliocity_listings(tmp_path: Path) -> None:
 
         if lease_listings:
             first_lease = lease_listings[0]
-            print(f"   - 첫 번째 매물: {first_lease.get('complex_name', 'N/A')} "
-                  f"{first_lease.get('area', 'N/A')}㎡ "
-                  f"{first_lease.get('floor', 'N/A')}층")
+            print(
+                f"   - 첫 번째 매물: {first_lease.get('complex_name', 'N/A')} "
+                f"{first_lease.get('area', 'N/A')}㎡ "
+                f"{first_lease.get('floor', 'N/A')}층"
+            )
 
             # 필드 검증
             assert first_lease.get("trade_type") == "B1", "전세 매물의 거래 유형이 B1이 아닙니다"
@@ -465,7 +487,12 @@ def test_fetch_heliocity_listings(tmp_path: Path) -> None:
     except Exception as e:
         print(f"   - 전세 매물 조회 실패: {str(e)}")
         # 전세 매물이 없을 수도 있음
-        if "result" in str(e) and len(e.args[0]) > 0 and "result" in e.args[0] and len(e.args[0]["result"]) == 0:
+        if (
+            "result" in str(e)
+            and len(e.args[0]) > 0
+            and "result" in e.args[0]
+            and len(e.args[0]["result"]) == 0
+        ):
             print("   - 전세 매물 없음 (정상)")
         else:
             raise
@@ -478,9 +505,11 @@ def test_fetch_heliocity_listings(tmp_path: Path) -> None:
 
         if rent_listings:
             first_rent = rent_listings[0]
-            print(f"   - 첫 번째 매물: {first_rent.get('complex_name', 'N/A')} "
-                  f"{first_rent.get('area', 'N/A')}㎡ "
-                  f"{first_rent.get('floor', 'N/A')}층")
+            print(
+                f"   - 첫 번째 매물: {first_rent.get('complex_name', 'N/A')} "
+                f"{first_rent.get('area', 'N/A')}㎡ "
+                f"{first_rent.get('floor', 'N/A')}층"
+            )
 
             # 필드 검증
             assert first_rent.get("trade_type") == "B2", "월세 매물의 거래 유형이 B2가 아닙니다"
@@ -490,24 +519,31 @@ def test_fetch_heliocity_listings(tmp_path: Path) -> None:
 
             # 계약 갱신권 정보 확인
             if first_rent.get("is_contract_renewal") == "Y":
-                print(f"   - 계약 갱신권: {first_rent.get('contract_renewal_price', 'N/A')} / "
-                      f"{first_rent.get('contract_renewal_fee', 'N/A')}")
+                print(
+                    f"   - 계약 갱신권: {first_rent.get('contract_renewal_price', 'N/A')} / "
+                    f"{first_rent.get('contract_renewal_fee', 'N/A')}"
+                )
 
     except Exception as e:
         print(f"   - 월세 매물 조회 실패: {str(e)}")
         # 월세 매물이 없을 수도 있음
-        if "result" in str(e) and len(e.args[0]) > 0 and "result" in e.args[0] and len(e.args[0]["result"]) == 0:
+        if (
+            "result" in str(e)
+            and len(e.args[0]) > 0
+            and "result" in e.args[0]
+            and len(e.args[0]["result"]) == 0
+        ):
             print("   - 월세 매물 없음 (정상)")
         else:
             raise
 
     # 4. 모든 매물 정보 합치기
     all_listings = []
-    if 'sale_listings' in locals():
+    if "sale_listings" in locals():
         all_listings.extend(sale_listings)
-    if 'lease_listings' in locals():
+    if "lease_listings" in locals():
         all_listings.extend(lease_listings)
-    if 'rent_listings' in locals():
+    if "rent_listings" in locals():
         all_listings.extend(rent_listings)
 
     # 5. CSV로 저장
@@ -569,11 +605,13 @@ def test_fetch_complex_listings(tmp_path: Path) -> None:
 
     # 첫 번째 동만 설정
     crawler.districts_data = {
-        "districts": [{
-            "district_name": test_district["district_name"],
-            "district_code": test_district["district_code"],
-            "dongs": [test_district["dongs"][0]]  # 첫 번째 동만
-        }]
+        "districts": [
+            {
+                "district_name": test_district["district_name"],
+                "district_code": test_district["district_code"],
+                "dongs": [test_district["dongs"][0]],  # 첫 번째 동만
+            }
+        ]
     }
 
     print(f"\n테스트 동: {test_district['dongs'][0]['dong_name']}")
@@ -607,8 +645,10 @@ def test_fetch_complex_listings(tmp_path: Path) -> None:
         # 여러 단지 정보 출력 (디버깅용)
         print("\n=== 크롤링된 단지 목록 (처음 5개) ===")
         for i, complex in enumerate(complexes[:5]):
-            print(f"{i+1}. {complex['complex_name']} (ID: {complex['complex_id']}) - "
-                  f"매물 {complex.get('total_article_count', 0)}개")
+            print(
+                f"{i+1}. {complex['complex_name']} (ID: {complex['complex_id']}) - "
+                f"매물 {complex.get('total_article_count', 0)}개"
+            )
 
         print(f"\n테스트 대상 단지: {complex_name_to_test}")
         print(f"Complex ID: {complex_id_to_test}")
@@ -682,9 +722,9 @@ def test_fetch_complex_listings(tmp_path: Path) -> None:
     finally:
         # 브라우저 정리
         try:
-            if hasattr(crawler2, 'page'):
+            if hasattr(crawler2, "page"):
                 crawler2.page.close()
-            if hasattr(crawler2, 'browser'):
+            if hasattr(crawler2, "browser"):
                 crawler2.browser.close()
             print("\n브라우저 리소스 정리 완료")
         except Exception as cleanup_error:
@@ -731,11 +771,13 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
 
     # districts_data를 금천구의 첫 번째 동만으로 수정
     crawler.districts_data = {
-        "districts": [{
-            "district_name": test_district["district_name"],
-            "district_code": test_district["district_code"],
-            "dongs": [test_district["dongs"][0]]  # 첫 번째 동만
-        }]
+        "districts": [
+            {
+                "district_name": test_district["district_name"],
+                "district_code": test_district["district_code"],
+                "dongs": [test_district["dongs"][0]],  # 첫 번째 동만
+            }
+        ]
     }
 
     print("\n=== 전체 파이프라인 테스트 시작 ===")
@@ -780,9 +822,9 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
 
         # 브라우저 정리
         try:
-            if hasattr(detail_crawler, 'page'):
+            if hasattr(detail_crawler, "page"):
                 detail_crawler.page.close()
-            if hasattr(detail_crawler, 'browser'):
+            if hasattr(detail_crawler, "browser"):
                 detail_crawler.browser.close()
         except Exception:
             pass
@@ -825,16 +867,18 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
             enriched_complexes[0]["active_listings_count"] = len(listings)
             print(f"   - ✅ 매물 {len(listings)}개 조회 성공")
             if prices:
-                print(f"   - 가격 범위: {min(prices):,} ~ {max(prices):,} (평균: {int(sum(prices)/len(prices)):,})")
+                print(
+                    f"   - 가격 범위: {min(prices):,} ~ {max(prices):,} (평균: {int(sum(prices)/len(prices)):,})"
+                )
         else:
             enriched_complexes[0]["active_listings_count"] = 0
             print("   - ⚠️ 매물 없음")
 
         # 브라우저 정리
         try:
-            if hasattr(listings_crawler, 'page'):
+            if hasattr(listings_crawler, "page"):
                 listings_crawler.page.close()
-            if hasattr(listings_crawler, 'browser'):
+            if hasattr(listings_crawler, "browser"):
                 listings_crawler.browser.close()
         except Exception:
             pass
@@ -866,14 +910,26 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
             assert field in header, f"CSV 헤더에 필수 필드 '{field}'가 없습니다"
 
         # 확장 필드 확인 (상세 정보)
-        enriched_fields = ["road_address", "jibun_address", "complex_name", "building_type",
-                          "total_household_count", "completion_date", "maintenance_cost",
-                          "fetched_at"]
+        enriched_fields = [
+            "road_address",
+            "jibun_address",
+            "complex_name",
+            "building_type",
+            "total_household_count",
+            "completion_date",
+            "maintenance_cost",
+            "fetched_at",
+        ]
         found_enriched_fields = [field for field in enriched_fields if field in header]
         print(f"   - 발견된 확장 필드: {len(found_enriched_fields)}개")
 
         # 매물 집계 필드 확인
-        listing_fields = ["avg_listing_price", "min_listing_price", "max_listing_price", "active_listings_count"]
+        listing_fields = [
+            "avg_listing_price",
+            "min_listing_price",
+            "max_listing_price",
+            "active_listings_count",
+        ]
         found_listing_fields = [field for field in listing_fields if field in header]
         print(f"   - 발견된 매물 필드: {len(found_listing_fields)}개")
 
@@ -896,7 +952,9 @@ def test_crawl_full_pipeline(tmp_path: Path) -> None:
     # 집계된 데이터 확인
     if enriched_complexes[0].get("active_listings_count", 0) > 0:
         print("\n   - 매물이 있는 단지: 1개")
-        print(f"     - {enriched_complexes[0]['complex_name']}: {enriched_complexes[0]['active_listings_count']}개 매물")
+        print(
+            f"     - {enriched_complexes[0]['complex_name']}: {enriched_complexes[0]['active_listings_count']}개 매물"
+        )
 
     print("\n✅ test_crawl_full_pipeline 테스트 통과!")
     print(f"   - 크롤링된 단지: {len(enriched_complexes)}개")

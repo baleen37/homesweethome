@@ -16,10 +16,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
     @pytest.fixture
     def config(self):
         """Create test configuration."""
-        return CrawlerConfig(
-            headless=True,
-            timeout=30
-        )
+        return CrawlerConfig(headless=True, timeout=30)
 
     @pytest.fixture
     def mock_districts_data(self):
@@ -36,10 +33,10 @@ class TestNaverRealEstateCrawlerWithTransactions:
                                 "leftLon": 126.880,
                                 "rightLon": 126.890,
                                 "topLat": 37.480,
-                                "bottomLat": 37.470
-                            }
+                                "bottomLat": 37.470,
+                            },
                         }
-                    ]
+                    ],
                 }
             ]
         }
@@ -61,7 +58,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
                     "dealCnt": 5,
                     "leaseCnt": 3,
                     "rentCnt": 2,
-                    "totalAtclCnt": 10
+                    "totalAtclCnt": 10,
                 }
             ]
         }
@@ -79,9 +76,9 @@ class TestNaverRealEstateCrawlerWithTransactions:
                     "exclusiveArea": "71.97",
                     "roomCount": 3,
                     "bathroomCount": 2,
-                    "householdCount": 150
+                    "householdCount": 150,
                 }
-            ]
+            ],
         }
 
     @pytest.fixture
@@ -101,7 +98,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
                         "isDelete": False,
                         "tradeCategory": "중개거래",
                         "propertyType": "NORMAL",
-                        "isRenew": False
+                        "isRenew": False,
                     },
                     {
                         "tradeDate": "2025-10-20",
@@ -113,7 +110,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
                         "isDelete": False,
                         "tradeCategory": "중개거래",
                         "propertyType": "NORMAL",
-                        "isRenew": False
+                        "isRenew": False,
                     },
                     {
                         "tradeDate": "2025-09-10",
@@ -125,15 +122,15 @@ class TestNaverRealEstateCrawlerWithTransactions:
                         "isDelete": False,
                         "tradeCategory": "중개거래",
                         "propertyType": "NORMAL",
-                        "isRenew": False
-                    }
+                        "isRenew": False,
+                    },
                 ],
-                "hasNextPage": False
-            }
+                "hasNextPage": False,
+            },
         }
 
-    @patch('crawler.crawlers.naver.sync_playwright')
-    @patch('crawler.crawlers.naver.Path')
+    @patch("crawler.crawlers.naver.sync_playwright")
+    @patch("crawler.crawlers.naver.Path")
     def test_crawl_with_transactions(
         self,
         mock_path,
@@ -142,7 +139,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
         mock_districts_data,
         mock_complexes_response,
         mock_complex_detail_response,
-        mock_transaction_response
+        mock_transaction_response,
     ):
         """Test full crawling pipeline with transaction data collection."""
         # Setup mocks
@@ -180,17 +177,19 @@ class TestNaverRealEstateCrawlerWithTransactions:
         mock_playwright.return_value = mock_context_manager
 
         # Create crawler with mocked districts data
-        with patch('crawler.crawlers.naver.Path') as mock_path2:
+        with patch("crawler.crawlers.naver.Path") as mock_path2:
             # Mock the data path
             mock_data_path = Path("/tmp/seoul_districts.json")
             mock_data_path.exists.return_value = True
-            mock_data_path.open.return_value.__enter__.return_value.read.return_value = json.dumps(mock_districts_data)
+            mock_data_path.open.return_value.__enter__.return_value.read.return_value = json.dumps(
+                mock_districts_data
+            )
             mock_path2.return_value = mock_data_path
 
             crawler = NaverRealEstateCrawler(config)
 
         # Mock crawl with transactions
-        with patch('crawler.crawlers.naver.CrawlCoordinator') as mock_coordinator:
+        with patch("crawler.crawlers.naver.CrawlCoordinator") as mock_coordinator:
             # Mock coordinator methods
             mock_coordinator_instance = Mock()
             mock_coordinator_instance.checkpoint_manager.checkpoint = {}
@@ -203,12 +202,8 @@ class TestNaverRealEstateCrawlerWithTransactions:
                 "total_transactions_collected": 9,
                 "total_errors": 0,
                 "duration_seconds": 10.0,
-                "rate_limiter_state": {
-                    "current_delay": 2.5,
-                    "success_count": 0,
-                    "error_count": 0
-                },
-                "results": []
+                "rate_limiter_state": {"current_delay": 2.5, "success_count": 0, "error_count": 0},
+                "results": [],
             }
             mock_coordinator.return_value = mock_coordinator_instance
 
@@ -225,12 +220,8 @@ class TestNaverRealEstateCrawlerWithTransactions:
             mock_coordinator.assert_called_once()
             mock_coordinator_instance.crawl_multiple_dongs.assert_called_once()
 
-    @patch('crawler.crawlers.naver.sync_playwright')
-    def test_fetch_transaction_history_with_validation(
-        self,
-        mock_playwright,
-        config
-    ):
+    @patch("crawler.crawlers.naver.sync_playwright")
+    def test_fetch_transaction_history_with_validation(self, mock_playwright, config):
         """Test transaction history fetching with data validation."""
         # Mock data including invalid transactions
         mock_response = {
@@ -248,7 +239,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
                         "isDelete": False,
                         "tradeCategory": "중개거래",
                         "propertyType": "NORMAL",
-                        "isRenew": False
+                        "isRenew": False,
                     },
                     # Invalid transaction (deleted)
                     {
@@ -261,7 +252,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
                         "isDelete": True,  # Deleted transaction
                         "tradeCategory": "중개거래",
                         "propertyType": "NORMAL",
-                        "isRenew": False
+                        "isRenew": False,
                     },
                     # Invalid transaction (missing trade date)
                     {
@@ -273,11 +264,11 @@ class TestNaverRealEstateCrawlerWithTransactions:
                         "isDelete": False,
                         "tradeCategory": "중개거래",
                         "propertyType": "NORMAL",
-                        "isRenew": False
-                    }
+                        "isRenew": False,
+                    },
                 ],
-                "hasNextPage": False
-            }
+                "hasNextPage": False,
+            },
         }
 
         # Mock playwright
@@ -297,7 +288,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
         mock_playwright.return_value = mock_context_manager
 
         # Create crawler
-        with patch('crawler.crawlers.naver.Path') as mock_path:
+        with patch("crawler.crawlers.naver.Path") as mock_path:
             mock_file = Mock()
             mock_file.exists.return_value = True
             mock_file.open.return_value.__enter__.return_value.read.return_value = "{}"
@@ -314,7 +305,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             pyeong_type_number=1,
             trade_type="A1",
             complex_name="테스트단지",
-            pyeong_name="84A"
+            pyeong_name="84A",
         )
 
         # Verify only valid transactions are returned
@@ -335,7 +326,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             "tradeDate": "2025-11-14",
             "floor": 21,
             "dealPrice": 1700000000,
-            "isDelete": False
+            "isDelete": False,
         }
         assert crawler._validate_transaction(valid_txn)
 
@@ -344,25 +335,16 @@ class TestNaverRealEstateCrawlerWithTransactions:
             "tradeDate": "2025-11-14",
             "floor": 21,
             "dealPrice": 1700000000,
-            "isDelete": True
+            "isDelete": True,
         }
         assert not crawler._validate_transaction(deleted_txn)
 
         # Invalid transaction (missing trade date)
-        no_date_txn = {
-            "floor": 21,
-            "dealPrice": 1700000000,
-            "isDelete": False
-        }
+        no_date_txn = {"floor": 21, "dealPrice": 1700000000, "isDelete": False}
         assert not crawler._validate_transaction(no_date_txn)
 
         # Invalid transaction (empty trade date)
-        empty_date_txn = {
-            "tradeDate": "",
-            "floor": 21,
-            "dealPrice": 1700000000,
-            "isDelete": False
-        }
+        empty_date_txn = {"tradeDate": "", "floor": 21, "dealPrice": 1700000000, "isDelete": False}
         assert not crawler._validate_transaction(empty_date_txn)
 
         # Invalid transaction (null floor)
@@ -370,7 +352,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             "tradeDate": "2025-11-14",
             "floor": None,
             "dealPrice": 1700000000,
-            "isDelete": False
+            "isDelete": False,
         }
         assert not crawler._validate_transaction(null_floor_txn)
 
@@ -387,7 +369,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             "monthlyRent": 0,
             "isDelete": False,
             "tradeCategory": "중개거래",
-            "isRenew": False
+            "isRenew": False,
         }
 
         parsed = crawler._parse_transaction(
@@ -396,7 +378,7 @@ class TestNaverRealEstateCrawlerWithTransactions:
             complex_name="테스트단지",
             pyeong_type_number=1,
             pyeong_name="84A",
-            trade_type="A1"
+            trade_type="A1",
         )
 
         assert parsed["complex_id"] == "111515"

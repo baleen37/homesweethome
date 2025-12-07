@@ -38,14 +38,14 @@ class TestAdaptiveRateLimiter:
         # Test that _last_wait_time is set after wait()
         assert limiter._last_wait_time is None
 
-        with patch('time.sleep'):
+        with patch("time.sleep"):
             limiter.wait()
 
         # After first wait, _last_wait_time should be set
         assert limiter._last_wait_time is not None
 
         # Second call should use the tracking logic
-        with patch('time.sleep'):
+        with patch("time.sleep"):
             limiter.wait()
 
         # _last_wait_time should still be set

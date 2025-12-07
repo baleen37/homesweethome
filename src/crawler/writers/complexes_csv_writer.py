@@ -63,9 +63,7 @@ class ComplexesCSVWriter:
                 writer.writeheader()
 
             # 데이터의 각 필드를 검증하고 정규화
-            normalized_data = [
-                self._normalize_complex_data(item) for item in data
-            ]
+            normalized_data = [self._normalize_complex_data(item) for item in data]
             writer.writerows(normalized_data)
 
         self._file_exists = True
@@ -97,9 +95,7 @@ class ComplexesCSVWriter:
         from crawler.utils.statistics import calculate_statistics_from_transactions
 
         # 통계 계산
-        complex_with_stats = calculate_statistics_from_transactions(
-            complex_data, transactions
-        )
+        complex_with_stats = calculate_statistics_from_transactions(complex_data, transactions)
 
         # 정규화 후 추가
         normalized = self._normalize_complex_data(complex_with_stats)
@@ -147,7 +143,10 @@ class ComplexesCSVWriter:
         # Normalize statistics fields
         normalized = normalize_complex_data(normalized, STATISTICS_FIELDS)
 
-        return normalized
+        # Only keep fields that are in the CSV schema
+        filtered = {field: normalized.get(field) for field in self.FIELDNAMES}
+
+        return filtered
 
     def ensure_file_exists(self) -> None:
         """CSV 파일이 존재하는지 확인하고, 없으면 빈 파일을 생성합니다."""

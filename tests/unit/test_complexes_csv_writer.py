@@ -99,9 +99,7 @@ class TestComplexesCSVWriter(TestCase):
 
     def test_append_with_statistics(self) -> None:
         """통계 계산과 함께 추가하는 기능 테스트"""
-        self.writer.append_with_statistics(
-            self.sample_complex_data, self.sample_transactions
-        )
+        self.writer.append_with_statistics(self.sample_complex_data, self.sample_transactions)
 
         # 파일이 생성되었는지 확인
         self.assertTrue(self.csv_path.exists())
@@ -149,15 +147,28 @@ class TestComplexesCSVWriter(TestCase):
         """FIELDNAMES에 모든 필드가 포함되어 있는지 확인"""
         expected_fields = [
             # 기본 필드
-            "complex_id", "complex_name", "real_estate_type",
-            "completion_year_month", "total_dong_count", "total_household_count",
-            "min_area", "max_area", "deal_count", "lease_count", "rent_count",
+            "complex_id",
+            "complex_name",
+            "real_estate_type",
+            "completion_year_month",
+            "total_dong_count",
+            "total_household_count",
+            "min_area",
+            "max_area",
+            "deal_count",
+            "lease_count",
+            "rent_count",
             # 상세 정보 필드
-            "pyeong_types", "fetched_at",
+            "pyeong_types",
+            "fetched_at",
             # 통계 필드
-            "total_transaction_count", "latest_deal_price", "latest_deal_date",
-            "avg_deal_price_1year", "deal_count_1year",
-            "lease_count_1year", "rent_count_1year",
+            "total_transaction_count",
+            "latest_deal_price",
+            "latest_deal_date",
+            "avg_deal_price_1year",
+            "deal_count_1year",
+            "lease_count_1year",
+            "rent_count_1year",
         ]
 
         for field in expected_fields:

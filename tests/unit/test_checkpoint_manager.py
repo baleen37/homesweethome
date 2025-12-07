@@ -13,10 +13,10 @@ def temp_checkpoint_file(tmp_path: Path) -> Path:
     return tmp_path / "checkpoint.json"
 
 
-def test_load_returns_none_when_file_does_not_exist(temp_checkpoint_file: Path) -> None:
+def test_load_returns_empty_dict_when_file_does_not_exist(temp_checkpoint_file: Path) -> None:
     manager = CheckpointManager(str(temp_checkpoint_file))
     result = manager.load()
-    assert result is None
+    assert result == {}
 
 
 def test_save_creates_checkpoint_file(temp_checkpoint_file: Path) -> None:
@@ -43,11 +43,7 @@ def test_load_returns_saved_checkpoint(temp_checkpoint_file: Path) -> None:
         "started_at": "2025-12-06T10:00:00",
         "last_updated_at": "2025-12-06T15:30:00",
         "failed_dongs": [],
-        "rate_limiter_state": {
-            "current_delay": 2.8,
-            "success_count": 45,
-            "error_count": 0
-        }
+        "rate_limiter_state": {"current_delay": 2.8, "success_count": 45, "error_count": 0},
     }
     with open(temp_checkpoint_file, "w") as f:
         json.dump(checkpoint, f)
@@ -91,10 +87,7 @@ def test_save_with_rate_limiter_state(temp_checkpoint_file: Path) -> None:
     mock_rate_limiter.success_count = 15
     mock_rate_limiter.error_count = 1
 
-    manager.save(
-        last_dong="1168010100",
-        rate_limiter=mock_rate_limiter
-    )
+    manager.save(last_dong="1168010100", rate_limiter=mock_rate_limiter)
 
     with open(temp_checkpoint_file) as f:
         saved = json.load(f)
@@ -108,11 +101,7 @@ def test_restore_rate_limiter_state(temp_checkpoint_file: Path) -> None:
     """Rate limiter 상태 복원 테스트"""
     # 저장된 상태로 파일 생성
     checkpoint = {
-        "rate_limiter_state": {
-            "current_delay": 4.5,
-            "success_count": 25,
-            "error_count": 2
-        }
+        "rate_limiter_state": {"current_delay": 4.5, "success_count": 25, "error_count": 2}
     }
     with open(temp_checkpoint_file, "w") as f:
         json.dump(checkpoint, f)
@@ -155,8 +144,8 @@ def test_get_progress_summary(temp_checkpoint_file: Path) -> None:
         "last_updated_at": "2025-12-06T15:30:00",
         "failed_dongs": [
             {"dong_code": "1168010100", "error": "Timeout"},
-            {"dong_code": "1168010200", "error": "API Error"}
-        ]
+            {"dong_code": "1168010200", "error": "API Error"},
+        ],
     }
 
     summary = manager.get_progress_summary()
