@@ -40,3 +40,7 @@ htmlcov/
 
 # Playwright MCP
 .playwright-mcp/
+
+# Nix
+.result
+result direnv.d/.state*
