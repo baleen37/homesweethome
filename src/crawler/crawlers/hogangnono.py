@@ -88,6 +88,9 @@ class HogangnonoCrawler(APICrawler):
         # 호갱노노 API 클라이언트
         self.hogangnono_client = HogangnonoAPIClient(config)
 
+        # 체크포인트 매니저 (main.py에서 접근 필요)
+        self.checkpoint_manager = None
+
         self.logger.info(
             "hogangnono_crawler_initialized",
             output_dir=str(self.output_dir),
@@ -574,6 +577,58 @@ class HogangnonoCrawler(APICrawler):
         except Exception as e:
             self.logger.error("failed_to_save_ranks", error=str(e))
             raise
+
+    def crawl(self, district_filter: Optional[List[str]] = None) -> Dict[str, Any]:
+        """크롤링 실행 (main.py와의 호환성을 위한 메서드)
+
+        Args:
+            district_filter: 크롤링할 구 리스트 (예: ["강남구", "서초구"])
+
+        Returns:
+            크롤링 통계 정보
+        """
+        from ..coordinator import CrawlCoordinator
+
+        # CrawlCoordinator 초기화
+        coordinator = CrawlCoordinator(
+            config_or_output_dir=self.config,
+            checkpoint_path=self.output_dir / "checkpoint.json",
+        )
+
+        # 현재는 region_bounds 기반으로만 크롤링 지원
+        # district_filter는 나중에 구현 필요
+        if district_filter:
+            self.logger.warning(
+                "district_filter_not_supported",
+                districts=district_filter,
+                message="Currently only bounding box based crawling is supported",
+            )
+
+        # 데이터 수집
+        complexes, transactions = self.crawl_region(
+            region_bounds=self.region_bounds,
+            apt_type="apart",
+            trade_type="sale",
+            max_pages=10,
+        )
+
+        # CSV 저장
+        self.save_to_csv(complexes, transactions)
+
+        # 통계 정보 반환
+        stats = {
+            "dongs_processed": 1,  # region 기반이라 동 단위 개념 없음
+            "total_dongs": 1,
+            "total_complexes_processed": len(complexes),
+            "total_complexes": len(complexes),
+            "total_transactions_collected": len(transactions),
+            "duration_seconds": 0,  # 시간 추적 로직은 나중에 구현
+        }
+
+        # 체크포인트 매니저 설정 (main.py에서 접근)
+        self.checkpoint_manager = coordinator.checkpoint_manager
+
+        return stats
 
     def crawl_and_save(
         self,
