@@ -1,0 +1,100 @@
+{
+  "data": {
+    "no": "11046",
+    "complexNo": "C001",
+    "name": "강남자이",
+    "cortarNo": "1168051500",
+    "cortarName": "강남구 청담동",
+    "dupleCount": 5,
+    "buildYear": "2023",
+    "isEco": true,
+    "lat": 37.524462,
+    "lng": 127.050101,
+    "jibun": "강남구 청담동 123-45",
+    "roadname": "강남대로 123",
+    "roadAddress": "서울특별시 강남구 강남대로 123",
+    "managementType": "자치관리",
+    "totalHouseholdCount": 245,
+    "parkingCount": 180,
+    "infraType": "아파트",
+    "tradeType": "매매,전월세",
+    "useApproveDate": "2023-06-15",
+    "mapLevel": 16,
+    "tagList": ["신축", "인기"],
+    "imageList": [
+      {
+        "url": "https://example.com/apt1.jpg",
+        "type": "main",
+        "description": "아파트 전경"
+      },
+      {
+        "url": "https://example.com/apt2.jpg",
+        "type": "exterior",
+        "description": "외관"
+      }
+    ],
+    "relatedComplex": [
+      {
+        "no": "11047",
+        "name": "강남자이 2차",
+        "distance": 0.5
+      }
+    ],
+    "recentDeals": [
+      {
+        "dealAmount": "150000",
+        "dealYear": 2023,
+        "dealMonth": 11,
+        "dealDay": 15,
+        "floor": "35",
+        "area": "84.51",
+        "areaPyeong": "25.6",
+        "agentName": "홍길동공인중개사",
+        "rent": "0",
+        "deposit": "0",
+        "type": "전세"
+      },
+      {
+        "dealAmount": "145000",
+        "dealYear": 2023,
+        "dealMonth": 11,
+        "dealDay": 10,
+        "floor": "28",
+        "area": "74.82",
+        "areaPyeong": "22.6",
+        "agentName": "김철수공인중개사",
+        "rent": "0",
+        "deposit": "0",
+        "type": "매매"
+      }
+    ],
+    "basicInfo": {
+      "totalFloor": "35",
+      "householdCount": "245",
+      "parkingCount": "180",
+      "heatingType": "지역난방",
+      "managementFee": "50000",
+      "supplyArea": "84.51㎡",
+      "buildYear": "2023",
+      "infraType": "아파트",
+      "tradeType": "매매,전월세"
+    },
+    "structureInfo": {
+      "type": "아파트",
+      "buildingType": "골조철근콘크리트",
+      "structureType": "복동",
+      "floorCount": "35",
+      "householdCount": "245",
+      "parkingCount": "180"
+    },
+    "locationInfo": {
+      "jibun": "강남구 청담동 123-45",
+      "roadName": "강남대로 123",
+      "lat": 37.524462,
+      "lng": 127.050101,
+      "distanceToSubway": 500,
+      "nearestSubway": "청담역"
+    }
+  },
+  "status": "success"
+}

@@ -1,0 +1,75 @@
+{
+  "data": [
+    {
+      "id": "1Iv2fb",
+      "category": 11,
+      "name": "판교역KTX",
+      "description": "강릉선",
+      "content": null,
+      "lat": 37.3947325,
+      "lng": 127.112436,
+      "address": null,
+      "likes": 0,
+      "isExpired": 0,
+      "dong": null,
+      "dist": 71
+    },
+    {
+      "id": "1At470",
+      "category": 10,
+      "name": "판교점",
+      "description": "롯데마트",
+      "content": null,
+      "lat": 37.39554549999999,
+      "lng": 127.11361710000001,
+      "address": "경기도 성남시 분당구 삼평동 741번지",
+      "likes": 0,
+      "isExpired": 0,
+      "dong": "삼평동",
+      "dist": 106
+    },
+    {
+      "id": "zqE47",
+      "category": 1,
+      "name": "판교",
+      "description": "경강선",
+      "content": null,
+      "lat": 37.394775885643,
+      "lng": 127.111982699564,
+      "address": null,
+      "likes": 0,
+      "isExpired": 0,
+      "dong": null,
+      "dist": 113
+    },
+    {
+      "id": "jz9d",
+      "category": 1,
+      "name": "판교",
+      "description": "신분당선",
+      "content": null,
+      "lat": 37.39477752734142,
+      "lng": 127.1111978295588,
+      "address": null,
+      "likes": 0,
+      "isExpired": 0,
+      "dong": null,
+      "dist": 182
+    },
+    {
+      "id": "1At7d0",
+      "category": 10,
+      "name": "판교점",
+      "description": "현대백화점",
+      "content": null,
+      "lat": 37.392785399999994,
+      "lng": 127.1120699,
+      "address": "경기도 성남시 분당구 백현동 541번지",
+      "likes": 0,
+      "isExpired": 0,
+      "dong": "백현동",
+      "dist": 230
+    }
+  ],
+  "status": "success"
+}

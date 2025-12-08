@@ -1,0 +1,46 @@
+{
+  "data": {
+    "rolling": [
+      {
+        "sidoName": "서울특별시",
+        "sigunguName": "강남구",
+        "dongName": "역삼동",
+        "rank": 1,
+        "prevRank": 1,
+        "visitor": 2028,
+        "rankType": "overall",
+        "hash": "gDG7d",
+        "regionName": "서울특별시 강남구 역삼동",
+        "name": "역삼센트럴자이",
+        "statusTag": "분양"
+      },
+      {
+        "sidoName": "서울특별시",
+        "sigunguName": "강동구",
+        "dongName": "둔촌동",
+        "rank": 2,
+        "prevRank": 2,
+        "visitor": 1213,
+        "rankType": "overall",
+        "hash": "dC7df",
+        "regionName": "서울특별시 강동구 둔촌동",
+        "name": "올림픽파크포레온",
+        "statusTag": null
+      },
+      {
+        "sidoName": "경기도",
+        "sigunguName": "의왕시",
+        "dongName": "고천동",
+        "rank": 3,
+        "prevRank": 3,
+        "visitor": 1119,
+        "rankType": "overall",
+        "hash": "fI4bc",
+        "regionName": "경기도 의왕시 고천동",
+        "name": "의왕시청역SKVIEWIPARK",
+        "statusTag": "분양"
+      }
+    ]
+  },
+  "status": "success"
+}

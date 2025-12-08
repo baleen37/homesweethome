@@ -1,0 +1,466 @@
+"""호갱노노 API 클라이언트 TDD 테스트
+
+Red 단계: 실패하는 테스트를 먼저 작성하여
+구현이 필요한 기능을 명확히 정의합니다.
+"""
+
+import json
+import pytest
+from unittest.mock import Mock, patch
+
+from crawler.api.hogangnono_client import (
+    APIResponse,
+    HogangnonoAPIClient,
+    SearchParams,
+)
+from crawler.config import CrawlerConfig
+
+
+class TestSearchParamsTDD:
+    """SearchParams TDD 테스트 - Red 단계"""
+
+    def test_search_params_bbox_conversion(self):
+        """SearchParams bbox 파라미터 변환 테스트
+
+        Expected: bbox tuple을 startX, startY, endX, endY로 올바르게 변환해야 함
+        현재 상태: 실패할 것임 (실제 동작 확인 필요)
+        """
+        # bbox 파라미터 (lng_min, lat_min, lng_max, lat_max)
+        params = SearchParams(bbox=(126.8781, 37.4132, 127.1834, 37.7151))
+
+        result = params.to_dict()
+
+        # 예상되는 결과
+        assert result["startX"] == 126.8781
+        assert result["startY"] == 37.4132
+        assert result["endX"] == 127.1834
+        assert result["endY"] == 37.7151
+
+    def test_search_params_with_required_fields(self):
+        """SearchParams 필수 필드 포함 테스트
+
+        Expected: API에 필요한 모든 필드를 포함해야 함
+        현재 상태: 실패할 것임 (일부 필드 누락 가능)
+        """
+        params = SearchParams(
+            bbox=(126.8781, 37.4132, 127.1834, 37.7151),
+            level=14,
+            tradeType=0,  # 매매
+            aptType=1,  # 아파트
+        )
+
+        result = params.to_dict()
+
+        # 필수 필드 확인
+        assert "startX" in result
+        assert "startY" in result
+        assert "endX" in result
+        assert "endY" in result
+        assert "level" in result
+        assert "tradeType" in result
+        assert "aptType" in result
+        assert result["map"] == "google"
+
+    def test_search_params_hogangnono_specific_fields(self):
+        """SearchParams 호갱노노 특정 필드 테스트
+
+        Expected: 호갱노노 API에 필요한 특정 필드를 포함해야 함
+        현재 상태: 실패할 것임 (호갱노노 특정 필드 누락)
+        """
+        params = SearchParams(
+            bbox=(126.8781, 37.4132, 127.1834, 37.7151),
+            level=14,
+        )
+
+        result = params.to_dict()
+
+        # 호갱노노 특정 필드 확인
+        assert "screenWidth" in result
+        assert "screenHeight" in result
+        assert "apt" in result
+        assert result["screenWidth"] == 1200
+        assert result["screenHeight"] == 924
+
+
+class TestAPIResponseTDD:
+    """APIResponse TDD 테스트 - Red 단계"""
+
+    def test_api_response_success_structure(self):
+        """성공 응답 구조 테스트
+
+        Expected: 호갱노노 API 성공 응답을 올바르게 파싱해야 함
+        현재 상태: 실패할 것임 (실제 응답 구조와 다를 수 있음)
+        """
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {
+            "success": True,
+            "data": [
+                {
+                    "id": "12345",
+                    "name": "테스트아파트",
+                    "address": "서울시 강남구",
+                    "lat": 37.5,
+                    "lng": 127.0,
+                }
+            ],
+        }
+
+        api_response = APIResponse.from_response(mock_response)
+
+        assert api_response.success is True
+        assert api_response.data is not None
+        assert len(api_response.data) > 0
+
+    def test_api_response_error_handling(self):
+        """에러 응답 처리 테스트
+
+        Expected: API 에러를 올바르게 감지하고 처리해야 함
+        현재 상태: 실패할 것임 (에러 처리 미완성)
+        """
+        mock_response = Mock()
+        mock_response.status_code = 429
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {
+            "success": False,
+            "error": "Rate limit exceeded",
+        }
+
+        api_response = APIResponse.from_response(mock_response)
+
+        assert api_response.success is False
+        assert api_response.status_code == 429
+        assert "Rate limit" in api_response.error
+
+    def test_api_response_html_content(self):
+        """HTML 콘텐츠 처리 테스트
+
+        Expected: HTML 응답을 성공으로 처리해야 함 (세션 초기화 등)
+        현재 상태: 실패할 것임 (HTML 처리 미완성)
+        """
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "text/html"}
+        mock_response.text = "<html><body>Test HTML</body></html>"
+
+        api_response = APIResponse.from_response(mock_response)
+
+        assert api_response.success is True
+        assert api_response.status_code == 200
+        assert api_response.data is not None
+
+
+class TestHogangnonoAPIClientTDD:
+    """HogangnonoAPIClient TDD 테스트 - Red 단계"""
+
+    @pytest.fixture
+    def config(self):
+        return CrawlerConfig(
+            user_agent="Test Agent",
+            timeout=10.0,
+        )
+
+    @pytest.fixture
+    def client(self, config):
+        return HogangnonoAPIClient(config)
+
+    def test_session_initialization(self, client):
+        """세션 초기화 테스트
+
+        Expected: 메인 페이지 접속으로 세션을 초기화해야 함
+        현재 상태: 실패할 것임 (실제 API 호출 필요)
+        """
+        # 초기화 전 상태 확인
+        assert client._session_initialized is False
+
+        # 세션 초기화 시도
+        result = client._initialize_session()
+
+        # 초기화 성공 확인
+        assert result is True
+        assert client._session_initialized is True
+
+    def test_api_headers_structure(self, client):
+        """API 헤더 구조 테스트
+
+        Expected: 올바른 API 요청 헤더를 생성해야 함
+        현재 상태: 실패할 것임 (헤더 필수 값 누락 가능)
+        """
+        headers = client._get_api_headers()
+
+        # 필수 헤더 필드 확인
+        assert "User-Agent" in headers
+        assert "Accept" in headers
+        assert "Referer" in headers
+        assert "Origin" in headers
+        assert "X-Requested-With" in headers
+        assert headers["X-Requested-With"] == "XMLHttpRequest"
+
+    @patch("requests.Session.request")
+    def test_make_request_with_cookies(self, mock_request, client):
+        """쿠키와 함께 요청 테스트
+
+        Expected: 세션 쿠키를 포함하여 API 요청을 보내야 함
+        현재 상태: 실패할 것임 (쿠키 처리 미완성)
+        """
+        # Mock 응답 설정
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {"success": True, "data": []}
+        mock_request.return_value = mock_response
+
+        # 세션 초기화 Mock
+        with patch.object(client, "_initialize_session", return_value=True):
+            client._session_initialized = True
+            client.session.cookies = Mock()
+
+            # API 요청
+            client._make_request(
+                method="GET",
+                endpoint="/api/test",
+                params={"test": "value"},
+            )
+
+            # 요청 확인
+            mock_request.assert_called_once()
+            call_kwargs = mock_request.call_args[1]
+
+            # 헤더 확인
+            assert "headers" in call_kwargs
+            assert call_kwargs["headers"]["User-Agent"] == client.config.user_agent
+
+    def test_get_apartments_bounding_endpoint(self, client):
+        """아파트 바운딩 엔드포인트 테스트
+
+        Expected: 올바른 엔드포인트로 요청을 보내야 함
+        현재 상태: 실패할 것임 (엔드포인트 불확실)
+        """
+        search_params = SearchParams(
+            bbox=(126.8781, 37.4132, 127.1834, 37.7151),
+            level=14,
+            tradeType=0,
+        )
+
+        with patch.object(client, "_make_request") as mock_request:
+            mock_request.return_value = APIResponse(success=True)
+
+            client.get_apartments_bounding(search_params)
+
+            # 올바른 엔드포인트 호출 확인
+            mock_request.assert_called_once_with(
+                method="GET",
+                endpoint="/api/apt/bounding",
+                params=search_params.to_dict(),
+            )
+
+    def test_rate_limiting(self, client):
+        """Rate limiting 테스트
+
+        Expected: API 호출 간격을 조절해야 함
+        현재 상태: 실패할 것임 (Rate limiting 미구현)
+        """
+
+        with patch.object(client, "_make_request") as mock_request:
+            mock_request.return_value = APIResponse(success=True)
+
+            # 첫 번째 요청
+            client._make_request("GET", "/api/test1")
+
+            # 두 번째 요청
+            client._make_request("GET", "/api/test2")
+
+            # Rate limiting이 적용되어야 함
+            # (실제 구현에서는 time.sleep이나 delay 로직이 필요)
+            assert mock_request.call_count == 2
+
+
+class TestHogangnonoCrawlerIntegrationTDD:
+    """호갱노노 크롤러 통합 TDD 테스트 - Red 단계"""
+
+    @pytest.fixture
+    def config(self):
+        return CrawlerConfig(
+            user_agent="Test Agent",
+            timeout=10.0,
+        )
+
+    @pytest.fixture
+    def crawler(self, config):
+        from crawler.crawlers.hogangnono import HogangnonoCrawler
+
+        return HogangnonoCrawler(
+            config=config,
+            output_dir="test_output",
+            region_bounds=(37.5, 126.9, 37.6, 127.0),
+        )
+
+    def test_crawl_region_with_real_data(self, crawler):
+        """실제 데이터 크롤링 테스트
+
+        Expected: 지역별 아파트 데이터를 가져와야 함
+        현재 상태: 실패할 것임 (실제 API 연동 필요)
+        """
+        with patch.object(crawler.hogangnono_client, "get_apartments_bounding") as mock_api:
+            # Mock 응답 데이터
+            mock_api.return_value = APIResponse(
+                success=True,
+                data={
+                    "data": [
+                        {
+                            "id": "12345",
+                            "name": "테스트아파트",
+                            "address": "서울시 강남구 테스트동",
+                            "lat": 37.5,
+                            "lng": 127.0,
+                            "build_year": "2020",
+                            "households": 500,
+                            "trade": {
+                                "type": "sale",
+                                "area": "84.94",
+                                "price": "150,000",
+                                "floor": "5",
+                            },
+                        }
+                    ]
+                },
+            )
+
+            complexes, transactions = crawler.crawl_region(
+                region_bounds=(37.5, 126.9, 37.6, 127.0),
+                apt_type="apart",
+                max_pages=1,
+            )
+
+            # 데이터 확인
+            assert len(complexes) > 0
+            assert len(transactions) > 0
+
+            # 데이터 구조 확인
+            complex_item = complexes[0]
+            assert "complex_id" in complex_item
+            assert "complex_name" in complex_item
+
+            transaction_item = transactions[0]
+            assert "complex_id" in transaction_item
+            assert "trade_type" in transaction_item
+
+    def test_data_mapping_to_naver_format(self, crawler):
+        """데이터 매핑 테스트
+
+        Expected: 호갱노노 데이터를 네이버 형식으로 올바르게 변환해야 함
+        현재 상태: 실패할 것임 (매핑 로직 오류 가능)
+        """
+        # 테스트 데이터
+        test_item = {
+            "id": "12345",
+            "name": "테스트아파트",
+            "address": "서울시 강남구",
+            "lat": 37.5,
+            "lng": 127.0,
+            "build_year": "2020",
+            "households": "500",
+            "trade": {
+                "type": "sale",
+                "area": "84.94",
+                "price": "150,000",
+                "floor": "5",
+                "date": "20241201",
+            },
+        }
+
+        mapped_data = crawler._map_to_naver_format(test_item)
+
+        # 매핑 결과 확인
+        assert mapped_data is not None
+        assert mapped_data["complex_id"] == "12345"
+        assert mapped_data["complex_name"] == "테스트아파트"
+        assert mapped_data["trade_type_name"] == "매매"
+        assert mapped_data["pyeong_type_number"] == 26  # 84.94 / 3.305785 ≈ 25.7
+        assert mapped_data["deal_price"] == 150000
+
+    def test_save_to_csv_functionality(self, crawler):
+        """CSV 저장 기능 테스트
+
+        Expected: 수집된 데이터를 CSV 파일에 저장해야 함
+        현재 상태: 실패할 것임 (파일 I/O 오류 가능)
+        """
+        test_complexes = [
+            {
+                "complex_id": "12345",
+                "complex_name": "테스트아파트",
+                "address": "서울시 강남구",
+            }
+        ]
+
+        test_transactions = [
+            {
+                "complex_id": "12345",
+                "trade_type": "A1",
+                "deal_price": 150000,
+            }
+        ]
+
+        # CSV 저장 시도
+        crawler.save_to_csv(test_complexes, test_transactions)
+
+        # 파일 생성 확인
+        assert crawler.complex_writer.output_path.exists()
+        assert crawler.transaction_writer.output_path.exists()
+
+
+class TestErrorHandlingTDD:
+    """에러 핸들링 TDD 테스트 - Red 단계"""
+
+    @pytest.fixture
+    def client(self):
+        config = CrawlerConfig(user_agent="Test", timeout=5.0)
+        return HogangnonoAPIClient(config)
+
+    def test_session_initialization_failure(self, client):
+        """세션 초기화 실패 테스트
+
+        Expected: 세션 초기화 실패를 올바르게 처리해야 함
+        현재 상태: 실패할 것임 (에러 처리 미완성)
+        """
+        with patch("requests.Session.get") as mock_get:
+            mock_get.side_effect = Exception("Network error")
+
+            result = client._initialize_session()
+
+            assert result is False
+            assert client._session_initialized is False
+
+    def test_api_timeout_handling(self, client):
+        """API 타임아웃 처리 테스트
+
+        Expected: 타임아웃 에러를 올바르게 처리해야 함
+        현재 상태: 실패할 것임 (타임아웃 처리 미완성)
+        """
+        with patch.object(client, "_make_request") as mock_request:
+            mock_request.return_value = APIResponse(
+                success=False,
+                error="Request timeout",
+                status_code=None,
+            )
+
+            response = client._make_request("GET", "/api/test")
+
+            assert response.success is False
+            assert "timeout" in response.error.lower()
+
+    def test_invalid_response_handling(self, client):
+        """잘못된 응답 처리 테스트
+
+        Expected: 잘못된 응답을 올바르게 처리해야 함
+        현재 상태: 실패할 것임 (응답 검증 미완성)
+        """
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+
+        api_response = APIResponse.from_response(mock_response)
+
+        assert api_response.success is False
+        assert api_response.status_code == 500

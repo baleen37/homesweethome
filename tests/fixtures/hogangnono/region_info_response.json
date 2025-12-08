@@ -1,0 +1,21 @@
+{
+  "data": {
+    "id": "4113500000",
+    "zoom": 15,
+    "name": "서울특별시 강남구",
+    "sidoName": "서울특별시",
+    "sigunguName": "강남구",
+    "dongName": null,
+    "hasRegionPage": true,
+    "showSellMyAptButton": true,
+    "showLocalItemButton": true,
+    "mapBubblePromotion": null,
+    "bounds": {
+      "north": 37.5325,
+      "south": 37.5064,
+      "east": 127.0658,
+      "west": 127.0234
+    }
+  },
+  "status": "success"
+}

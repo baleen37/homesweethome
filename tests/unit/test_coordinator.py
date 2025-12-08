@@ -43,7 +43,7 @@ class TestCrawlCoordinator:
                     "complex_id": complex_id,
                     "complex_name": "헬리오시티",
                     "pyeong_type_number": pyeong_type,
-                    "pyeong_name": f"84{['A', 'B'][pyeong_type-1]}",
+                    "pyeong_name": f"84{['A', 'B'][pyeong_type - 1]}",
                     "trade_type": trade_type,
                     "trade_type_name": {"A1": "매매", "B1": "전세", "B2": "월세"}[trade_type],
                     "trade_date": "2025-11-14",

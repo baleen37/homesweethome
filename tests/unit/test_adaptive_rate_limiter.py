@@ -14,7 +14,7 @@ class TestAdaptiveRateLimiter:
         """Test initial state of rate limiter."""
         limiter = AdaptiveRateLimiter()
 
-        assert limiter.current_delay == 2.5
+        assert limiter.current_delay == 5.0
         assert limiter.min_delay == 1.5
         assert limiter.max_delay == 10.0
         assert limiter.error_count == 0
@@ -28,8 +28,8 @@ class TestAdaptiveRateLimiter:
         limiter.wait()
         elapsed = time.time() - start_time
 
-        # Should wait approximately current_delay (2.5 seconds)
-        assert 2.4 <= elapsed <= 2.6
+        # Should wait approximately current_delay (5 seconds)
+        assert 4.9 <= elapsed <= 5.1
 
     def test_wait_with_previous_call(self):
         """Test wait() tracks last call time."""
@@ -80,8 +80,8 @@ class TestAdaptiveRateLimiter:
         for _ in range(10):
             limiter.on_success()
 
-        # Delay should be reduced by 10%: 2.5 * 0.9 = 2.25
-        assert limiter.current_delay == 2.25
+        # Delay should be reduced by 10%: 5.0 * 0.9 = 4.5
+        assert limiter.current_delay == 4.5
         assert limiter.success_count == 0  # Should reset after reducing delay
 
     def test_on_success_does_not_reduce_below_min_delay(self):
@@ -166,12 +166,12 @@ class TestAdaptiveRateLimiter:
         # 1 error resets success count
         limiter.on_rate_limit_error()
         assert limiter.success_count == 0
-        assert limiter.current_delay == 5.0  # 2.5 * 2
+        assert limiter.current_delay == 10.0  # 5.0 * 2
 
         # 10 more successes should reduce delay
         for _ in range(10):
             limiter.on_success()
-        assert limiter.current_delay == 4.5  # 5.0 * 0.9
+        assert limiter.current_delay == 9.0  # 10.0 * 0.9
         assert limiter.success_count == 0
 
     def test_get_retry_delay_exponential_backoff(self):
@@ -200,7 +200,7 @@ class TestAdaptiveRateLimiter:
         limiter.reset()
 
         # Check initial state restored
-        assert limiter.current_delay == 2.5
+        assert limiter.current_delay == 5.0
         assert limiter.error_count == 0
         assert limiter.success_count == 0
 

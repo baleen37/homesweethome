@@ -421,6 +421,26 @@ class CrawlerConfig(BaseModel):
         except ValueError as e:
             raise ValueError(f"환경 변수 설정 오류: {e}")
 
+    @classmethod
+    def for_integration_test(cls, output_dir: str, districts: list[str]) -> "CrawlerConfig":
+        """Create config for integration testing"""
+        return cls(
+            site="hogangnono",
+            hogangnono={
+                "timeout": 30,
+                "rate_limit_delay": 2.0,
+                "page_size": 20,
+            },
+            timeout=30,
+            headless=True,
+            use_threading=False,
+            max_workers=1,
+            delay_seconds=2.0,
+            retry_attempts=3,
+            retry_delay=1.0,
+            output_file=f"{output_dir}/test_output.csv",
+        )
+
     def create_output_path(self, base_dir: str = "output") -> Path:
         """타임스탬프가 포함된 출력 파일 경로 생성"""
         # 디렉토리 생성
