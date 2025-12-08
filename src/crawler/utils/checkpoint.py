@@ -56,16 +56,16 @@ class CheckpointManager:
         """체크포인트 디렉토리 생성"""
         self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> Dict[str, Any] | None:
         """체크포인트 데이터 로드 (새 API)
 
         Returns:
-            체크포인트 데이터 딕셔너리. 파일이 없거나 손상된 경우 빈 딕셔너리 반환
+            체크포인트 데이터 딕셔너리. 파일이 없거나 손상된 경우 None 반환
         """
         with self._lock:
             if not self.checkpoint_path.exists():
                 logger.debug("checkpoint_file_not_found", path=str(self.checkpoint_path))
-                return {}
+                return None
 
             try:
                 with open(self.checkpoint_path, "r", encoding="utf-8") as f:
@@ -78,7 +78,7 @@ class CheckpointManager:
                 logger.warning("checkpoint_corrupted", path=str(self.checkpoint_path), error=str(e))
                 # 손상된 파일 백업
                 self._backup_corrupted_file()
-                return {}
+                return None
 
     def _backup_corrupted_file(self) -> None:
         """손상된 체크포인트 파일 백업"""
@@ -141,7 +141,7 @@ class CheckpointManager:
         """
         with self._lock:
             data = self.load()
-            return key in data
+            return data is not None and key in data
 
     def get_processed_keys(self) -> set[str]:
         """처리된 모든 키 목록 반환
@@ -151,7 +151,7 @@ class CheckpointManager:
         """
         with self._lock:
             data = self.load()
-            return set(data.keys())
+            return set(data.keys()) if data else set()
 
     def clear(self) -> None:
         """체크포인트 데이터 전체 삭제"""
@@ -178,7 +178,7 @@ class CheckpointManager:
         """
         with self._lock:
             data = self.load()
-            return data.get(key, default)
+            return data.get(key, default) if data else default
 
     def remove(self, key: str) -> bool:
         """특정 키 삭제
@@ -191,7 +191,7 @@ class CheckpointManager:
         """
         with self._lock:
             data = self.load()
-            if key in data:
+            if data is not None and key in data:
                 del data[key]
                 self._atomic_write(data)
                 return True
@@ -213,6 +213,8 @@ class CheckpointManager:
         """
         with self._lock:
             current_data = self.load()
+            if current_data is None:
+                current_data = {}
             current_data.update(updates)
             self._atomic_write(current_data)
 
@@ -227,7 +229,7 @@ class CheckpointManager:
             file_size = self.checkpoint_path.stat().st_size if self.checkpoint_path.exists() else 0
 
             return {
-                "keys_count": len(data),
+                "keys_count": len(data) if data else 0,
                 "file_size_bytes": file_size,
                 "file_path": str(self.checkpoint_path),
                 "exists": self.checkpoint_path.exists(),
@@ -263,14 +265,23 @@ class CheckpointManager:
     def save(self, *args, **kwargs) -> None:
         """다중 정의: 기존 API와 새 API 모두 지원
 
-        새 API용: save(key, data)
+        새 API용1: save(data_dict) - 전체 데이터 딕셔너리 저장
+        새 API용2: save(key, data) - 키-값 쌍 저장
         기존 API용: save(last_dong=None, last_complex=None, ...)
         """
+        # 새 API 호출 (data_dict)
+        if len(args) == 1 and not kwargs and isinstance(args[0], dict):
+            data_dict = args[0]
+            with self._lock:
+                # 전체 데이터를 그대로 저장
+                self._atomic_write(data_dict)
         # 새 API 호출 (key, data)
-        if len(args) == 2 and not kwargs:
+        elif len(args) == 2 and not kwargs:
             key, data = args
             with self._lock:
                 current_data = self.load()
+                if current_data is None:
+                    current_data = {}
                 current_data[key] = data
                 self._atomic_write(current_data)
         # 기존 API 호출

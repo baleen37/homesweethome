@@ -32,7 +32,7 @@ class CrawlCoordinator:
 
     def __init__(
         self,
-        output_dir: Path,
+        config_or_output_dir: Path | Any,
         checkpoint_path: Path | None = None,
         initial_delay: float = 2.0,
         max_delay: float = 10.0,
@@ -42,14 +42,26 @@ class CrawlCoordinator:
         """CrawlCoordinator 초기화
 
         Args:
-            output_dir: CSV 파일 출력 디렉토리
+            config_or_output_dir: CrawlerConfig 객체 또는 CSV 파일 출력 디렉토리
             checkpoint_path: 체크포인트 파일 경로 (None이면 체크포인트 미사용)
             initial_delay: 초기 요청 간 지연 시간 (초)
             max_delay: 최대 지연 시간 (초)
             enable_progress_tracking: 진행 상황 추적 활성화 여부
             progress_report_interval: 진행 상황 리포트 출력 간격 (초)
         """
-        self.output_dir = Path(output_dir)
+        # Check if first argument is a CrawlerConfig
+        if hasattr(config_or_output_dir, "output_file"):
+            # It's a CrawlerConfig object
+            config = config_or_output_dir
+            self.output_dir = (
+                Path(config.output_file).parent if config.output_file else Path("output")
+            )
+            if not self.output_dir.exists():
+                self.output_dir = Path("output/test-integration/csv")
+        else:
+            # It's a path string
+            self.output_dir = Path(config_or_output_dir)
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # CSV Writer 초기화

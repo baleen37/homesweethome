@@ -438,6 +438,7 @@ class CrawlerConfig(BaseModel):
             delay_seconds=2.0,
             retry_attempts=3,
             retry_delay=1.0,
+            output_file=f"{output_dir}/test_output.csv",
         )
 
     def create_output_path(self, base_dir: str = "output") -> Path:
