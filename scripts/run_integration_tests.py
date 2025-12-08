@@ -24,7 +24,7 @@ def main():
 
     # Run tests in phases
     phases = [
-        ("Infrastructure", "tests/integration/conftest_integration.py tests/integration/helpers/"),
+        ("Infrastructure", "tests/integration/test_integration_infrastructure.py"),
         ("API Connectivity", "tests/integration/test_real_api_endpoints.py"),
         ("E2E Crawling", "tests/integration/test_e2e_crawling.py"),
         (
@@ -42,7 +42,13 @@ def main():
         phase_start = time.time()
 
         try:
-            cmd = ["pytest", "-v", "--tb=short", test_path]
+            # Handle multiple test files
+            if " " in test_path:
+                test_files = test_path.split()
+            else:
+                test_files = [test_path]
+
+            cmd = ["pytest", "-v", "--tb=short", "--run-integration"] + test_files
             result = subprocess.run(cmd, capture_output=True, text=True)
 
             phase_time = time.time() - phase_start
