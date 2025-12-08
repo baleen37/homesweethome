@@ -2,11 +2,11 @@ import argparse
 from pathlib import Path
 
 from crawler.config import CrawlerConfig
-from crawler.crawlers.naver import NaverRealEstateCrawler
+from crawler.crawlers.hogangnono import HogangnonoCrawler
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="HomeSweetHome Crawler - 네이버 부동산")
+    parser = argparse.ArgumentParser(description="HomeSweetHome Crawler - 호갱노노 부동산")
     parser.add_argument(
         "--output",
         type=Path,
@@ -44,13 +44,13 @@ def main() -> None:
         print(f"설정 오류: {e}")
         exit(1)
 
-    print("네이버 부동산 크롤링 시작...")
+    print("호갱노노 부동산 크롤링 시작...")
     if args.resume:
         print("체크포인트에서 재개합니다.")
     if district_filter:
         print(f"대상 구: {', '.join(district_filter)}")
 
-    crawler = NaverRealEstateCrawler(config)
+    crawler = HogangnonoCrawler(config)
 
     try:
         stats = crawler.crawl(district_filter=district_filter)
@@ -58,7 +58,7 @@ def main() -> None:
         print(f"\n오류: {e}")
         print("\n사용 가능한 구 목록을 확인하려면 다음 명령을 실행하세요:")
         print(
-            "python -c \"from crawler.crawlers.naver import NaverRealEstateCrawler; from crawler.config import CrawlerConfig; c = NaverRealEstateCrawler(CrawlerConfig.from_env()); districts = [d['district_name'] for d in c.districts_data['districts']]; print(', '.join(sorted(districts)))\""
+            "python -c \"from crawler.crawlers.hogangnono import HogangnonoCrawler; from crawler.config import CrawlerConfig; c = HogangnonoCrawler(CrawlerConfig.from_env()); districts = [d['district_name'] for d in c.districts_data['districts']]; print(', '.join(sorted(districts)))\""
         )
         exit(1)
     except RuntimeError as e:
