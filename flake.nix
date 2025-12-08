@@ -66,8 +66,8 @@
             # Set Python path
             export PYTHONPATH="${builtins.toString ./.}/src:$PYTHONPATH"
 
-            # Set Playwright browsers path
-            export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
+            # Playwright browsers path is set in .envrc to use external installation
+            # Nix-provided browsers are outdated (version 1181 vs required 1194)
 
             # Set output directory
             export CRAWLER_OUTPUT_DIR="${builtins.toString ./.}/output"
