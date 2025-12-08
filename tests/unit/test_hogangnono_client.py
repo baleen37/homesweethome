@@ -78,6 +78,7 @@ class TestAPIResponse:
         """성공 응답 테스트"""
         mock_response = Mock()
         mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {
             "success": True,
             "data": {"items": []},
@@ -85,7 +86,7 @@ class TestAPIResponse:
 
         api_response = APIResponse.from_response(mock_response)
         assert api_response.success is True
-        assert api_response.data == {"items": []}
+        assert api_response.data == {"items": []}  # data 필드만 추출됨
         assert api_response.error is None
         assert api_response.status_code == 200
 
@@ -93,6 +94,7 @@ class TestAPIResponse:
         """직접 데이터 응답 테스트"""
         mock_response = Mock()
         mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {"items": []}
 
         api_response = APIResponse.from_response(mock_response)
@@ -127,15 +129,8 @@ class TestHogangnonoAPIClient:
         assert client.base_url == "https://hogangnono.com"
         assert client.session == mock_session
         assert client.min_delay == 1.0
-
-        # 기본 헤더 설정 확인
-        expected_headers = {
-            "User-Agent": config.user_agent,
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-        }
-        for key, value in expected_headers.items():
-            assert client.session.headers[key] == value
+        # 세션 초기화 상태 확인
+        assert client._session_initialized is False
 
     @patch("crawler.api.hogangnono_client.Session")
     def test_build_url(self, mock_session_class, config):
@@ -151,8 +146,12 @@ class TestHogangnonoAPIClient:
         mock_session = Mock()
         mock_response = Mock()
         mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {"success": True, "data": {"items": []}}
         mock_session.request.return_value = mock_response
+        mock_session.get.return_value = Mock(status_code=200)
+        mock_session.cookies = Mock()
+        mock_session.cookies.__iter__ = Mock(return_value=iter([]))
         mock_session_class.return_value = mock_session
 
         client = HogangnonoAPIClient(config)
