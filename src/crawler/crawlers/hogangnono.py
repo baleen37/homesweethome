@@ -3,8 +3,6 @@
 APICrawler를 상속받아 호갱노노 부동산 데이터를 수집합니다.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 

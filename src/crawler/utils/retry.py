@@ -4,8 +4,6 @@ This module provides robust retry logic for handling transient failures
 in API calls and other operations.
 """
 
-from __future__ import annotations
-
 import random
 import time
 from enum import Enum

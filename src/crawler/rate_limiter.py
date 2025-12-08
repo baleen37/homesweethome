@@ -4,8 +4,6 @@ This module implements an adaptive rate limiting strategy that dynamically
 adjusts delay between requests based on success/error patterns.
 """
 
-from __future__ import annotations
-
 import time
 from typing import Final
 

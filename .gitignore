@@ -44,3 +44,4 @@ htmlcov/
 # Nix
 .result
 result direnv.d/.state*
+.direnv/

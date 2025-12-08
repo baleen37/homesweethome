@@ -5,8 +5,6 @@ APICrawler 추상 클래스를 구현합니다. 세션 관리, 헤더 설정, �
 JSON 응답 파싱, 페이지네이션, 에러 핸들링, Rate Limiting 등의 기능을 포함합니다.
 """
 
-from __future__ import annotations
-
 import json
 import time
 from abc import ABC, abstractmethod

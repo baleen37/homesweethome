@@ -3,8 +3,6 @@
 호갱노노 API 엔드포인트에 접근하기 위한 전용 클라이언트를 제공합니다.
 """
 
-from __future__ import annotations
-
 import json
 import types
 from dataclasses import dataclass
@@ -205,7 +203,7 @@ class APIResponse:
     status_code: Optional[int] = None
 
     @classmethod
-    def from_response(cls, response: Response) -> APIResponse:
+    def from_response(cls, response: Response) -> "APIResponse":
         """requests.Response 객체에서 APIResponse 생성"""
         # 기본 값 초기화
         status_code = None
@@ -493,7 +491,6 @@ class HogangnonoAPIClient:
 
         return final_headers
 
-    # @retry_with_backoff(max_attempts=3)  # 데코레이터 임시 제거
     def _make_request(
         self,
         method: str,
@@ -786,7 +783,7 @@ class HogangnonoAPIClient:
         self.session.close()
         self.logger.info("API client session closed")
 
-    def __enter__(self) -> HogangnonoAPIClient:
+    def __enter__(self) -> "HogangnonoAPIClient":
         """Context manager 진입"""
         # Context manager 진입 시 자동으로 세션 초기화
         self._initialize_session()
