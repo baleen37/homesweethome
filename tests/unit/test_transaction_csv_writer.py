@@ -1,6 +1,7 @@
 import csv
 import tempfile
 from pathlib import Path
+from typing import Any
 from unittest import TestCase
 
 from crawler.writers.transaction_csv_writer import TransactionCSVWriter

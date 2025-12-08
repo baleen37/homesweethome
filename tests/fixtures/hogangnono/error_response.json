@@ -1,0 +1,6 @@
+{
+  "status": "error",
+  "message": "인증되지 않은 요청입니다",
+  "code": "AUTH_REQUIRED",
+  "error": "Access denied"
+}
