@@ -8,11 +8,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# Playwright import (TDD 테스트를 위해)
-try:
-    from playwright.sync_api import sync_playwright
-except ImportError:
-    sync_playwright = None
 
 from .api import APICrawler
 from ..api.hogangnono_client import HogangnonoAPIClient, SearchParams
