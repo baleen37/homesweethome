@@ -16,6 +16,29 @@ Python 웹 크롤링 + CSV 저장 보일러플레이트
 
 ## 설치
 
+### Nix를 사용하는 경우 (권장)
+
+```bash
+# 1. Nix 설치 (https://nixos.org/download.html)
+# 2. direnv 설치 및 설정
+# macOS: brew install direnv
+# Ubuntu: sudo apt install direnv
+
+# 3. direnv 설정 (shell config에 추가)
+echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
+# 또는 zsh의 경우
+echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc
+
+# 4. 프로젝트 진입 (자동으로 Nix 환경 활성화)
+cd homesweethome
+direnv allow  # 최초 1회만 실행
+
+# 5. Playwright 브라우저 설치
+uv run playwright install chromium
+```
+
+### 기존 방식 (uv 직접 사용)
+
 ```bash
 # 의존성 설치
 uv sync
