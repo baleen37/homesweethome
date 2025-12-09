@@ -274,3 +274,45 @@ class TestHogangnonoAPIEndpoints:
         assert "lng_min" not in result
         assert result["zoom"] == 15
         assert result["limit"] == 50
+
+    @pytest.mark.integration
+    def test_regions_api(self):
+        """전체 지역 목록 조회 API 검증
+
+        `/api/v2/regions` API를 실제로 호출하여 응답 구조와 서울 25개 구 데이터 확인
+        """
+        # 세션 생성 및 쿠키 획득
+        session = requests.Session()
+        session.get("https://hogangnono.com")
+
+        # regions API 호출
+        response = session.get(
+            "https://hogangnono.com/api/v2/regions", headers={"X-Requested-With": "XMLHttpRequest"}
+        )
+
+        assert response.status_code == 200, f"API 호출 실패: {response.status_code}"
+
+        data = response.json()
+
+        # 응답 구조 검증
+        assert "data" in data, "응답에 'data' 필드가 없음"
+        assert "regionList" in data["data"], "응답에 'regionList' 필드가 없음"
+
+        # 서울특별시 찾기
+        seoul = next((r for r in data["data"]["regionList"] if r["regionCode"] == "11"), None)
+        assert seoul is not None, "서울특별시 데이터를 찾을 수 없음"
+        assert seoul["name"] == "서울", f"서울 이름이 잘못됨: {seoul['name']}"
+
+        # 서울 25개 구 검증
+        assert "children" in seoul, "서울에 children 필드가 없음"
+        assert (
+            len(seoul["children"]) == 25
+        ), f"서울 구 개수 오류: {len(seoul['children'])}개 (예상: 25개)"
+
+        # 구 데이터 필드 검증
+        for district in seoul["children"]:
+            assert "regionCode" in district, f"구 데이터에 regionCode 없음: {district}"
+            assert "name" in district, f"구 데이터에 name 없음: {district}"
+            assert "fullName" in district, f"구 데이터에 fullName 없음: {district}"
+
+        print(f"✓ 서울 25개 구 확인: {[d['name'] for d in seoul['children']]}")
