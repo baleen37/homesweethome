@@ -316,3 +316,47 @@ class TestHogangnonoAPIEndpoints:
             assert "fullName" in district, f"구 데이터에 fullName 없음: {district}"
 
         print(f"✓ 서울 25개 구 확인: {[d['name'] for d in seoul['children']]}")
+
+    @pytest.mark.integration
+    def test_pois_bounding_small_bbox(self):
+        """작은 bbox로 POI 조회 (600개 제한 안 걸림)
+
+        `/api/v2/pois-bounding` API를 작은 bbox로 호출하여
+        600개 제한에 걸리지 않는 정상 동작 확인
+        """
+        # 세션 생성 및 쿠키 획득
+        session = requests.Session()
+        session.get("https://hogangnono.com")
+
+        # 작은 bbox 파라미터 (0.01도 = 약 1km)
+        params = {
+            "level": 16,
+            "startX": 127.00,
+            "endX": 127.01,
+            "startY": 37.50,
+            "endY": 37.51,
+            "types": "1",  # 아파트만
+        }
+
+        response = session.get("https://hogangnono.com/api/v2/pois-bounding", params=params)
+
+        assert response.status_code == 200, f"API 호출 실패: {response.status_code}"
+
+        data = response.json()
+
+        assert "data" in data, "응답에 'data' 필드가 없음"
+        assert isinstance(data["data"], list), f"data는 list여야 함: {type(data['data'])}"
+
+        poi_count = len(data["data"])
+        assert poi_count < 600, f"600개 제한에 걸림: {poi_count}개"
+
+        # POI 필드 검증
+        if poi_count > 0:
+            poi = data["data"][0]
+            required_fields = ["id", "name", "lat", "lng", "category", "address"]
+            for field in required_fields:
+                assert field in poi, f"POI에 {field} 필드 없음: {poi.keys()}"
+
+            assert poi["category"] == 1, f"category=1(아파트)여야 함: {poi['category']}"
+
+        print(f"✓ 작은 bbox: {poi_count}개 POI (600개 제한 안 걸림)")
