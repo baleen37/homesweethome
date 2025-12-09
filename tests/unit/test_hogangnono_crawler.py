@@ -1,291 +1,367 @@
-"""HogangnonoCrawler 단위 테스트"""
+"""Tests for HogangnonoCrawler implementation."""
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 from crawler.config import CrawlerConfig
 from crawler.crawlers.hogangnono import HogangnonoCrawler
-from crawler.api.hogangnono_client import APIResponse
 
 
 @pytest.fixture
 def config():
-    """테스트용 설정 객체"""
+    """Create test config for HogangnonoCrawler."""
     return CrawlerConfig(
-        user_agent="test-agent",
-        timeout=10.0,
+        site="hogangnono",
+        timeout=30,
+        headless=True,
+        hogangnono={
+            "rate_limit_delay": 1.0,
+            "page_size": 20,
+        },
     )
 
 
 @pytest.fixture
-def temp_output_dir(tmp_path):
-    """임시 출력 디렉토리"""
-    output_dir = tmp_path / "output"
-    output_dir.mkdir()
-    return output_dir
-
-
-@pytest.fixture
-def crawler(config, temp_output_dir):
-    """테스트용 크롤러 객체"""
-    return HogangnonoCrawler(
-        config=config,
-        output_dir=temp_output_dir,
-        region_bounds=(37.5, 126.9, 37.6, 127.0),
-    )
+def crawler(config):
+    """Create HogangnonoCrawler instance."""
+    return HogangnonoCrawler(config)
 
 
 class TestHogangnonoCrawler:
-    """HogangnonoCrawler 테스트 클래스"""
+    """Test cases for HogangnonoCrawler."""
 
     def test_init(self, crawler):
-        """초기화 테스트"""
+        """Test crawler initialization."""
+        assert crawler is not None
+        assert crawler.config.site == "hogangnono"
+        assert hasattr(crawler, "browser_manager")
+        assert hasattr(crawler, "logger")
         assert crawler.base_url == "https://hogangnono.com"
-        assert crawler.region_bounds == (37.5, 126.9, 37.6, 127.0)
-        assert crawler.output_dir.exists()
 
-    def test_get_endpoint(self, crawler):
-        """엔드포인트 반환 테스트"""
-        endpoint = crawler.get_endpoint()
-        assert endpoint == "/api/apt/bounding"
+    def test_get_url(self, crawler):
+        """Test get_url method returns correct URL."""
+        url = crawler.get_url()
+        assert url == "https://hogangnono.com"
 
-    def test_get_params(self, crawler):
-        """요청 파라미터 반환 테스트"""
-        params = crawler.get_params()
-        expected = {
-            "lat_min": 37.5,
-            "lng_min": 126.9,
-            "lat_max": 37.6,
-            "lng_max": 127.0,
-            "zoom": 14,
-            "limit": 100,
-            "apt_type": "apart",
-        }
-        assert params == expected
+    @patch("crawler.crawlers.hogangnono.BrowserManager")
+    def test_fetch_with_browser(self, mock_browser_manager_class, crawler):
+        """Test fetch method uses BrowserManager correctly."""
+        # Mock browser manager and page
+        mock_browser_manager = Mock()
+        mock_page = Mock()
 
-    def test_parse_response_empty_data(self, crawler):
-        """빈 응답 파싱 테스트"""
-        response_data = {"data": []}
-        result = crawler.parse_response(response_data)
+        # Create a proper context manager mock
+        mock_context_manager = Mock()
+        mock_context_manager.__enter__ = Mock(return_value=mock_page)
+        mock_context_manager.__exit__ = Mock(return_value=None)
+        mock_browser_manager.managed_browser.return_value = mock_context_manager
+        mock_browser_manager_class.return_value = mock_browser_manager
+
+        # Recreate crawler with mocked BrowserManager
+        crawler = HogangnonoCrawler(crawler.config)
+
+        # Mock page.goto and content
+        mock_page.goto.return_value = None
+        mock_page.wait_for_load_state.return_value = None
+        mock_page.content.return_value = "<html>test</html>"
+
+        # Test fetch
+        result = crawler.fetch("https://hogangnono.com")
+
+        assert result == "<html>test</html>"
+        mock_page.goto.assert_called_once_with("https://hogangnono.com")
+        mock_page.wait_for_load_state.assert_called_once_with("networkidle")
+        mock_page.content.assert_called_once()
+
+    def test_parse_empty_html(self, crawler):
+        """Test parse method with empty HTML."""
+        result = crawler.parse("")
         assert result == []
 
-    def test_parse_response_with_items(self, crawler):
-        """아이템이 있는 응답 파싱 테스트"""
-        # 호갱노노 형식의 더미 데이터
-        response_data = {
-            "data": [
+    def test_parse_with_mock_html(self, crawler):
+        """Test parse method with mock HTML structure."""
+        mock_html = """
+        <html>
+            <body>
+                <div data-testid="real-estate-item">
+                    <div class="price">12억 5,000만</div>
+                    <div class="area">84.85㎡</div>
+                    <div class="floor">3/15층</div>
+                    <div class="date">24.12.01</div>
+                    <div class="complex-name">테스트단지</div>
+                    <div class="address">서울시 강남구 테스트동</div>
+                </div>
+                <div data-testid="real-estate-item">
+                    <div class="price">8억 3,000만</div>
+                    <div class="area">75.32㎡</div>
+                    <div class="floor">5/20층</div>
+                    <div class="date">24.11.28</div>
+                    <div class="complex-name">테스트단지2</div>
+                    <div class="address">서울시 서초구 테스트동</div>
+                </div>
+            </body>
+        </html>
+        """
+
+        result = crawler.parse(mock_html)
+
+        assert len(result) == 2
+        assert result[0]["price"] == "12억 5,000만"
+        assert result[0]["area"] == "84.85㎡"
+        assert result[0]["floor"] == "3/15층"
+        assert result[0]["date"] == "24.12.01"
+        assert result[0]["complex_name"] == "테스트단지"
+        assert result[0]["address"] == "서울시 강남구 테스트동"
+
+    def test_parse_with_alternative_selectors(self, crawler):
+        """Test parse method with alternative CSS selectors."""
+        html_with_property_items = """
+        <html>
+            <body>
+                <div class="property-item">
+                    <div class="price">5억</div>
+                    <div class="area">59.5㎡</div>
+                    <div class="complex-name">오피스텔</div>
+                </div>
+                <li class="search-item">
+                    <div class="price">3억</div>
+                    <div class="area">33.2㎡</div>
+                    <div class="complex-name">원룸</div>
+                </li>
+            </body>
+        </html>
+        """
+
+        with patch("crawler.crawlers.hogangnono.BeautifulSoup") as mock_bs:
+            mock_soup = Mock()
+            mock_bs.return_value = mock_soup
+
+            # Mock items with get_text method
+            mock_item1 = Mock()
+            mock_item1.find.side_effect = [
+                Mock(get_text=Mock(return_value="5억")),  # price
+                Mock(get_text=Mock(return_value="59.5㎡")),  # area
+                Mock(get_text=Mock(return_value="")),  # floor
+                Mock(get_text=Mock(return_value="")),  # date
+                Mock(get_text=Mock(return_value="오피스텔")),  # complex_name
+                Mock(get_text=Mock(return_value="")),  # address
+            ]
+
+            # First find_all returns empty, second attempt returns items
+            mock_soup.find_all.side_effect = [
+                [],  # No data-testid items
+                [mock_item1],  # property-item found
+            ]
+
+            result = crawler.parse(html_with_property_items)
+
+            assert isinstance(result, list)
+            mock_bs.assert_called_once_with(html_with_property_items, "html.parser")
+
+    def test_extract_listing_data(self, crawler):
+        """Test _extract_listing_data method."""
+        # Create mock item element
+        mock_item = Mock()
+
+        # Mock find method for each class
+        mock_item.find.side_effect = [
+            Mock(get_text=Mock(return_value="10억 5,000만")),  # price
+            Mock(get_text=Mock(return_value="84.95㎡")),  # area
+            Mock(get_text=Mock(return_value="5/15층")),  # floor
+            Mock(get_text=Mock(return_value="24.12.01")),  # date
+            Mock(get_text=Mock(return_value="테스트아파트")),  # complex_name
+            Mock(get_text=Mock(return_value="서울시 강남구")),  # address
+        ]
+
+        result = crawler._extract_listing_data(mock_item)
+
+        assert result is not None
+        assert result["price"] == "10억 5,000만"
+        assert result["area"] == "84.95㎡"
+        assert result["floor"] == "5/15층"
+        assert result["date"] == "24.12.01"
+        assert result["complex_name"] == "테스트아파트"
+        assert result["address"] == "서울시 강남구"
+
+    def test_extract_listing_data_no_price_or_name(self, crawler):
+        """Test _extract_listing_data returns None when no price or name."""
+        mock_item = Mock()
+        mock_item.find.side_effect = [
+            Mock(get_text=Mock(return_value="")),  # empty price
+            Mock(get_text=Mock(return_value="84.95㎡")),
+            Mock(get_text=Mock(return_value="5/15층")),
+            Mock(get_text=Mock(return_value="24.12.01")),
+            Mock(get_text=Mock(return_value="")),  # empty complex_name
+            Mock(get_text=Mock(return_value="서울시 강남구")),
+        ]
+
+        result = crawler._extract_listing_data(mock_item)
+
+        assert result is None
+
+    @patch("crawler.crawlers.hogangnono.BrowserManager")
+    def test_crawl_region(self, mock_browser_manager_class, crawler):
+        """Test crawl_region method."""
+        # Mock browser manager and page
+        mock_browser_manager = Mock()
+        mock_page = Mock()
+
+        # Create a proper context manager mock
+        mock_context_manager = Mock()
+        mock_context_manager.__enter__ = Mock(return_value=mock_page)
+        mock_context_manager.__exit__ = Mock(return_value=None)
+        mock_browser_manager.managed_browser.return_value = mock_context_manager
+        mock_browser_manager_class.return_value = mock_browser_manager
+
+        # Recreate crawler with mocked BrowserManager
+        crawler = HogangnonoCrawler(crawler.config)
+
+        # Mock page operations
+        mock_page.goto.return_value = None
+        mock_page.wait_for_load_state.return_value = None
+        mock_page.locator.return_value.count.return_value = 1  # search input found
+        mock_page.locator.return_value.fill = Mock()
+        mock_page.keyboard.press = Mock()
+        mock_page.wait_for_timeout.return_value = None
+        mock_page.content.return_value = "<html>test</html>"
+
+        # Mock parse result
+        with patch.object(crawler, "parse") as mock_parse:
+            mock_parse.return_value = [
                 {
-                    "id": "12345",
-                    "name": "테스트아파트",
-                    "address": "서울시 강남구 테헤란로",
-                    "lat": 37.5,
-                    "lng": 127.0,
-                    "build_year": "2020",
-                    "households": 500,
-                    "floors": 35,
-                    "trade": {
-                        "type": "sale",
-                        "area": "84.95",
-                        "floor": "5층",
-                        "price": "10,000,000",
-                        "date": "20241201",
-                    },
+                    "price": "10억",
+                    "complex_name": "테스트",
+                    "area": "84㎡",
+                    "floor": "5/15층",
+                    "date": "24.12.01",
+                    "address": "서울시 강남구",
                 }
             ]
-        }
 
-        result = crawler.parse_response(response_data)
-        assert len(result) == 1
+            result = crawler.crawl_region("강남구", "개포동")
 
-        # 원본 데이터 확인
-        item = result[0]
-        assert item["id"] == "12345"
-        assert item["name"] == "테스트아파트"
+            assert len(result) == 1
+            assert result[0]["price"] == "10억"
+            mock_page.goto.assert_called_once_with("https://hogangnono.com")
+            mock_page.locator.return_value.fill.assert_called_once_with("강남구 개포동")
+            mock_page.keyboard.press.assert_called_once_with("Enter")
+            mock_parse.assert_called_once_with("<html>test</html>")
 
-    def test_parse_response_different_trade_types(self, crawler):
-        """다양한 거래 타입 파싱 테스트"""
-        response_data = {
-            "data": [
-                {
-                    "id": "1",
-                    "name": "매매아파트",
-                    "recent_trade": {
-                        "type": "sale",
-                        "deal_price": "500,000,000",
-                    },
-                },
-                {
-                    "id": "2",
-                    "name": "전세아파트",
-                    "recent_trade": {
-                        "type": "jeonse",
-                        "jeonse_price": "300,000,000",
-                    },
-                },
-                {
-                    "id": "3",
-                    "name": "월세아파트",
-                    "recent_trade": {
-                        "type": "monthly",
-                        "deposit": "100,000,000",
-                        "monthly_rent": "500,000",
-                    },
-                },
+    @patch("crawler.crawlers.hogangnono.BrowserManager")
+    def test_crawl_with_pagination(self, mock_browser_manager_class, crawler):
+        """Test crawl_with_pagination method."""
+        # Mock browser manager and page
+        mock_browser_manager = Mock()
+        mock_page = Mock()
+
+        # Create a proper context manager mock
+        mock_context_manager = Mock()
+        mock_context_manager.__enter__ = Mock(return_value=mock_page)
+        mock_context_manager.__exit__ = Mock(return_value=None)
+        mock_browser_manager.managed_browser.return_value = mock_context_manager
+        mock_browser_manager_class.return_value = mock_browser_manager
+
+        # Recreate crawler with mocked BrowserManager
+        crawler = HogangnonoCrawler(crawler.config)
+
+        # Mock page operations
+        mock_page.goto.return_value = None
+        mock_page.wait_for_load_state.return_value = None
+        mock_page.locator.return_value.count.return_value = 1  # search input found
+        mock_page.locator.return_value.fill = Mock()
+        mock_page.keyboard.press = Mock()
+        mock_page.wait_for_timeout.return_value = None
+
+        # Mock page.content to return different results for each call
+        mock_page.content.side_effect = [
+            "<html>page1</html>",  # First page
+            "<html>page2</html>",  # After more button click
+            "<html>page2</html>",  # No new items
+        ]
+
+        # Mock parse results
+        with patch.object(crawler, "parse") as mock_parse:
+            mock_parse.side_effect = [
+                [{"complex_name": "아파트1", "area": "84㎡", "price": "10억"}],  # First page
+                [{"complex_name": "아파트2", "area": "75㎡", "price": "8억"}],  # Second page
+                [{"complex_name": "아파트2", "area": "75㎡", "price": "8억"}],  # No new items
             ]
-        }
 
-        result = crawler.parse_response(response_data)
-        assert len(result) == 3
+            # Mock more button (visible on first iteration, hidden on second)
+            mock_more_button = Mock()
+            mock_more_button.count.return_value = 1
+            mock_more_button.is_visible.return_value = True
+            mock_more_button.click = Mock()
 
-        # 매매
-        assert result[0]["id"] == "1"
-        assert result[0]["name"] == "매매아파트"
+            mock_page.locator.side_effect = [
+                Mock(count=Mock(return_value=1), fill=Mock()),  # search input
+                mock_more_button,  # more button on first iteration
+                Mock(count=Mock(return_value=0)),  # no more button
+            ]
 
-        # 전세
-        assert result[1]["id"] == "2"
-        assert result[1]["name"] == "전세아파트"
+            result = crawler.crawl_with_pagination("강남구", max_pages=3)
 
-        # 월세
-        assert result[2]["id"] == "3"
-        assert result[2]["name"] == "월세아파트"
+            assert len(result) == 2  # Both unique apartments
+            assert result[0]["complex_name"] == "아파트1"
+            assert result[1]["complex_name"] == "아파트2"
 
-    def test_crawl_region_success(self, crawler):
-        """지역 크롤링 성공 테스트"""
-        # Mock API 응답
-        mock_response = APIResponse(
-            success=True,
-            data={
-                "items": [
-                    {
-                        "id": "1",
-                        "name": "아파트1",
-                        "trade": {"type": "sale", "deal_price": "500,000,000"},
-                    },
-                    {
-                        "id": "2",
-                        "name": "아파트2",
-                        "trade": {"type": "jeonse", "jeonse_price": "300,000,000"},
-                    },
-                ]
-            },
-        )
+    @patch("crawler.crawlers.hogangnono.BrowserManager")
+    def test_crawl_integration(self, mock_browser_manager_class, crawler):
+        """Test crawl method integrates fetch and parse correctly."""
+        # Mock browser manager and page
+        mock_browser_manager = Mock()
+        mock_page = Mock()
 
-        with patch.object(
-            crawler.hogangnono_client, "get_apartments_bounding", return_value=mock_response
-        ):
-            complexes, transactions = crawler.crawl_region()
+        # Create a proper context manager mock
+        mock_context_manager = Mock()
+        mock_context_manager.__enter__ = Mock(return_value=mock_page)
+        mock_context_manager.__exit__ = Mock(return_value=None)
+        mock_browser_manager.managed_browser.return_value = mock_context_manager
+        mock_browser_manager_class.return_value = mock_browser_manager
 
-        assert len(complexes) == 2
-        assert len(transactions) == 2
-        assert complexes[0]["complex_name"] == "아파트1"
-        assert transactions[0]["trade_type"] == "A1"
-        assert transactions[1]["trade_type"] == "B1"
+        # Recreate crawler with mocked BrowserManager
+        crawler = HogangnonoCrawler(crawler.config)
 
-    def test_crawl_region_with_pagination(self, crawler):
-        """페이지네이션 포함 크롤링 테스트"""
-        # 첫 페이지 응답
-        first_response = APIResponse(success=True, data={"items": [{"id": "1", "name": "아파트1"}]})
+        # Mock page operations
+        mock_page.goto.return_value = None
+        mock_page.wait_for_load_state.return_value = None
+        mock_page.content.return_value = "<html>test</html>"
 
-        # 두 번째 페이지 응답
-        second_response = APIResponse(
-            success=True, data={"items": [{"id": "2", "name": "아파트2"}]}
-        )
+        # Mock parse result
+        with patch.object(crawler, "parse") as mock_parse:
+            mock_parse.return_value = [
+                {
+                    "price": "12억",
+                    "area": "84㎡",
+                    "floor": "3/15층",
+                    "date": "24.12.01",
+                    "complex_name": "테스트",
+                    "address": "서울시 강남구",
+                }
+            ]
 
-        # 세 번째 페이지 (빈 응답)
-        empty_response = APIResponse(success=True, data={"items": []})
+            result = crawler.crawl()
 
-        with (
-            patch.object(
-                crawler.hogangnono_client, "get_apartments_bounding", return_value=first_response
-            ),
-            patch.object(
-                crawler.hogangnono_client,
-                "_make_request",
-                side_effect=[second_response, empty_response],
-            ),
-        ):
-            complexes, transactions = crawler.crawl_region(max_pages=5)
+            assert len(result) == 1
+            assert result[0]["price"] == "12억"
+            mock_parse.assert_called_once_with("<html>test</html>")
 
-        assert len(complexes) == 2
-        assert len(transactions) == 2
+    def test_crawl_with_exception_handling(self, crawler):
+        """Test crawl method handles exceptions properly."""
+        with patch.object(crawler, "fetch", side_effect=Exception("Network error")):
+            with pytest.raises(Exception, match="Network error"):
+                crawler.crawl()
 
-    def test_save_to_csv(self, crawler, temp_output_dir):
-        """CSV 저장 테스트"""
-        complexes = [
-            {
-                "id": "1",
-                "name": "아파트1",
-                "address": "주소1",
-                "build_year": 2020,
-                "households": 100,
-                "floors": 10,
-            }
-        ]
+    @patch("crawler.crawlers.hogangnono.BrowserManager")
+    def test_browser_manager_integration(self, mock_browser_manager_class, config):
+        """Test BrowserManager is properly integrated."""
+        mock_browser_manager = Mock()
+        mock_browser_manager_class.return_value = mock_browser_manager
 
-        transactions = [
-            {
-                "id": "1",
-                "name": "아파트1",
-                "address": "주소1",
-                "build_year": 2020,
-                "households": 100,
-                "floors": 10,
-                "trade_type": "A1",
-                "deal_price": 500000000,
-                "trade_date": "20241201",
-            }
-        ]
+        # Create crawler
+        crawler = HogangnonoCrawler(config)
 
-        crawler.save_to_csv(complexes, transactions)
-
-        # 파일 확인
-        complexes_file = temp_output_dir / "hogangnono_complexes.csv"
-        transactions_file = temp_output_dir / "hogangnono_transactions.csv"
-
-        assert complexes_file.exists()
-        assert transactions_file.exists()
-
-        # 내용 확인
-        with open(complexes_file, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "아파트1" in content
-
-        with open(transactions_file, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "500000000" in content
-
-    def test_crawl_and_save_integration(self, crawler):
-        """크롤링과 저장 통합 테스트"""
-        mock_response = APIResponse(
-            success=True,
-            data={
-                "items": [
-                    {
-                        "id": "1",
-                        "name": "테스트아파트",
-                        "address": "서울시 강남구",
-                        "build_year": "2020",
-                        "households": 200,
-                        "floors": 15,
-                        "trade": {
-                            "type": "sale",
-                            "deal_price": "1,000,000,000",
-                            "date": "20241201",
-                        },
-                    }
-                ]
-            },
-        )
-
-        with patch.object(
-            crawler.hogangnono_client, "get_apartments_bounding", return_value=mock_response
-        ):
-            crawler.crawl_and_save()
-
-        # 파일이 생성되었는지 확인
-        complexes_file = crawler.output_dir / "hogangnono_complexes.csv"
-        transactions_file = crawler.output_dir / "hogangnono_transactions.csv"
-
-        assert complexes_file.exists()
-        assert transactions_file.exists()
+        # Verify BrowserManager was initialized with config
+        mock_browser_manager_class.assert_called_once_with(config)
+        assert crawler.browser_manager == mock_browser_manager
