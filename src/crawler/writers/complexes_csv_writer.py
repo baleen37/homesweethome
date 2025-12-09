@@ -5,6 +5,7 @@ with basic information, detailed information, and calculated statistics fields.
 """
 
 import csv
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -119,6 +120,7 @@ class ComplexesCSVWriter:
         normalized = complex_data.copy()
 
         # Define default values for all non-statistics fields
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         default_values = {
             "complex_id": "",
             "complex_name": "",
@@ -132,7 +134,7 @@ class ComplexesCSVWriter:
             "lease_count": 0,
             "rent_count": 0,
             "pyeong_types": "",
-            "fetched_at": "",
+            "fetched_at": current_time,
         }
 
         # Fill in missing non-statistics fields with defaults

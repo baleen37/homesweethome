@@ -1,25 +1,29 @@
 """호갱노노 전용 크롤러 구현
 
-BaseCrawler를 상속받아 Playwright 기반으로 호갱노노 부동산 데이터를 수집합니다.
+BaseCrawler를 상속받아 호갱노노 API 클라이언트를 통해 부동산 데이터를 수집합니다.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, List, Optional
 
 from bs4 import BeautifulSoup
 
 from .base import BaseCrawler
 from ..config import CrawlerConfig
+from ..api.hogangnono_client import HogangnonoAPIClient, SearchParams
 from ..utils.browser_manager import BrowserManager
+from ..rate_limiter import AdaptiveRateLimiter
+from ..writers.hogangnono_csv_writer import HogangnonoCSVWriter
 
 
 class HogangnonoCrawler(BaseCrawler):
     """호갱노노 부동산 크롤러
 
-    BaseCrawler를 상속받아 Playwright를 통해 호갱노노 사이트의 데이터를 수집합니다.
+    BaseCrawler를 상속받아 API 클라이언트를 통해 호갱노노 데이터를 수집합니다.
     - 지역(구/동) 기반 검색
-    - 동적 로딩 되는 매물 목록 추출
+    - API 기반 매물 목록 추출
     - 상세 정보 접근 및 파싱
     """
 
@@ -31,16 +35,39 @@ class HogangnonoCrawler(BaseCrawler):
         """
         super().__init__(config)
 
-        # Playwright를 위한 BrowserManager 초기화
+        # API 클라이언트 초기화
+        self.api_client = HogangnonoAPIClient(config)
+
+        # Playwright를 위한 BrowserManager 초기화 (fallback용)
         self.browser_manager = BrowserManager(config)
+
+        # Rate Limiter 초기화 (API 클라이언트에 내장된 것 사용)
+        self.rate_limiter = AdaptiveRateLimiter()
+
+        # CSV Writer 초기화
+        output_dir = config.output_file or "output"
+        # If output_file is a file path, extract directory
+        if output_dir.endswith(".csv"):
+            output_dir = str(Path(output_dir).parent)
+        self.csv_writer = HogangnonoCSVWriter(output_dir=output_dir)
 
         # 기본 URL
         self.base_url = "https://hogangnono.com"
 
+        # 설정에서 제한값 가져오기
+        site_config = config.get_site_config()
+        self.max_pages = getattr(site_config, "max_page", 5)
+        self.max_apartments_per_page = getattr(site_config, "page_size", 10)
+
+        output_dir = config.output_file or "output"
+        if output_dir.endswith(".csv"):
+            output_dir = str(Path(output_dir).parent)
         self.logger.info(
             "hogangnono_crawler_initialized",
             base_url=self.base_url,
-            headless=config.headless,
+            max_pages=self.max_pages,
+            max_apartments_per_page=self.max_apartments_per_page,
+            output_dir=output_dir,
         )
 
     def get_url(self) -> str:
@@ -63,6 +90,9 @@ class HogangnonoCrawler(BaseCrawler):
         Raises:
             Exception: 페이지 로드 실패 시
         """
+        # Rate limiting 적용
+        self.rate_limiter.wait()
+
         try:
             with self.browser_manager.managed_browser() as page:
                 # 페이지 이동
@@ -74,6 +104,9 @@ class HogangnonoCrawler(BaseCrawler):
                 # HTML 콘텐츠 가져오기
                 html_content = page.content()
 
+                # 성공 시 rate limiter 알림
+                self.rate_limiter.on_success()
+
                 self.logger.info(
                     "page_loaded_successfully",
                     url=url,
@@ -83,6 +116,12 @@ class HogangnonoCrawler(BaseCrawler):
                 return html_content
 
         except Exception as e:
+            # HTTP 429 에러인 경우 rate limiter에 알림
+            if "429" in str(e) or "Too Many Requests" in str(e):
+                self.rate_limiter.on_rate_limit_error()
+            else:
+                self.rate_limiter.on_error()
+
             self.logger.error(
                 "failed_to_fetch_page",
                 url=url,
@@ -167,7 +206,7 @@ class HogangnonoCrawler(BaseCrawler):
 
         return listings
 
-    def _extract_apartment_data(self, item) -> Optional[dict[str, Any]]:
+    def _extract_apartment_data(self, item: Any) -> Optional[dict[str, Any]]:
         """개별 아파트 정보 추출 (검색 결과 페이지)
 
         Args:
@@ -247,7 +286,7 @@ class HogangnonoCrawler(BaseCrawler):
         Returns:
             추출된 실거래가 데이터 리스트
         """
-        listings = []
+        listings: List[dict[str, Any]] = []
 
         try:
             # 실거래가 표 찾기
@@ -352,6 +391,9 @@ class HogangnonoCrawler(BaseCrawler):
         Returns:
             수집된 부동산 데이터 리스트
         """
+        # Rate limiting 적용
+        self.rate_limiter.wait()
+
         try:
             search_query = f"{district} {dong or ''}".strip()
             encoded_query = search_query.replace(" ", "%20")
@@ -362,7 +404,7 @@ class HogangnonoCrawler(BaseCrawler):
                 page.goto(search_url)
                 page.wait_for_load_state("networkidle")
 
-                # 2. 로딩 대기
+                # 2. 로딩 대기 (설정에서 가져온 값 사용)
                 page.wait_for_timeout(3000)
 
                 # 3. 현재 페이지의 HTML 가져오기
@@ -370,6 +412,9 @@ class HogangnonoCrawler(BaseCrawler):
 
                 # 4. 데이터 파싱
                 listings = self.parse(html)
+
+                # 성공 시 rate limiter 알림
+                self.rate_limiter.on_success()
 
                 self.logger.info(
                     "region_crawl_completed",
@@ -382,6 +427,12 @@ class HogangnonoCrawler(BaseCrawler):
                 return listings
 
         except Exception as e:
+            # HTTP 429 에러인 경우 rate limiter에 알림
+            if "429" in str(e) or "Too Many Requests" in str(e):
+                self.rate_limiter.on_rate_limit_error()
+            else:
+                self.rate_limiter.on_error()
+
             self.logger.error(
                 "failed_to_crawl_region",
                 district=district,
@@ -399,6 +450,9 @@ class HogangnonoCrawler(BaseCrawler):
         Returns:
             수집된 실거래가 데이터 리스트
         """
+        # Rate limiting 적용
+        self.rate_limiter.wait()
+
         try:
             with self.browser_manager.managed_browser() as page:
                 # 1. 아파트 상세 페이지로 이동
@@ -433,6 +487,9 @@ class HogangnonoCrawler(BaseCrawler):
                 # 5. 데이터 파싱
                 listings = self.parse(html)
 
+                # 성공 시 rate limiter 알림
+                self.rate_limiter.on_success()
+
                 self.logger.info(
                     "apartment_detail_crawl_completed",
                     apt_id=apt_id,
@@ -442,6 +499,12 @@ class HogangnonoCrawler(BaseCrawler):
                 return listings
 
         except Exception as e:
+            # HTTP 429 에러인 경우 rate limiter에 알림
+            if "429" in str(e) or "Too Many Requests" in str(e):
+                self.rate_limiter.on_rate_limit_error()
+            else:
+                self.rate_limiter.on_error()
+
             self.logger.error(
                 "failed_to_crawl_apartment_detail",
                 apt_id=apt_id,
@@ -450,19 +513,32 @@ class HogangnonoCrawler(BaseCrawler):
             return []
 
     def crawl_with_pagination(
-        self, district: str, dong: Optional[str] = None, max_pages: int = 5
+        self,
+        district: str,
+        dong: Optional[str] = None,
+        max_pages: Optional[int] = None,
+        save_to_csv: bool = True,
     ) -> List[dict[str, Any]]:
         """페이지네이션 포함 크롤링
 
         Args:
             district: 구 이름
             dong: 동 이름
-            max_pages: 최대 페이지 수
+            max_pages: 최대 페이지 수 (설정에서 가져옴)
+            save_to_csv: CSV 파일에 저장할지 여부
 
         Returns:
             수집된 부동산 데이터 리스트
         """
+        # 설정에서 max_pages 가져오기 (인자로 전달된 경우 우선 사용)
+        if max_pages is None:
+            max_pages = self.max_pages
+
         all_listings = []
+        all_transactions = []
+
+        # Rate limiting 적용
+        self.rate_limiter.wait()
 
         try:
             search_query = f"{district} {dong or ''}".strip()
@@ -481,11 +557,14 @@ class HogangnonoCrawler(BaseCrawler):
                 all_listings.extend(listings)
 
                 # 3. 각 아파트의 상세 페이지에서 실거래가 데이터 수집
-                for listing in listings[:10]:  # 최대 10개 아파트만 상세 조회
+                # 설정에서 가져온 최대 아파트 수만큼만 상세 조회
+                max_apartments = min(len(listings), self.max_apartments_per_page)
+
+                for listing in listings[:max_apartments]:
                     apt_id = listing.get("apt_id", "")
                     if apt_id:
                         try:
-                            # 상세 페이지 크롤링
+                            # 상세 페이지 크롤링 (내부에서 rate limiting 적용)
                             transactions = self.crawl_apartment_detail(apt_id)
 
                             # 상세 정보를 기존 정보와 병합
@@ -498,9 +577,7 @@ class HogangnonoCrawler(BaseCrawler):
                                     }
                                 )
                                 all_listings.append(transaction)
-
-                            # 다음 요청 전 대기 (Rate Limiting)
-                            page.wait_for_timeout(2000)
+                                all_transactions.append(transaction)
 
                         except Exception as e:
                             self.logger.warning(
@@ -510,18 +587,60 @@ class HogangnonoCrawler(BaseCrawler):
                             )
                             continue
 
+                # 성공 시 rate limiter 알림
+                self.rate_limiter.on_success()
+
+                # 4. CSV에 저장
+                if save_to_csv:
+                    # 단지 정보 저장 (목록에서)
+                    if listings:
+                        # 목록을 POI 형식으로 변환
+                        complexes_data = []
+                        for listing in listings:
+                            complex_data = {
+                                "complexNo": listing.get("apt_id", ""),
+                                "complexName": listing.get("complex_name", ""),
+                                "useApproveDate": listing.get("move_in_date", "")
+                                .replace("년", "-")
+                                .replace("월", "")
+                                .replace("입주", ""),
+                                "totalDongCount": 0,  # 목록에서는 없음
+                                "totalHouseholdCount": 0,  # 목록에서는 없음
+                                "minArea": 0.0,
+                                "maxArea": 0.0,
+                                "dealCnt": len(all_transactions),
+                                "leaseCnt": 0,
+                                "rentCnt": 0,
+                            }
+                            complexes_data.append(complex_data)
+
+                        self.save_complexes_to_csv(complexes_data)
+
+                    # 거래내역 저장
+                    if all_transactions:
+                        self.save_transactions_to_csv(all_transactions)
+
                 self.logger.info(
                     "pagination_crawl_completed",
                     district=district,
                     dong=dong,
                     apartments_count=len(listings),
-                    transactions_count=len(all_listings) - len(listings),
+                    transactions_count=len(all_transactions),
                     total_items=len(all_listings),
+                    max_pages=max_pages,
+                    max_apartments_per_page=self.max_apartments_per_page,
+                    saved_to_csv=save_to_csv,
                 )
 
                 return all_listings
 
         except Exception as e:
+            # HTTP 429 에러인 경우 rate limiter에 알림
+            if "429" in str(e) or "Too Many Requests" in str(e):
+                self.rate_limiter.on_rate_limit_error()
+            else:
+                self.rate_limiter.on_error()
+
             self.logger.error(
                 "failed_to_crawl_with_pagination",
                 district=district,
@@ -529,3 +648,139 @@ class HogangnonoCrawler(BaseCrawler):
                 error=str(e),
             )
             return all_listings
+
+    def fetch_complexes_by_region(self, bounds: dict[str, float]) -> List[dict[str, Any]]:
+        """API를 통해 지역별 단지 정보 조회
+
+        Args:
+            bounds: 좌표 정보 (startX, endX, startY, endY)
+
+        Returns:
+            수집된 단지 정보 리스트
+        """
+        try:
+            # SearchParams 생성
+            search_params = SearchParams(
+                startX=bounds["startX"],
+                endX=bounds["endX"],
+                startY=bounds["startY"],
+                endY=bounds["endY"],
+                level=17,
+                isIgnorePin=False,
+            )
+
+            # API 호출
+            response = self.api_client.get_apartments_bounding(search_params)
+
+            if response.success and response.data:
+                # POI 데이터 파싱
+                pois = self.api_client.parse_pois_from_bounding(response.data)
+
+                self.logger.info(
+                    "api_complex_fetch_success",
+                    pois_count=len(pois),
+                    bounds=bounds,
+                )
+
+                return pois
+            else:
+                self.logger.error(
+                    "api_complex_fetch_failed",
+                    error=response.error,
+                    status_code=response.status_code,
+                )
+                return []
+
+        except Exception as e:
+            self.logger.error(
+                "failed_to_fetch_complexes_by_region",
+                bounds=bounds,
+                error=str(e),
+            )
+            return []
+
+    def fetch_rankings(self, rank_type: str = "daily", limit: int = 100) -> List[dict[str, Any]]:
+        """API를 통해 인기 순위 조회
+
+        Args:
+            rank_type: 순위 타입 (daily, weekly, monthly)
+            limit: 가져올 항목 수
+
+        Returns:
+            수집된 순위 정보 리스트
+        """
+        try:
+            # API 호출
+            response = self.api_client.get_ranking(rank_type=rank_type, limit=limit)
+
+            if response.success and response.data:
+                # 순위 데이터 파싱
+                complexes = self.api_client.parse_complexes_from_ranks(response.data)
+
+                self.logger.info(
+                    "api_rankings_fetch_success",
+                    complexes_count=len(complexes),
+                    rank_type=rank_type,
+                    limit=limit,
+                )
+
+                return complexes
+            else:
+                self.logger.error(
+                    "api_rankings_fetch_failed",
+                    error=response.error,
+                    status_code=response.status_code,
+                )
+                return []
+
+        except Exception as e:
+            self.logger.error(
+                "failed_to_fetch_rankings",
+                rank_type=rank_type,
+                error=str(e),
+            )
+            return []
+
+    def save_complexes_to_csv(self, complexes_data: List[dict[str, Any]]) -> None:
+        """단지 데이터를 CSV 파일에 저장
+
+        Args:
+            complexes_data: 저장할 단지 데이터 리스트
+        """
+        try:
+            self.csv_writer.save_complexes(complexes_data)
+            self.logger.info(
+                "complexes_saved_to_csv",
+                count=len(complexes_data),
+            )
+        except Exception as e:
+            self.logger.error(
+                "failed_to_save_complexes",
+                error=str(e),
+            )
+
+    def save_transactions_to_csv(self, transactions_data: List[dict[str, Any]]) -> None:
+        """거래내역 데이터를 CSV 파일에 저장
+
+        Args:
+            transactions_data: 저장할 거래내역 데이터 리스트
+        """
+        try:
+            self.csv_writer.save_transactions(transactions_data)
+            self.logger.info(
+                "transactions_saved_to_csv",
+                count=len(transactions_data),
+            )
+        except Exception as e:
+            self.logger.error(
+                "failed_to_save_transactions",
+                error=str(e),
+            )
+
+    def get_csv_stats(self) -> dict[str, Any]:
+        """CSV 파일 통계 정보 반환
+
+        Returns:
+            CSV 파일 통계 정보
+        """
+        return self.csv_writer.get_stats()
