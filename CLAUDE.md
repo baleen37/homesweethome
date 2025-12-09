@@ -304,6 +304,114 @@ class BaseCrawler(ABC):
 
 - **기본 URL**: `https://hogangnono.com`
 
+### API 메서드 사용법
+
+#### 1. 동 목록 조회
+```python
+from crawler.crawlers.hogangnono import HogangnonoCrawler
+from crawler.config import CrawlerConfig
+
+config = CrawlerConfig.from_env()
+crawler = HogangnonoCrawler(config)
+
+# 특정 구의 동 목록 조회
+dongs = crawler.fetch_dongs("11680")  # 강남구 코드
+for dong in dongs:
+    print(f"{dong['dongCode']}: {dong['dongName']}")
+```
+
+#### 2. 단지 목록 조회
+```python
+# 특정 동의 단지 목록 조회
+complexes = crawler.fetch_complexes("11680500")  # 역삼동 코드
+for complex in complexes:
+    print(f"{complex['id']}: {complex['name']}")
+
+# 단지 상세 정보 조회
+complex_detail = crawler.fetch_complex_detail("C001")
+print(f"주소: {complex_detail['address']}")
+print(f"건축년도: {complex_detail['buildYear']}")
+```
+
+#### 3. 매물 목록 조회
+```python
+# 특정 단지의 매물 목록 조회
+listings = crawler.fetch_listings("C001", page=1)
+for listing in listings:
+    print(f"{listing['exclusiveArea']}㎡, {listing['floor']}층, {listing['price']}만원")
+
+# 필터링 옵션과 함께 조회
+filtered_listings = crawler.fetch_listings(
+    complex_id="C001",
+    page=1,
+    deal_type="A1",  # 아파트 매매
+    min_area=84,     # 최소 84㎡
+    max_area=84      # 최대 84㎡
+)
+```
+
+#### 4. 매물 상세 조회
+```python
+# 특정 매물의 상세 정보 조회
+listing_detail = crawler.fetch_listing_detail("L001")
+print(f"계약일: {listing_detail['contractDate']}")
+print(f"층: {listing_detail['floor']}")
+print(f"가격: {listing_detail['price']}만원")
+```
+
+### 크롤러 사용 예시
+
+#### 단일 동 크롤링
+```python
+from crawler.coordinator import CrawlCoordinator
+from crawler.config import CrawlerConfig
+from pathlib import Path
+
+config = CrawlerConfig(
+    base_url="https://hogangnono.com",
+    output_dir="output",
+    request_interval=5.0,  # 5초 간격
+    max_retries=3
+)
+
+# 강남구 역삼동만 크롤링
+coordinator = CrawlCoordinator(
+    config=config,
+    districts=[{"code": "11680", "name": "강남구"}],
+    output_dir=Path("output"),
+    target_dongs=["11680500"],  # 역삼동
+    resume=False
+)
+
+coordinator.crawl_all()
+```
+
+#### 전체 구 크롤링
+```python
+# 여러 구 동시 크롤링
+districts = [
+    {"code": "11680", "name": "강남구"},
+    {"code": "11650", "name": "서초구"},
+    {"code": "11710", "name": "송파구"}
+]
+
+coordinator = CrawlCoordinator(
+    config=config,
+    districts=districts,
+    output_dir=Path("output"),
+    resume=True  # 중단 시 재개
+)
+
+coordinator.crawl_all()
+```
+
+### 계층적 크롤링 패턴
+
+1. **구 → 동**: `fetch_dongs()`로 구 내 모든 동 조회
+2. **동 → 단지**: `fetch_complexes()`로 동 내 모든 단지 조회
+3. **단지 → 매물**: `fetch_listings()`로 단지 내 모든 매물 조회
+4. **페이지네이션**: 매물이 많을 경우 페이지별로 조회
+
 ### 데이터 저장
 
 - **거래내역**: `output/transactions.csv`
