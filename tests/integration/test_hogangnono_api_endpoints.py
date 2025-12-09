@@ -458,3 +458,37 @@ class TestHogangnonoAPIEndpoints:
         print(f"✓ 강남구 중심 2km x 2km: {len(apartments)}개 POI 수집 성공")
         print(f"  - Category 1 (교통시설): {categories.get(1, 0)}개")
         print(f"  - Category 10 (상점/기타): {categories.get(10, 0)}개")
+
+    @pytest.mark.integration
+    def test_session_cookie_requirement(self):
+        """세션 쿠키 필요 여부 확인
+
+        쿠키 없이 API 호출 vs 쿠키 있을 때 API 호출 비교
+        세션 관리의 필요성 확인
+        """
+        # 1. 쿠키 없이 호출
+        response_no_cookie = requests.get(
+            "https://hogangnono.com/api/v2/regions", headers={"X-Requested-With": "XMLHttpRequest"}
+        )
+
+        # 2. 메인 페이지 접속 후 쿠키 획득
+        session = requests.Session()
+        main_response = session.get("https://hogangnono.com")
+        assert main_response.status_code == 200, "메인 페이지 접속 실패"
+
+        response_with_cookie = session.get(
+            "https://hogangnono.com/api/v2/regions", headers={"X-Requested-With": "XMLHttpRequest"}
+        )
+
+        # 결과 비교
+        print(f"쿠키 없음: {response_no_cookie.status_code}")
+        print(f"쿠키 있음: {response_with_cookie.status_code}")
+
+        # 쿠키 있을 때는 반드시 성공
+        assert response_with_cookie.status_code == 200, "세션이 있어도 API 호출 실패"
+
+        # 쿠키 없이도 성공하는지 확인
+        if response_no_cookie.status_code == 200:
+            print("✓ 세션 쿠키 없이도 API 호출 가능")
+        else:
+            print("⚠️  세션 쿠키 필요 - 메인 페이지 접속 후 쿠키 획득 필수")
