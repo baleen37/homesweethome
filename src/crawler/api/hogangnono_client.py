@@ -6,6 +6,9 @@
 from __future__ import annotations
 
 import json
+import random
+import time
+import hashlib
 import types
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -22,6 +25,52 @@ try:
 except ImportError:
     Mock = None
 # retry_with_backoff는 현재 구현되어 있지 않음
+
+
+class AdaptiveRateLimiter:
+    """적응형 Rate Limiter
+
+    성공/실패 이력에 따라 동적으로 지연 시간을 조정합니다.
+    """
+
+    def __init__(self, min_delay: float = 1.0, max_delay: float = 3.0):
+        """초기화
+
+        Args:
+            min_delay: 최소 지연 시간 (초)
+            max_delay: 최대 지연 시간 (초)
+        """
+        self.min_delay = min_delay
+        self.max_delay = max_delay
+        self.current_delay = min_delay * 1.5  # 초기 지연 시간
+        self.success_count = 0
+        self.failure_count = 0
+
+    def wait(self):
+        """요청 전 대기"""
+        # 랜덤한 지연 시간 추가 (탐지 방지)
+        actual_delay = self.current_delay + random.uniform(0, 0.5)
+        time.sleep(actual_delay)
+
+    def success(self):
+        """성공 처리"""
+        self.success_count += 1
+        self.failure_count = 0
+
+        # 연속 성공 시 지연 시간 감소
+        if self.success_count >= 10 and self.current_delay > self.min_delay:
+            self.current_delay = max(self.min_delay, self.current_delay * 0.9)
+            self.success_count = 0
+
+    def failure(self):
+        """실패 처리"""
+        self.failure_count += 1
+        self.success_count = 0
+
+        # 연속 실패 시 지연 시간 증가
+        if self.failure_count >= 3:
+            self.current_delay = min(self.max_delay, self.current_delay * 2)
+            self.failure_count = 0
 
 
 class SearchParams:
@@ -76,6 +125,7 @@ class SearchParams:
         rentType: Optional[int] = 0,
         map: str = "google",
         bbox: Optional[tuple[float, float, float, float]] = None,
+        isIgnorePin: Optional[bool] = False,
     ):
         """초기화
 
@@ -108,6 +158,9 @@ class SearchParams:
             self.endX = endX
             self.startY = startY
             self.endY = endY
+
+        # isIgnorePin 속성 설정
+        self.isIgnorePin = isIgnorePin
 
         # level 유효성 검사
         if level is not None and not (self.MIN_LEVEL <= level <= self.MAX_LEVEL):
@@ -176,14 +229,48 @@ class SearchParams:
             params["priceType"] = self.priceType
         if hasattr(self, "rentType") and self.rentType is not None:
             params["rentType"] = self.rentType
+        if hasattr(self, "isIgnorePin") and self.isIgnorePin is not None:
+            params["isIgnorePin"] = str(self.isIgnorePin).lower()  # "true" 또는 "false"
 
         # 항상 포함
         params["map"] = self.map
 
-        # 호갱노노 API 특정 파라미터
+        # 호갱노노 API 특정 파라미터 (api_analysis_result.json에서 확인)
         params["screenWidth"] = 1200
         params["screenHeight"] = 924
         params["apt"] = ""  # 아파트 필터 (빈 문자열)
+        params["areaNo"] = ""  # 면적 번호 필터 (빈 문자열)
+
+        # api_analysis_result.json의 성공 파라미터 추가
+        # 기본값 설정
+        params["areaFrom"] = 0
+        params["areaTo"] = 80
+        params["priceFrom"] = 0
+        params["priceTo"] = 401000
+        params["gapPriceFrom"] = 0
+        params["gapPriceTo"] = 151000
+        params["gapPriceNeg"] = "false"  # 문자열로 변환
+        params["sinceFrom"] = 0
+        params["sinceTo"] = 30
+        params["floorAreaRatioFrom"] = 0
+        params["floorAreaRatioTo"] = 900
+        params["buildingCoverageRatioFrom"] = 0
+        params["buildingCoverageRatioTo"] = 100
+        params["rentalBusinessRatioFrom"] = 0
+        params["rentalBusinessRatioTo"] = 100
+        params["householdFrom"] = 0
+        params["householdTo"] = 5000
+        params["parking"] = 0
+        params["profitRatio"] = 0
+        params["rentRateFrom"] = 0
+        params["rentRateTo"] = 200
+        params["aptType"] = -1
+        params["isIgnorePin"] = "false"  # 문자열로 변환
+        params["auctionState"] = -1
+        params["reconstructionStep"] = 0
+        params["reconstructionStepFrom"] = 1
+        params["reconstructionStepTo"] = 10
+        params["r"] = str(int(time.time() * 1000))  # 타임스탬프 기반 랜덤 파라미터
 
         return params
 
@@ -275,16 +362,24 @@ class APIResponse:
                     if http_error and isinstance(data, dict) and "message" in data:
                         error_msg = f"HTTP error: {status_code} {response.reason if hasattr(response, 'reason') else ''} - {data['message']}"
 
+                    # HTTP 에러인 경우 전체 응답 내용을 포함
+                    if http_error:
+                        if not error_msg:
+                            # 응답 내용의 일부를 에러 메시지에 포함
+                            response_text = ""
+                            try:
+                                # response 객체는 여기서 접근 가능
+                                error_msg = f"HTTP error: {status_code} {response.reason if hasattr(response, 'reason') else ''}"
+                                if hasattr(response, "text"):
+                                    response_text = response.text[:500]
+                                    error_msg += f" - Response: {response_text}"
+                            except Exception:
+                                pass
+
                     return cls(
                         success=not http_error,
                         data=data if not http_error else None,
-                        error=error_msg
-                        if error_msg
-                        else (
-                            None
-                            if not http_error
-                            else f"HTTP error: {status_code} {response.reason if hasattr(response, 'reason') else ''}"
-                        ),
+                        error=error_msg,
                         status_code=status_code,
                     )
             else:
@@ -383,8 +478,8 @@ class HogangnonoAPIClient:
 
         self.logger = get_logger()
 
-        # Rate limiting
-        self.min_delay = 1.0  # 최소 1초 간격
+        # Adaptive rate limiting
+        self.rate_limiter = AdaptiveRateLimiter(min_delay=1.0, max_delay=3.0)
 
     def _build_url(self, endpoint: str) -> str:
         """전체 URL 빌드"""
@@ -458,38 +553,67 @@ class HogangnonoAPIClient:
     def _get_api_headers(self) -> dict[str, str]:
         """API 호출용 헤더
 
+        분석 결과를 바탕으로 호갱노노 API에서 필수로 요구하는 헤더를 포함합니다.
+
         Returns:
             API 요청 헤더 딕셔너리
         """
-        return {
+        # 기본 헤더
+        headers = {
             "User-Agent": self.config.user_agent,
-            "Accept": "application/json, text/plain, */*",
+            "Accept": "application/json",
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache",
-            "Sec-Ch-Ua": '"Not.A/Brand";v="8", "Chromium";v="114"',
-            "Sec-Ch-Ua-Mobile": "?0",
-            "Sec-Ch-Ua-Platform": '"macOS"',
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "Referer": self.base_url,
-            "Origin": self.base_url,
-            "X-Requested-With": "XMLHttpRequest",
+            "Referer": f"{self.base_url}/",
+            # Chrome Client Hints
+            "sec-ch-ua": '"Chromium";v="141", "Not?A_Brand";v="8"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"macOS"',
+            # 호갱노노 앱 정보 헤더
+            "x-hogangnono-app-name": "hogangnono",
+            "x-hogangnono-api-version": "2.4.0",
+            "x-hogangnono-release-version": "2.4.0.9",
+            "x-hogangnono-platform": "desktop",
         }
+
+        return headers
 
     def _add_auth_headers(
         self,
         headers: Optional[dict[str, str]] = None,
     ) -> dict[str, str]:
-        """인증 헤더 추가 (필요 시)"""
+        """인증 및 동적 헤더 추가
+
+        분석 결과를 바탕으로 동적으로 변경되는 헤더 값을 추가합니다.
+
+        Args:
+            headers: 추가할 헤더 (선택 사항)
+
+        Returns:
+            최종 헤더 딕셔너리
+        """
         if headers is None:
             headers = {}
 
         # API 헤더와 병합
         api_headers = self._get_api_headers()
         final_headers = {**api_headers, **headers}
+
+        # 동적 헤더 추가
+        timestamp = str(int(time.time() * 1000))
+        final_headers.update(
+            {
+                # 광고 ID (분석에서 발견된 샘플 값 사용)
+                "x-hogangnono-at": "B-IESS2wXDvWTZXzb8nmKSKGjmflKEY2TpMw",
+                # 현재 타임스탬프
+                "x-hogangnono-ct": timestamp,
+                # 이벤트 로그 (SHA1 해시)
+                "x-hogangnono-event-log": hashlib.sha1(
+                    f"{timestamp}{random.random()}".encode()
+                ).hexdigest(),
+                # 이벤트 지속 시간 (랜덤)
+                "x-hogangnono-event-duration": str(random.randint(50000, 200000)),
+            }
+        )
 
         return final_headers
 
@@ -503,6 +627,9 @@ class HogangnonoAPIClient:
         headers: Optional[dict[str, str]] = None,
     ) -> APIResponse:
         """HTTP 요청 실행"""
+        # Rate limiting 적용
+        self.rate_limiter.wait()
+
         # 세션이 초기화되지 않았다면 초기화
         if not self._session_initialized:
             if not self._initialize_session():
@@ -520,6 +647,7 @@ class HogangnonoAPIClient:
             method=method,
             url=url,
             params=params,
+            delay=self.rate_limiter.current_delay,
         )
 
         # 쿠키 정보 로깅
@@ -560,12 +688,14 @@ class HogangnonoAPIClient:
                 "API request successful",
                 status=response.status_code,
             )
+            self.rate_limiter.success()
         else:
             self.logger.error(
                 "API request failed",
                 status=response.status_code,
                 error=api_response.error,
             )
+            self.rate_limiter.failure()
 
         return api_response
 
@@ -630,9 +760,12 @@ class HogangnonoAPIClient:
         Returns:
             APIResponse 객체
         """
+        # SearchParams.to_dict()를 사용하여 모든 필요한 파라미터 가져오기
+        # api_analysis_result.json의 성공 파라미터 사용
         params = search_params.to_dict()
 
-        # 호갱노노 API 엔드포인트
+        # /api/v2/pois-bounding 엔드포인트 사용
+        # /api/apt/bounding은 더 이상 작동하지 않음 (2025-12-09 기준)
         return self._make_request(
             method="GET",
             endpoint="/api/v2/pois-bounding",
@@ -834,21 +967,17 @@ class HogangnonoAPIClient:
         Returns:
             API 응답 데이터
         """
-        # 실제 API 파라미터 형식에 맞게 전달
-        params = {
-            "level": 17,
-            "startX": bounds["startX"],
-            "endX": bounds["endX"],
-            "startY": bounds["startY"],
-            "endY": bounds["endY"],
-            "isIgnorePin": False,
-        }
-
-        response = self._make_request(
-            method="GET",
-            endpoint="/api/v2/pois-bounding",
-            params=params,
+        # SearchParams 객체 생성
+        search_params = SearchParams(
+            startX=bounds["startX"],
+            endX=bounds["endX"],
+            startY=bounds["startY"],
+            endY=bounds["endY"],
+            level=17,
+            isIgnorePin=False,  # 추가 파라미터
         )
+
+        response = self.get_apartments_bounding(search_params)
 
         if not response.success:
             raise Exception(f"Failed to fetch pois-bounding: {response.error}")
