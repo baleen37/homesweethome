@@ -759,24 +759,71 @@ class HogangnonoAPIClient:
             params=params,
         )
 
-    def get_apartment_detail(self, apartment_id: str) -> APIResponse:
+    def get_apartment_detail(self, apt_id: str) -> APIResponse:
         """아파트 상세 정보 조회
 
         Args:
-            apartment_id: 아파트 ID
+            apt_id: 아파트 ID (aptHash)
 
         Returns:
             APIResponse 객체
-        """
-        params = {
-            "id": apartment_id,
-        }
 
-        return self._make_request(
-            method="GET",
-            endpoint="/api/apt/detail",
-            params=params,
-        )
+        Example Response:
+            {
+                "data": {
+                    "aptHash": "1Hq6f",
+                    "aptName": "래미안",
+                    "buildYear": 2005,
+                    "household": 1012,
+                    "parkingCount": 850,
+                    "floorAreaRatio": 250.5,
+                    "buildingCoverageRatio": 15.3
+                },
+                "status": "success"
+            }
+        """
+        return self._make_request(method="GET", endpoint=f"/api/v2/apts/{apt_id}", params={})
+
+    def get_apartment_transactions(
+        self, apt_id: str, trade_type: int = 0, area_no: int = 0, full_period: bool = False
+    ) -> APIResponse:
+        """실거래 내역 조회
+
+        Args:
+            apt_id: 단지 ID (aptHash)
+            trade_type: 0=매매, 1=전세, 2=월세
+            area_no: 면적 필터 (0=전체)
+            full_period: True면 전체 기간, False면 최근 3년
+
+        Returns:
+            APIResponse 객체
+
+        Example Response:
+            {
+                "data": {
+                    "shortTermReport": [
+                        {
+                            "date": "2025-01-31T15:00:00.000Z",
+                            "minPrice": 333000,
+                            "maxPrice": 346000,
+                            "averagePrice": 343000,
+                            "volume": 3,
+                            "trades": [...]
+                        }
+                    ]
+                },
+                "status": "success"
+            }
+        """
+        # 엔드포인트 결정
+        if full_period:
+            endpoint = f"/api/v2/apts/{apt_id}/monthly-reports/more"
+        else:
+            endpoint = f"/api/v2/apts/{apt_id}/monthly-reports"
+
+        params = {"tradeType": trade_type, "areaNo": area_no}
+
+        return self._make_request(method="GET", endpoint=endpoint, params=params)
 
     def close(self) -> None:
         """세션 종료"""
@@ -1112,3 +1159,39 @@ class HogangnonoAPIClient:
             "x-hogangnono-api-version": "2.4.0",
             "x-hogangnono-platform": "desktop",
         }
+
+    def get_regions(self, region_code: Optional[str] = None) -> APIResponse:
+        """시/도, 구/군 목록 조회
+
+        Args:
+            region_code: 특정 시/도 필터링 (예: "11" = 서울)
+
+        Returns:
+            APIResponse with regionList data
+
+        Example Response:
+            {
+                "data": {
+                    "regionList": [
+                        {
+                            "regionCode": "11",
+                            "name": "서울",
+                            "fullName": "서울특별시",
+                            "children": [
+                                {
+                                    "regionCode": "11680",
+                                    "name": "강남구",
+                                    "fullName": "서울특별시 강남구"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "status": "success"
+            }
+        """
+        params = {}
+        if region_code:
+            params["regionCode"] = region_code
+
+        return self._make_request(method="GET", endpoint="/api/v2/regions", params=params)

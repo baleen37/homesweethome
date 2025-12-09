@@ -464,3 +464,116 @@ class TestErrorHandlingTDD:
 
         assert api_response.success is False
         assert api_response.status_code == 500
+
+    def test_get_regions_success(self, client):
+        """전체 지역 목록 조회 성공"""
+        with patch.object(client, "_make_request") as mock_request:
+            mock_request.return_value = APIResponse(
+                success=True,
+                data={
+                    "regionList": [
+                        {
+                            "regionCode": "11",
+                            "name": "서울",
+                            "fullName": "서울특별시",
+                            "children": [
+                                {
+                                    "regionCode": "11680",
+                                    "name": "강남구",
+                                    "fullName": "서울특별시 강남구",
+                                }
+                            ],
+                        }
+                    ]
+                },
+                status_code=200,
+            )
+
+            response = client.get_regions()
+
+            assert response.success
+            assert response.data is not None
+            assert "regionList" in response.data
+            assert len(response.data["regionList"]) > 0
+
+            mock_request.assert_called_once_with(
+                method="GET", endpoint="/api/v2/regions", params={}
+            )
+
+    def test_get_apartment_detail_success(self, client):
+        """단지 상세 정보 조회 성공"""
+        with patch.object(client, "_make_request") as mock_request:
+            mock_request.return_value = APIResponse(
+                success=True,
+                data={
+                    "aptHash": "1Hq6f",
+                    "aptName": "래미안",
+                    "buildYear": 2005,
+                    "household": 1012,
+                    "parkingCount": 850,
+                    "floorAreaRatio": 250.5,
+                    "buildingCoverageRatio": 15.3,
+                },
+                status_code=200,
+            )
+
+            response = client.get_apartment_detail("1Hq6f")
+
+            assert response.success
+            assert response.data is not None
+            assert response.data["aptHash"] == "1Hq6f"
+
+            mock_request.assert_called_once_with(
+                method="GET", endpoint="/api/v2/apts/1Hq6f", params={}
+            )
+
+    def test_get_apartment_transactions_recent(self, client):
+        """최근 3년 실거래 내역 조회"""
+        with patch.object(client, "_make_request") as mock_request:
+            mock_request.return_value = APIResponse(
+                success=True,
+                data={
+                    "shortTermReport": [
+                        {
+                            "date": "2025-01-31T15:00:00.000Z",
+                            "minPrice": 333000,
+                            "maxPrice": 346000,
+                            "averagePrice": 343000,
+                            "volume": 3,
+                            "trades": [{"id": 36780389, "price": 340000, "floor": 9, "day": 18}],
+                        }
+                    ]
+                },
+                status_code=200,
+            )
+
+            response = client.get_apartment_transactions("1Hq6f", trade_type=0)
+
+            assert response.success
+            assert response.data is not None
+            assert "shortTermReport" in response.data
+
+            mock_request.assert_called_once_with(
+                method="GET",
+                endpoint="/api/v2/apts/1Hq6f/monthly-reports",
+                params={"tradeType": 0, "areaNo": 0},
+            )
+
+    def test_get_apartment_transactions_full_period(self, client):
+        """전체 기간 실거래 내역 조회"""
+        with patch.object(client, "_make_request") as mock_request:
+            mock_request.return_value = APIResponse(
+                success=True,
+                data={"longTermReport": []},
+                status_code=200,
+            )
+
+            response = client.get_apartment_transactions("1Hq6f", trade_type=0, full_period=True)
+
+            assert response.success
+
+            mock_request.assert_called_once_with(
+                method="GET",
+                endpoint="/api/v2/apts/1Hq6f/monthly-reports/more",
+                params={"tradeType": 0, "areaNo": 0},
+            )
