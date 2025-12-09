@@ -236,27 +236,18 @@ class TestPoisBoundingAPI:
         mock_session.cookies.__iter__ = Mock(return_value=iter([]))
         mock_session_class.return_value = mock_session
 
-        client = HogangnonoAPIClient(config)
+        HogangnonoAPIClient(config)
 
         # 유효하지 않은 level 값 테스트
         invalid_levels = [-1, 0, 19, 100]
 
         for invalid_level in invalid_levels:
-            search_params = SearchParams(
-                level=invalid_level,
-                bbox=(127.045, 37.515, 127.055, 37.525),
-            )
-
-            client.get_apartments_bounding(search_params)
-
-            # 현재 구현에서는 통과하지만, 실제 API에서는 에러가 발생할 수 있음
-            # 이 테스트는 향후 유효성 검사 로직 추가를 위한 준비
-            mock_session.request.assert_called()
-
-            # 호출된 파라미터 확인
-            call_args = mock_session.request.call_args
-            actual_params = call_args[1]["params"]
-            assert actual_params["level"] == str(invalid_level)
+            # SearchParams 생성 시 ValueError가 발생해야 함
+            with pytest.raises(ValueError, match="level must be between"):
+                SearchParams(
+                    level=invalid_level,
+                    bbox=(127.045, 37.515, 127.055, 37.525),
+                )
 
     def test_search_params_to_dict_format(self):
         """SearchParams.to_dict()가 올바른 형식으로 변환하는지 테스트"""

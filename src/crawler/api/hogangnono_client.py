@@ -13,13 +13,13 @@ from requests import Response, Session
 from structlog import get_logger
 
 from crawler.config import CrawlerConfig
+from ..utils.retry import retry_transient_errors
 
 # Mock 객체 확인을 위한 임포트 (테스트 환경에서만 사용)
 try:
     from unittest.mock import Mock
 except ImportError:
     Mock = None
-# retry_with_backoff는 현재 구현되어 있지 않음
 
 
 class SearchParams:
@@ -392,6 +392,8 @@ class HogangnonoAPIClient:
 
     def _build_url(self, endpoint: str) -> str:
         """전체 URL 빌드"""
+        if not endpoint.startswith("/"):
+            endpoint = "/" + endpoint
         return f"{self.base_url}{endpoint}"
 
     def _initialize_session(self) -> bool:
@@ -585,6 +587,7 @@ class HogangnonoAPIClient:
 
         return api_response
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_complex_list(
         self,
         cortar_no: str,
@@ -612,6 +615,7 @@ class HogangnonoAPIClient:
             params=params,
         )
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_complex_detail(
         self,
         complex_id: str,
@@ -634,6 +638,7 @@ class HogangnonoAPIClient:
             params=params,
         )
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_apartments_bounding(
         self,
         search_params: SearchParams,
@@ -655,6 +660,7 @@ class HogangnonoAPIClient:
             params=params,
         )
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_ranking(self, rank_type: str = "daily", limit: int = 100) -> APIResponse:
         """인기 순위 조회
 
@@ -676,6 +682,7 @@ class HogangnonoAPIClient:
             params=params,
         )
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_recent_visits(self, apt_type: str = "apart", limit: int = 100) -> APIResponse:
         """최근 방문한 아파트 조회
 
@@ -697,6 +704,7 @@ class HogangnonoAPIClient:
             params=params,
         )
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_region_info(self, lat: float, lng: float, zoom: int = 15) -> APIResponse:
         """지역 정보 조회
 
@@ -720,6 +728,7 @@ class HogangnonoAPIClient:
             params=params,
         )
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_pois_bounding(self, search_params: SearchParams) -> APIResponse:
         """POI 목록 조회 (Bounding box 기반)
 
@@ -732,6 +741,7 @@ class HogangnonoAPIClient:
         # get_apartments_bounding과 동일한 기능
         return self.get_apartments_bounding(search_params)
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def search_apartments(
         self,
         query: str,
@@ -778,6 +788,7 @@ class HogangnonoAPIClient:
             params=params,
         )
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_apartment_detail(self, apt_id: str) -> APIResponse:
         """아파트 상세 정보 조회
 
@@ -803,6 +814,7 @@ class HogangnonoAPIClient:
         """
         return self._make_request(method="GET", endpoint=f"/api/v2/apts/{apt_id}", params={})
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_apartment_transactions(
         self, apt_id: str, trade_type: int = 0, area_no: int = 0, full_period: bool = False
     ) -> APIResponse:
@@ -872,6 +884,7 @@ class HogangnonoAPIClient:
         """
         self.close()
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def fetch_ranks_rolling(self) -> dict[str, Any]:
         """인기 순위 롤링 데이터 조회
 
@@ -888,6 +901,7 @@ class HogangnonoAPIClient:
 
         return response.data
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def fetch_pois_bounding(self, bounds: dict[str, float]) -> dict[str, Any]:
         """POI 데이터 조회 (Bounding box 기반)
 
@@ -1125,6 +1139,7 @@ class HogangnonoAPIClient:
 
         return results
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def search_apartments_by_location(
         self, center_lng: float, center_lat: float, delta: float = 0.02, level: int = 17
     ) -> dict[str, Any]:
@@ -1179,6 +1194,7 @@ class HogangnonoAPIClient:
             "x-hogangnono-platform": "desktop",
         }
 
+    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_regions(self, region_code: Optional[str] = None) -> APIResponse:
         """시/도, 구/군 목록 조회
 

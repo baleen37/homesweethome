@@ -353,6 +353,70 @@ class TestHogangnonoAPIClientTDD:
                         # on_rate_limit_error()가 호출되었는지 확인
                         mock_on_rate_limit.assert_called_once()
 
+    def test_retry_decorator_applied_to_api_methods(self, client):
+        """@retry_transient_errors 데코레이터가 API 메서드에 적용되었는지 확인"""
+
+        # 데코레이터가 적용된 메서드 목록
+        api_methods = [
+            "get_complex_list",
+            "get_complex_detail",
+            "get_apartments_bounding",
+            "get_ranking",
+            "get_recent_visits",
+            "get_region_info",
+            "get_pois_bounding",
+            "search_apartments",
+            "get_apartment_detail",
+            "get_apartment_transactions",
+            "get_regions",
+            "fetch_ranks_rolling",
+            "fetch_pois_bounding",
+            "search_apartments_by_location",
+        ]
+
+        for method_name in api_methods:
+            method = getattr(client, method_name)
+
+            # 메서드의 __func__를 통해 데코레이터 적용 확인
+            # Retryable decorator는 wrapper function을 반환
+            assert (
+                "wrapper" in method.__name__
+            ), f"{method_name} should be wrapped by retry decorator"
+
+            # 또는 decorator가 적용되었는지 소스 코드에서 확인
+            unbound_method = getattr(client.__class__, method_name)
+            # 데코레이터가 적용된 메서드는 wrapper function을 가짐
+            assert (
+                hasattr(unbound_method, "__name__") and "wrapper" in unbound_method.__name__
+            ), f"{method_name} should be wrapped by retry decorator"
+
+    def test_retry_behavior_on_transient_errors(self, client):
+        """일시적 오류 시 재시도 동작 테스트"""
+        import requests
+
+        with patch.object(client, "_initialize_session", return_value=True):
+            with patch.object(client.rate_limiter, "wait"):
+                with patch.object(client.session, "request") as mock_request:
+                    # 처음 두 번은 예외 발생, 세 번째는 성공
+                    mock_response = Mock()
+                    mock_response.status_code = 200
+                    mock_response.headers = {"content-type": "application/json"}
+                    mock_response.json.return_value = {"status": "success", "data": {}}
+
+                    # 처음 두 번은 timeout 예외, 세 번째는 성공
+                    mock_request.side_effect = [
+                        requests.exceptions.Timeout("Connection timeout"),
+                        requests.exceptions.Timeout("Connection timeout"),
+                        mock_response,
+                    ]
+
+                    # retry가 적용되면 최종적으로 성공해야 함
+                    result = client.get_regions()
+
+                    # 3번의 요청이 있었는지 확인 (2번 재시도 + 1번 성공)
+                    assert mock_request.call_count == 3
+                    assert result.success is True
+
 
 class TestHogangnonoCrawlerIntegrationTDD:
     """호갱노노 크롤러 통합 TDD 테스트 - Red 단계"""
@@ -406,7 +470,6 @@ class TestHogangnonoCrawlerIntegrationTDD:
             complexes, transactions = crawler.crawl_region(
                 region_bounds=(37.5, 126.9, 37.6, 127.0),
                 apt_type="apart",
-                max_pages=1,
             )
 
             # 데이터 확인

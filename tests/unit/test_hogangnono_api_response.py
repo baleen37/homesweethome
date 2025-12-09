@@ -193,11 +193,11 @@ class TestAPIResponse:
         mock_response = Mock(spec=Response)
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "Application/JSON"}  # 대문자 포함
-        mock_response.json.return_value = {"success": True}
+        mock_response.json.return_value = {"success": True, "data": {"items": [1, 2, 3]}}
 
         api_response = APIResponse.from_response(mock_response)
 
         assert api_response.success is True
-        # success 필드가 있지만 data 필드가 없는 응답은 전체 응답을 data로 반환
-        assert api_response.data == {"success": True}
+        # success 필드가 있으므로 data 필드만 반환
+        assert api_response.data == {"items": [1, 2, 3]}
         assert api_response.status_code == 200
