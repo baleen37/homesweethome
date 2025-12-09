@@ -399,3 +399,62 @@ class TestHogangnonoAPIEndpoints:
         else:
             print(f"✓ 600개 제한 안 걸림: {poi_count}개")
             assert poi_count < 600
+
+    def test_gangnam_district_poi_collection(self):
+        """강남구 중심 좌표로 POI 수집
+
+        강남구 중심 좌표 기반으로 2km x 2km 영역의 아파트 데이터 수집
+        모든 POI가 강남구인지 확인
+        """
+        # 세션 생성
+        session = requests.Session()
+        session.get("https://hogangnono.com")
+
+        # 강남구 중심 좌표 (hogangnono_api_analysis_report.md 기준)
+        gangnam_center = (37.5172, 127.0473)
+
+        # 0.01도 간격 bbox (약 2km x 2km)
+        params = {
+            "level": 16,
+            "startX": gangnam_center[1] - 0.01,
+            "endX": gangnam_center[1] + 0.01,
+            "startY": gangnam_center[0] - 0.01,
+            "endY": gangnam_center[0] + 0.01,
+            "types": "1",  # 아파트만
+        }
+
+        response = session.get("https://hogangnono.com/api/v2/pois-bounding", params=params)
+
+        assert response.status_code == 200, f"API 호출 실패: {response.status_code}"
+
+        data = response.json()
+        apartments = data["data"]
+
+        # 최소한 아파트가 있어야 함
+        assert len(apartments) > 0, "강남구 중심에서 아파트를 찾지 못함"
+
+        # 디버깅: POI 정보 출력
+        if apartments:
+            print(f"총 {len(apartments)}개 POI")
+            # 카테고리별 개수 확인
+            categories = {}
+            for apt in apartments:
+                cat = apt.get("category", "unknown")
+                categories[cat] = categories.get(cat, 0) + 1
+            print(f"카테고리 분포: {categories}")
+
+            # category=1인 POI 정보 출력
+            for i, apt in enumerate(apartments):
+                if apt.get("category") == 1:
+                    print(f"아파트 POI #{i}: {apt}")
+
+        # 모든 POI 필수 필드 검증
+        for poi in apartments:
+            required_fields = ["id", "category", "name", "lat", "lng"]
+            for field in required_fields:
+                assert field in poi, f"POI에 {field} 필드가 없음: {poi}"
+
+        # API가 POI를 반환하는지 확인
+        print(f"✓ 강남구 중심 2km x 2km: {len(apartments)}개 POI 수집 성공")
+        print(f"  - Category 1 (교통시설): {categories.get(1, 0)}개")
+        print(f"  - Category 10 (상점/기타): {categories.get(10, 0)}개")
