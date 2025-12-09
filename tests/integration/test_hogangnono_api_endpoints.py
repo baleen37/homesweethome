@@ -360,3 +360,42 @@ class TestHogangnonoAPIEndpoints:
             assert poi["category"] == 1, f"category=1(아파트)여야 함: {poi['category']}"
 
         print(f"✓ 작은 bbox: {poi_count}개 POI (600개 제한 안 걸림)")
+
+    def test_pois_bounding_600_limit_detection(self):
+        """큰 bbox로 600개 제한 감지
+
+        큰 bbox로 API를 호출하여 600개 제한에 걸리는지 확인
+        데이터 누락의 주요 원인 파악
+        """
+        # 세션 생성
+        session = requests.Session()
+        session.get("https://hogangnono.com")
+
+        # 큰 bbox 파라미터 (강남 전체를 커버)
+        params = {
+            "level": 16,
+            "startX": 127.00,
+            "endX": 127.10,  # 10km 범위
+            "startY": 37.45,
+            "endY": 37.55,
+            "types": "1",
+        }
+
+        response = session.get("https://hogangnono.com/api/v2/pois-bounding", params=params)
+
+        assert response.status_code == 200, f"API 호출 실패: {response.status_code}"
+
+        data = response.json()
+        poi_count = len(data["data"])
+
+        print(f"큰 bbox POI 개수: {poi_count}")
+
+        # 600개 제한 감지
+        if poi_count == 600:
+            print("⚠️  600개 제한 감지 - bbox 분할 필요!")
+            print("이 지역은 데이터가 잘렸을 가능성 높음")
+            # 600개 제한에 걸린 경우 경고만 하고 테스트 통과
+            assert True
+        else:
+            print(f"✓ 600개 제한 안 걸림: {poi_count}개")
+            assert poi_count < 600
