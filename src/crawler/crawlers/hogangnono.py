@@ -137,30 +137,27 @@ class HogangnonoCrawler(BaseCrawler):
         listings = []
 
         try:
-            # 실제 호갱노노 사이트의 CSS 선택자 (예시)
-            # TODO: 실제 사이트 구조에 맞게 선택자 업데이트 필요
-            items = soup.find_all("div", {"data-testid": "real-estate-item"})
-
-            if not items:
-                # 다른 가능한 선택자 시도
-                items = soup.find_all("div", class_="property-item")
-                if not items:
-                    items = soup.find_all("li", class_="search-item")
+            # 1. 아파트 목록에서 추출 (검색 결과 페이지)
+            items = soup.find_all("a", href=lambda x: x and "/apt/" in x)
 
             for item in items:
                 try:
-                    # 각 매물 정보 추출
-                    listing_data = self._extract_listing_data(item)
+                    # 각 아파트 정보 추출
+                    listing_data = self._extract_apartment_data(item)
 
                     if listing_data:
                         listings.append(listing_data)
 
                 except Exception as e:
                     self.logger.warning(
-                        "failed_to_extract_listing",
+                        "failed_to_extract_apartment",
                         error=str(e),
                     )
                     continue
+
+            # 2. 실거래가 표에서 추출 (상세 페이지)
+            if not listings:
+                listings = self._extract_transaction_data(soup)
 
         except Exception as e:
             self.logger.error(
@@ -170,58 +167,180 @@ class HogangnonoCrawler(BaseCrawler):
 
         return listings
 
-    def _extract_listing_data(self, item) -> Optional[dict[str, Any]]:
-        """개별 매물 정보 추출
+    def _extract_apartment_data(self, item) -> Optional[dict[str, Any]]:
+        """개별 아파트 정보 추출 (검색 결과 페이지)
 
         Args:
-            item: BeautifulSoup item element
+            item: BeautifulSoup a element
 
         Returns:
-            추출된 매물 정보 또는 None
+            추출된 아파트 정보 또는 None
         """
         try:
-            # 가격 정보 추출
-            price_element = item.find("div", class_="price")
-            price = price_element.get_text(strip=True) if price_element else ""
+            # 링크에서 아파트 ID 추출
+            href = item.get("href", "")
+            apt_id = href.split("/apt/")[-1].split("/")[0] if "/apt/" in href else ""
 
-            # 면적 정보 추출
-            area_element = item.find("div", class_="area")
-            area = area_element.get_text(strip=True) if area_element else ""
+            # 아파트 이름과 정보는 전체 텍스트에서 추출
+            # Playwright는 실제 HTML을 반환하므로 li 전체 텍스트를 사용
+            parent = item.find_parent("li")
+            if parent:
+                full_text = parent.get_text(strip=True)
 
-            # 층 정보 추출
-            floor_element = item.find("div", class_="floor")
-            floor = floor_element.get_text(strip=True) if floor_element else ""
+                # 첫 번째 링크 텍스트가 아파트 이름
+                complex_name = item.get_text(strip=True)
 
-            # 날짜 정보 추출
-            date_element = item.find("div", class_="date")
-            date = date_element.get_text(strip=True) if date_element else ""
+                # 전체 텍스트에서 동 이름 추출
+                dong = ""
+                if "동" in full_text:
+                    # "개포동 개포자이프레지던스" 형태에서 동 추출
+                    parts = full_text.split()
+                    for part in parts:
+                        if "동" in part and part != complex_name:
+                            dong = part
+                            break
 
-            # 단지명 추출
-            complex_element = item.find("div", class_="complex-name")
-            complex_name = complex_element.get_text(strip=True) if complex_element else ""
+                # 세대수 및 입주일 정보 추출
+                household_count = ""
+                move_in_date = ""
+                if "세대" in full_text:
+                    import re
 
-            # 주소 정보 추출
-            address_element = item.find("div", class_="address")
-            address = address_element.get_text(strip=True) if address_element else ""
+                    household_match = re.search(r"(\d+[,\d]*\s*세대)", full_text)
+                    if household_match:
+                        household_count = household_match.group(1)
 
-            # 필수 정보가 있으면 데이터 반환
-            if price or complex_name:
-                return {
-                    "price": price,
-                    "area": area,
-                    "floor": floor,
-                    "date": date,
-                    "complex_name": complex_name,
-                    "address": address,
-                }
+                if "년" in full_text and "입주" in full_text:
+                    date_match = re.search(r"(\d{4}\s*년\s*\d+\s*월\s*입주)", full_text)
+                    if date_match:
+                        move_in_date = date_match.group(1)
+
+                # 필수 정보가 있으면 데이터 반환
+                if complex_name and apt_id:
+                    return {
+                        "apt_id": apt_id,
+                        "complex_name": complex_name,
+                        "dong": dong,
+                        "household_count": household_count,
+                        "move_in_date": move_in_date,
+                        "price": "",
+                        "area": "",
+                        "floor": "",
+                        "date": "",
+                        "address": "",
+                    }
 
         except Exception as e:
             self.logger.warning(
-                "failed_to_extract_item_data",
+                "failed_to_extract_apartment_data",
                 error=str(e),
             )
 
         return None
+
+    def _extract_transaction_data(self, soup: BeautifulSoup) -> List[dict[str, Any]]:
+        """실거래가 데이터 추출 (상세 페이지)
+
+        Args:
+            soup: BeautifulSoup 객체
+
+        Returns:
+            추출된 실거래가 데이터 리스트
+        """
+        listings = []
+
+        try:
+            # 실거래가 표 찾기
+            table = soup.find("table")
+            if not table:
+                return listings
+
+            # 단지 정보 추출
+            complex_name = ""
+            heading = soup.find("h1")
+            if heading:
+                complex_name = heading.get_text(strip=True)
+
+            # 주소 정보 추출
+            address = ""
+            address_generic = soup.find("generic", string=lambda x: x and "특별시" in x)
+            if address_generic:
+                address = address_generic.get_text(strip=True)
+
+            # 실거래가 행들 추출
+            rows = table.find_all("tr")[1:]  # 헤더 제외
+            for row in rows:
+                cells = row.find_all("td")
+                if len(cells) >= 3:
+                    try:
+                        # 계약일
+                        date_cell = cells[0]
+                        date = date_cell.get_text(strip=True)
+
+                        # 면적 (타입)
+                        area_cell = cells[1]
+                        area_button = area_cell.find("button")
+                        area = (
+                            area_button.get_text(strip=True)
+                            if area_button
+                            else area_cell.get_text(strip=True)
+                        )
+
+                        # 가격 및 층수
+                        price_cell = cells[2]
+                        # 각 generic 요소에서 텍스트 추출
+                        price_generics = price_cell.find_all("generic")
+
+                        price = ""
+                        floor = ""
+                        if len(price_generics) >= 2:
+                            # 첫 번째 generic: 가격
+                            price = price_generics[0].get_text(strip=True)
+                            # 두 번째 generic: 층수
+                            floor = price_generics[1].get_text(strip=True)
+                        else:
+                            # fallback: 전체 텍스트에서 분리
+                            price_text = price_cell.get_text(strip=True)
+                            if "층" in price_text:
+                                # "억 7,000 28층" 형태 처리
+                                import re
+
+                                match = re.search(r"([0-9,]+억(?:\s*[0-9,]+만)?)", price_text)
+                                if match:
+                                    price = match.group(1)
+                                floor_match = re.search(r"(\d+층)", price_text)
+                                if floor_match:
+                                    floor = floor_match.group(1)
+
+                        listings.append(
+                            {
+                                "apt_id": "",
+                                "complex_name": complex_name,
+                                "dong": address.split()[1] if len(address.split()) > 1 else "",
+                                "household_count": "",
+                                "move_in_date": "",
+                                "price": price,
+                                "area": area,
+                                "floor": floor,
+                                "date": date,
+                                "address": address,
+                            }
+                        )
+
+                    except Exception as e:
+                        self.logger.warning(
+                            "failed_to_extract_transaction_row",
+                            error=str(e),
+                        )
+                        continue
+
+        except Exception as e:
+            self.logger.error(
+                "failed_to_extract_transaction_data",
+                error=str(e),
+            )
+
+        return listings
 
     def crawl_region(self, district: str, dong: Optional[str] = None) -> List[dict[str, Any]]:
         """지역별 크롤링 실행
@@ -235,55 +354,97 @@ class HogangnonoCrawler(BaseCrawler):
         """
         try:
             search_query = f"{district} {dong or ''}".strip()
+            encoded_query = search_query.replace(" ", "%20")
 
             with self.browser_manager.managed_browser() as page:
-                # 1. 사이트 접속
-                page.goto(self.base_url)
+                # 1. 검색 결과 페이지로 직접 이동
+                search_url = f"{self.base_url}/search?q={encoded_query}"
+                page.goto(search_url)
                 page.wait_for_load_state("networkidle")
 
-                # 2. 검색창에 지역 입력
-                # TODO: 실제 검색창 선택자에 맞게 수정 필요
-                search_input = page.locator(
-                    'input[placeholder*="지역"], input[placeholder*="검색"]'
+                # 2. 로딩 대기
+                page.wait_for_timeout(3000)
+
+                # 3. 현재 페이지의 HTML 가져오기
+                html = page.content()
+
+                # 4. 데이터 파싱
+                listings = self.parse(html)
+
+                self.logger.info(
+                    "region_crawl_completed",
+                    district=district,
+                    dong=dong,
+                    search_query=search_query,
+                    listings_count=len(listings),
                 )
-                if search_input.count() > 0:
-                    search_input.fill(search_query)
-                    page.keyboard.press("Enter")
 
-                    # 3. 검색 결과 로딩 대기
-                    page.wait_for_load_state("networkidle")
-
-                    # 추가 로딩을 위해 잠시 대기
-                    page.wait_for_timeout(2000)
-
-                    # 4. 현재 페이지의 HTML 가져오기
-                    html = page.content()
-
-                    # 5. 데이터 파싱
-                    listings = self.parse(html)
-
-                    self.logger.info(
-                        "region_crawl_completed",
-                        district=district,
-                        dong=dong,
-                        search_query=search_query,
-                        listings_count=len(listings),
-                    )
-
-                    return listings
-                else:
-                    self.logger.warning(
-                        "search_input_not_found",
-                        district=district,
-                        dong=dong,
-                    )
-                    return []
+                return listings
 
         except Exception as e:
             self.logger.error(
                 "failed_to_crawl_region",
                 district=district,
                 dong=dong,
+                error=str(e),
+            )
+            return []
+
+    def crawl_apartment_detail(self, apt_id: str) -> List[dict[str, Any]]:
+        """아파트 상세 페이지 크롤링 (실거래가 데이터)
+
+        Args:
+            apt_id: 아파트 ID
+
+        Returns:
+            수집된 실거래가 데이터 리스트
+        """
+        try:
+            with self.browser_manager.managed_browser() as page:
+                # 1. 아파트 상세 페이지로 이동
+                detail_url = f"{self.base_url}/apt/{apt_id}/0"
+                page.goto(detail_url)
+                page.wait_for_load_state("networkidle")
+
+                # 2. 로딩 대기
+                page.wait_for_timeout(3000)
+
+                # 3. "더보기" 버튼 클릭하여 더 많은 실거래가 로드
+                try:
+                    # 여러 "더보기" 버튼이 있을 수 있으므로 실거래가 섹션의 더보기 버튼 찾기
+                    more_buttons = page.locator('button:has-text("더보기")')
+                    count = more_buttons.count()
+
+                    for i in range(count):
+                        button = more_buttons.nth(i)
+                        # 버튼이 보이고 활성화되어 있으면 클릭
+                        if button.is_visible() and button.is_enabled():
+                            button.click()
+                            page.wait_for_timeout(2000)
+                except Exception as e:
+                    self.logger.debug(
+                        "failed_to_click_more_button",
+                        error=str(e),
+                    )
+
+                # 4. 페이지 HTML 가져오기
+                html = page.content()
+
+                # 5. 데이터 파싱
+                listings = self.parse(html)
+
+                self.logger.info(
+                    "apartment_detail_crawl_completed",
+                    apt_id=apt_id,
+                    listings_count=len(listings),
+                )
+
+                return listings
+
+        except Exception as e:
+            self.logger.error(
+                "failed_to_crawl_apartment_detail",
+                apt_id=apt_id,
                 error=str(e),
             )
             return []
@@ -305,72 +466,60 @@ class HogangnonoCrawler(BaseCrawler):
 
         try:
             search_query = f"{district} {dong or ''}".strip()
+            encoded_query = search_query.replace(" ", "%20")
 
             with self.browser_manager.managed_browser() as page:
-                # 1. 사이트 접속 및 검색
-                page.goto(self.base_url)
+                # 1. 검색 결과 페이지로 직접 이동
+                search_url = f"{self.base_url}/search?q={encoded_query}"
+                page.goto(search_url)
                 page.wait_for_load_state("networkidle")
+                page.wait_for_timeout(3000)
 
-                search_input = page.locator(
-                    'input[placeholder*="지역"], input[placeholder*="검색"]'
-                )
-                if search_input.count() > 0:
-                    search_input.fill(search_query)
-                    page.keyboard.press("Enter")
-                    page.wait_for_load_state("networkidle")
-                    page.wait_for_timeout(2000)
+                # 2. 첫 페이지 데이터 수집 (아파트 목록)
+                html = page.content()
+                listings = self.parse(html)
+                all_listings.extend(listings)
 
-                    # 2. 첫 페이지 데이터 수집
-                    html = page.content()
-                    listings = self.parse(html)
-                    all_listings.extend(listings)
+                # 3. 각 아파트의 상세 페이지에서 실거래가 데이터 수집
+                for listing in listings[:10]:  # 최대 10개 아파트만 상세 조회
+                    apt_id = listing.get("apt_id", "")
+                    if apt_id:
+                        try:
+                            # 상세 페이지 크롤링
+                            transactions = self.crawl_apartment_detail(apt_id)
 
-                    # 3. 추가 페이지 로딩 (더보기 버튼 또는 스크롤)
-                    for page_num in range(2, max_pages + 1):
-                        # TODO: 실제 페이지네이션 방식에 맞게 수정 필요
-                        # "더보기" 버튼 클릭 시도
-                        more_button = page.locator(
-                            'button:has-text("더보기"), button:has-text("더 보기")'
-                        )
+                            # 상세 정보를 기존 정보와 병합
+                            for transaction in transactions:
+                                transaction.update(
+                                    {
+                                        "dong": listing.get("dong", ""),
+                                        "household_count": listing.get("household_count", ""),
+                                        "move_in_date": listing.get("move_in_date", ""),
+                                    }
+                                )
+                                all_listings.append(transaction)
 
-                        if more_button.count() > 0 and more_button.is_visible():
-                            more_button.click()
+                            # 다음 요청 전 대기 (Rate Limiting)
                             page.wait_for_timeout(2000)
 
-                            # 새 데이터 수집
-                            html = page.content()
-                            new_listings = self.parse(html)
-
-                            # 중복 제거 후 추가
-                            existing_ids = {
-                                item.get("complex_name", "") + item.get("area", "")
-                                for item in all_listings
-                            }
-                            for item in new_listings:
-                                item_id = item.get("complex_name", "") + item.get("area", "")
-                                if item_id not in existing_ids:
-                                    all_listings.append(item)
-                                    existing_ids.add(item_id)
-
-                            self.logger.info(
-                                "additional_page_loaded",
-                                page_num=page_num,
-                                new_items=len(new_listings),
-                                total_items=len(all_listings),
+                        except Exception as e:
+                            self.logger.warning(
+                                "failed_to_crawl_apartment_transaction",
+                                apt_id=apt_id,
+                                error=str(e),
                             )
-                        else:
-                            # 더보기 버튼이 없으면 종료
-                            self.logger.info(
-                                "no_more_pages",
-                                last_page=page_num - 1,
-                                total_items=len(all_listings),
-                            )
-                            break
+                            continue
 
-                    return all_listings
-                else:
-                    self.logger.warning("search_input_not_found")
-                    return []
+                self.logger.info(
+                    "pagination_crawl_completed",
+                    district=district,
+                    dong=dong,
+                    apartments_count=len(listings),
+                    transactions_count=len(all_listings) - len(listings),
+                    total_items=len(all_listings),
+                )
+
+                return all_listings
 
         except Exception as e:
             self.logger.error(
