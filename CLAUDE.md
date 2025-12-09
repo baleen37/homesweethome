@@ -164,6 +164,26 @@ uv run pytest -pdb
 uv run pytest -v -s
 ```
 
+### Integration 테스트 실행
+
+```bash
+# API 엔드포인트별 integration 테스트
+pytest tests/integration/test_hogangnono_api_endpoints.py -m integration -v
+
+# 특정 테스트만 실행
+pytest tests/integration/test_hogangnono_api_endpoints.py::test_regions_api -v
+
+# Rate limiting 테스트 제외 (느림)
+pytest tests/integration/test_hogangnono_api_endpoints.py -m "integration and not slow" -v
+```
+
+### Fixture 수집
+
+```bash
+# API 응답 fixtures 수집
+python tests/helpers/record_fixtures.py
+```
+
 ## 코드 품질 검사
 
 ### Ruff (Linting & Formatting)
