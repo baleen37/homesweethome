@@ -347,21 +347,10 @@ class HogangnonoCrawler(APICrawler):
                 }
                 all_complexes.append(complex_info)
 
-                # 거래 정보
-                transaction_info = {
-                    k: v
-                    for k, v in item.items()
-                    if k
-                    not in [
-                        "address",
-                        "latitude",
-                        "longitude",
-                        "build_year",
-                        "households",
-                        "floors",
-                    ]
-                }
-                all_transactions.append(transaction_info)
+                # 거래 정보는 실제 거래 데이터가 있는 경우에만 추가
+                # 현재 API는 단지 정보만 제공하므로 거래내역은 추가하지 않음
+                # 거래내역은 별도의 API 호출이 필요하지만 현재는 구현되어 있지 않음
+                # TODO: 단지별 상세 API를 통해 실제 거래내역 수집 기능 구현 필요
 
             # 호갱노노 API는 페이지네이션을 지원하지 않음
             # 모든 데이터는 첫 번째 호출에서 반환됨 (최대 600개)
