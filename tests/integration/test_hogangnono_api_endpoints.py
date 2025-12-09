@@ -7,6 +7,7 @@ TDD 접근법: 현재 실패하는 테스트를 먼저 작성하고,
 import json
 import pytest
 import requests
+import time
 from unittest.mock import Mock
 
 from crawler.api.hogangnono_client import HogangnonoAPIClient, SearchParams, APIResponse
@@ -492,3 +493,60 @@ class TestHogangnonoAPIEndpoints:
             print("✓ 세션 쿠키 없이도 API 호출 가능")
         else:
             print("⚠️  세션 쿠키 필요 - 메인 페이지 접속 후 쿠키 획득 필수")
+
+    @pytest.mark.integration
+    @pytest.mark.slow
+    def test_rate_limiting_policy(self):
+        """Rate limiting 정책 확인
+
+        연속 10회 API 호출로 429 에러 발생 여부 확인
+        안전한 요청 간격 파악
+        """
+        # 세션 생성
+        session = requests.Session()
+        session.get("https://hogangnono.com")
+
+        params = {
+            "level": 16,
+            "startX": 127.00,
+            "endX": 127.01,
+            "startY": 37.50,
+            "endY": 37.51,
+            "types": "1",
+        }
+
+        # 연속 10회 호출
+        status_codes = []
+        response_times = []
+
+        print("\n연속 API 호출 테스트 (0.5초 간격):")
+        for i in range(10):
+            start_time = time.time()
+
+            response = session.get("https://hogangnono.com/api/v2/pois-bounding", params=params)
+
+            elapsed = time.time() - start_time
+            status_codes.append(response.status_code)
+            response_times.append(elapsed)
+
+            print(f"  {i+1}. Status: {response.status_code}, Time: {elapsed:.2f}s")
+
+            time.sleep(0.5)  # 0.5초 간격
+
+        # 429 (Too Many Requests) 발생 여부
+        has_rate_limit = 429 in status_codes
+
+        if has_rate_limit:
+            print("\n⚠️  Rate limiting 감지 - 요청 간격 조정 필요")
+            rate_limit_index = status_codes.index(429)
+            print(f"   {rate_limit_index + 1}번째 요청에서 429 에러")
+        else:
+            print("\n✓ 0.5초 간격으로 10회 연속 호출 성공")
+
+        # 최소 일부는 성공해야 함
+        success_count = status_codes.count(200)
+        assert success_count > 0, f"모든 요청 실패: {status_codes}"
+
+        # 평균 응답 시간
+        avg_time = sum(response_times) / len(response_times)
+        print(f"   평균 응답 시간: {avg_time:.2f}s")
