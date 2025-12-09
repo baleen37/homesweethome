@@ -27,6 +27,10 @@ class TransactionCSVWriter:
         "trade_category",
         "is_delete",
         "is_renew",
+        "gu_code",  # 추가: 구 코드
+        "dong_code",  # 추가: 동 코드
+        "gu_name",  # 추가: 구 이름
+        "dong_name",  # 추가: 동 이름
     ]
 
     def __init__(self, output_path: Path) -> None:

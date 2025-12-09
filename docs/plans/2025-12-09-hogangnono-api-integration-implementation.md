@@ -1594,9 +1594,16 @@ python scripts/main.py --resume
 ### 데이터 흐름
 
 1. `/api/v2/regions` - 시/도, 구/군 목록 수집
-2. `/api/v2/pois-bounding` - 단지 목록 수집
+2. `/api/v2/pois-bounding` - 단지 목록 수집 (※ `/api/apt/bounding`이 아님)
 3. `/api/v2/apts/{aptId}` - 단지 상세 정보
 4. `/api/v2/apts/{aptId}/monthly-reports` - 실거래 내역
+
+### API 엔드포인트 주의사항
+
+- **아파트 단지 조회**: `/api/apt/bounding`이 아닌 `/api/v2/pois-bounding` 사용
+  - 세션 쿠키 필요 (connect.sid, client.cid, bat)
+  - 최대 600개 POI 제한
+  - `category=0` 필터로 아파트만 조회
 
 ### 예상 소요 시간
 

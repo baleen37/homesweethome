@@ -26,7 +26,7 @@ class TestCrawlCoordinatorProgress:
     def test_init_with_progress_tracking(self):
         """Progress tracking 활성화된 상태로 초기화 테스트"""
         coordinator = CrawlCoordinator(
-            output_dir=self.temp_dir,
+            config_or_config_or_output_dir=self.temp_dir,
             checkpoint_path=self.checkpoint_path,
             enable_progress_tracking=True,
             progress_report_interval=30,
@@ -39,7 +39,7 @@ class TestCrawlCoordinatorProgress:
     def test_init_without_progress_tracking(self):
         """Progress tracking 비활성화된 상태로 초기화 테스트"""
         coordinator = CrawlCoordinator(
-            output_dir=self.temp_dir,
+            config_or_output_dir=self.temp_dir,
             checkpoint_path=self.checkpoint_path,
             enable_progress_tracking=False,
         )
@@ -55,7 +55,7 @@ class TestCrawlCoordinatorProgress:
 
         # Coordinator 초기화
         coordinator = CrawlCoordinator(
-            output_dir=self.temp_dir,
+            config_or_output_dir=self.temp_dir,
             checkpoint_path=self.checkpoint_path,
             enable_progress_tracking=True,
         )
@@ -95,7 +95,7 @@ class TestCrawlCoordinatorProgress:
         """에러 발생 시 Progress tracking 테스트"""
         # Coordinator 초기화 (실제 ProgressTracker 사용)
         coordinator = CrawlCoordinator(
-            output_dir=self.temp_dir,
+            config_or_output_dir=self.temp_dir,
             checkpoint_path=self.checkpoint_path,
             enable_progress_tracking=True,
         )
@@ -137,7 +137,7 @@ class TestCrawlCoordinatorProgress:
 
         # Coordinator 초기화
         coordinator = CrawlCoordinator(
-            output_dir=self.temp_dir,
+            config_or_output_dir=self.temp_dir,
             checkpoint_path=self.checkpoint_path,
             enable_progress_tracking=True,
         )
@@ -180,7 +180,7 @@ class TestCrawlCoordinatorProgress:
     def test_progress_file_creation(self):
         """Progress 파일 생성 확인 테스트"""
         coordinator = CrawlCoordinator(
-            output_dir=self.temp_dir,
+            config_or_output_dir=self.temp_dir,
             checkpoint_path=self.checkpoint_path,
             enable_progress_tracking=True,
             progress_report_interval=1,  # 1초 간격
@@ -202,7 +202,7 @@ class TestCrawlCoordinatorProgress:
     def test_progress_log_content(self):
         """Progress 로그 내용 확인 테스트"""
         coordinator = CrawlCoordinator(
-            output_dir=self.temp_dir,
+            config_or_output_dir=self.temp_dir,
             checkpoint_path=self.checkpoint_path,
             enable_progress_tracking=True,
         )

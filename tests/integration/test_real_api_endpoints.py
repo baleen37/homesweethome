@@ -1,7 +1,10 @@
+import pytest
 import requests
 # from crawler.api.hogangnono_client import HogangnonoAPIClient
 
 
+@pytest.mark.integration
+@pytest.mark.slow
 def test_real_hogangnono_api_availability():
     """Test that real 호갱노노 API endpoints are accessible"""
     # Direct HTTP client test for basic connectivity
@@ -19,6 +22,8 @@ def test_real_hogangnono_api_availability():
             assert "name" in data["rolling"][0], "Each item should have a name field"
 
 
+@pytest.mark.integration
+@pytest.mark.slow
 def test_bounding_box_api_with_real_coordinates():
     """Test bounding box API with Seoul coordinates"""
     # Direct HTTP client test - use correct API endpoint

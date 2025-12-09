@@ -15,6 +15,7 @@ from crawler.config import CrawlerConfig
 from crawler.crawlers.hogangnono import HogangnonoCrawler
 
 
+@pytest.mark.slow
 class TestHogangnonoAPIEndpoints:
     """호갱노노 API 엔드포인트 테스트
 

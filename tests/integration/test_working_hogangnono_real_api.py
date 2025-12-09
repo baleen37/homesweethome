@@ -24,6 +24,7 @@ def crawler(config):
 
 
 @pytest.mark.integration
+@pytest.mark.slow
 class TestWorkingHogangnonoRealAPI:
     """Integration tests with real API calls."""
 

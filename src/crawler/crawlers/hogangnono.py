@@ -3,6 +3,7 @@
 APICrawler를 상속받아 호갱노노 부동산 데이터를 수집합니다.
 """
 
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -89,11 +90,110 @@ class HogangnonoCrawler(APICrawler):
         # 체크포인트 매니저 (main.py에서 접근 필요)
         self.checkpoint_manager = None
 
+        # 동 코드 매핑 정보 로드
+        self.dong_code_mapping = self._load_dong_code_mapping()
+
         self.logger.info(
             "hogangnono_crawler_initialized",
             output_dir=str(self.output_dir),
             region_bounds=self.region_bounds,
         )
+
+    def _load_dong_code_mapping(self) -> Dict[str, Dict[str, Any]]:
+        """동 코드 매핑 정보 로드"""
+        mapping_file = self.output_dir / "dong_code_mapping.json"
+        if mapping_file.exists():
+            with open(mapping_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return {}
+
+    def fetch_dong_codes(
+        self, district_name: str, lat: float = None, lng: float = None
+    ) -> Dict[str, str]:
+        """API를 통해 동 코드 정보 가져오기"""
+        search_url = "https://hogangnono.com/api/v2/searches/new"
+        params = {"query": district_name}
+        if lat is not None:
+            params["y"] = lat
+        if lng is not None:
+            params["x"] = lng
+
+        try:
+            response = self.session.get(search_url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get("status") != "success":
+                return {}
+
+            dongs = {}
+            matched = data.get("data", {}).get("matched", {})
+
+            if "region" in matched:
+                for item in matched["region"].get("list", []):
+                    if item.get("local_type") == "local3":  # 동 정보
+                        dong_name = item.get("local3_name", "")
+                        dong_code = item.get("local3_code", "")
+                        if dong_name and dong_code:
+                            dongs[dong_name] = dong_code
+
+            return dongs
+
+        except Exception as e:
+            self.logger.error("fetch_dong_codes_error", district=district_name, error=str(e))
+            return {}
+
+    def get_dong_code(self, district_name: str, dong_name: str) -> Optional[str]:
+        """동 이름으로 코드 조회"""
+        # 캐시된 정보 확인
+        if district_name in self.dong_code_mapping:
+            return self.dong_code_mapping[district_name].get(dong_name)
+
+        # API에서 가져오기
+        dongs = self.fetch_dong_codes(district_name)
+        if dongs:
+            # 캐시 업데이트
+            if district_name not in self.dong_code_mapping:
+                self.dong_code_mapping[district_name] = {}
+            self.dong_code_mapping[district_name].update(dongs)
+
+            # 파일에 저장
+            mapping_file = self.output_dir / "dong_code_mapping.json"
+            with open(mapping_file, "w", encoding="utf-8") as f:
+                json.dump(self.dong_code_mapping, f, ensure_ascii=False, indent=2)
+
+            return dongs.get(dong_name)
+
+        return None
+
+    def _parse_gu_dong_from_address(self, address: str) -> tuple[str | None, str | None]:
+        """주소에서 구와 동 이름 추출"""
+        if not address:
+            return None, None
+
+        # 서울특별시가 아닌 경우
+        if "서울특별시" not in address and not address.startswith("서울 "):
+            return None, None
+
+        # 주소 파싱
+        parts = address.split()
+        gu = None
+        dong = None
+
+        for i, part in enumerate(parts):
+            # 구 찾기 (시가 아닌 구)
+            if part.endswith("구") and "시" not in part:
+                gu = part
+                # 다음 파트가 동인지 확인
+                if i + 1 < len(parts):
+                    next_part = parts[i + 1]
+                    # 번지가 포함된 동 처리 (예: 역삼동 825-24)
+                    dong_part = next_part.split("-")[0]
+                    if dong_part.endswith("동"):
+                        dong = dong_part
+                break
+
+        return gu, dong
 
     def get_endpoint(self) -> str:
         """API 엔드포인트 반환
@@ -233,6 +333,18 @@ class HogangnonoCrawler(APICrawler):
             else:
                 trade_year = 0
 
+            # 주소에서 구와 동 정보 추출
+            gu_name, dong_name = self._parse_gu_dong_from_address(address)
+
+            # 동 코드 조회
+            dong_code = None
+            gu_code = None
+            if gu_name and dong_name:
+                dong_code = self.get_dong_code(gu_name, dong_name)
+                if dong_code:
+                    # 구 코드는 동 코드의 앞 5자리
+                    gu_code = dong_code[:5]
+
             # 결과 조합
             result = {
                 # 단지 정보 (complexes.csv용)
@@ -258,6 +370,11 @@ class HogangnonoCrawler(APICrawler):
                 "trade_category": trade_type,
                 "is_delete": "N",
                 "is_renew": "N",
+                # 추가: 행정구역 정보
+                "gu_code": gu_code or "",
+                "dong_code": dong_code or "",
+                "gu_name": gu_name or "",
+                "dong_name": dong_name or "",
             }
 
             return result

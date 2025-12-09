@@ -11,6 +11,7 @@ from crawler.api.hogangnono_client import HogangnonoAPIClient, SearchParams
 from crawler.config import CrawlerConfig
 
 
+@pytest.mark.slow
 class TestHogangnonoRealAPIDiscovery:
     """호갱노노 실제 API 발견 테스트"""
 

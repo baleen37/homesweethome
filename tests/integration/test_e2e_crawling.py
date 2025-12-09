@@ -12,6 +12,7 @@ from tests.integration.helpers.data_validator import DataValidator
 
 
 @pytest.mark.integration
+@pytest.mark.slow
 def test_full_gangnam_crawling_workflow(integration_test_dir):
     # Setup test config
     config = CrawlerConfig.for_integration_test(
