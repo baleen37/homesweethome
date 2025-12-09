@@ -195,18 +195,20 @@ class TestHogangnonoCrawler:
         mock_response = APIResponse(
             success=True,
             data={
-                "items": [
-                    {
-                        "id": "1",
-                        "name": "아파트1",
-                        "trade": {"type": "sale", "deal_price": "500,000,000"},
-                    },
-                    {
-                        "id": "2",
-                        "name": "아파트2",
-                        "trade": {"type": "jeonse", "jeonse_price": "300,000,000"},
-                    },
-                ]
+                "data": {
+                    "items": [
+                        {
+                            "id": "1",
+                            "name": "아파트1",
+                            "trade": {"type": "sale", "deal_price": "500,000,000"},
+                        },
+                        {
+                            "id": "2",
+                            "name": "아파트2",
+                            "trade": {"type": "jeonse", "jeonse_price": "300,000,000"},
+                        },
+                    ]
+                }
             },
         )
 
@@ -224,15 +226,17 @@ class TestHogangnonoCrawler:
     def test_crawl_region_with_pagination(self, crawler):
         """페이지네이션 포함 크롤링 테스트"""
         # 첫 페이지 응답
-        first_response = APIResponse(success=True, data={"items": [{"id": "1", "name": "아파트1"}]})
+        first_response = APIResponse(
+            success=True, data={"data": {"items": [{"id": "1", "name": "아파트1"}]}}
+        )
 
         # 두 번째 페이지 응답
         second_response = APIResponse(
-            success=True, data={"items": [{"id": "2", "name": "아파트2"}]}
+            success=True, data={"data": {"items": [{"id": "2", "name": "아파트2"}]}}
         )
 
         # 세 번째 페이지 (빈 응답)
-        empty_response = APIResponse(success=True, data={"items": []})
+        empty_response = APIResponse(success=True, data={"data": {"items": []}})
 
         with (
             patch.object(
@@ -294,21 +298,23 @@ class TestHogangnonoCrawler:
         mock_response = APIResponse(
             success=True,
             data={
-                "items": [
-                    {
-                        "id": "1",
-                        "name": "테스트아파트",
-                        "address": "서울시 강남구",
-                        "build_year": "2020",
-                        "households": 200,
-                        "floors": 15,
-                        "trade": {
-                            "type": "sale",
-                            "deal_price": "1,000,000,000",
-                            "date": "20241201",
-                        },
-                    }
-                ]
+                "data": {
+                    "items": [
+                        {
+                            "id": "1",
+                            "name": "테스트아파트",
+                            "address": "서울시 강남구",
+                            "build_year": "2020",
+                            "households": 200,
+                            "floors": 15,
+                            "trade": {
+                                "type": "sale",
+                                "deal_price": "1,000,000,000",
+                                "date": "20241201",
+                            },
+                        }
+                    ]
+                }
             },
         )
 

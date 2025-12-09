@@ -251,7 +251,7 @@ class TestHogangnonoAPIClientTDD:
             # 올바른 엔드포인트 호출 확인
             mock_request.assert_called_once_with(
                 method="GET",
-                endpoint="/api/apt/bounding",
+                endpoint="/api/v2/pois-bounding",
                 params=search_params.to_dict(),
             )
 
@@ -274,6 +274,84 @@ class TestHogangnonoAPIClientTDD:
             # Rate limiting이 적용되어야 함
             # (실제 구현에서는 time.sleep이나 delay 로직이 필요)
             assert mock_request.call_count == 2
+
+    def test_rate_limiter_integration(self, client):
+        """RateLimiter가 API 호출에 통합되었는지 확인"""
+        # RateLimiter가 초기화되었는지 확인
+        assert hasattr(client, "rate_limiter")
+        assert client.rate_limiter is not None
+
+        # 초기 설정 확인
+        assert client.rate_limiter.current_delay == 2.0
+        assert client.rate_limiter.min_delay == 1.0
+        assert client.rate_limiter.max_delay == 10.0
+
+    def test_rate_limiter_called_before_request(self, client):
+        """API 호출 전 rate limiter wait() 호출 확인"""
+        with patch.object(client.rate_limiter, "wait") as mock_wait:
+            with patch.object(client, "_initialize_session", return_value=True):
+                with patch.object(client.session, "request") as mock_request:
+                    mock_response = Mock()
+                    mock_response.status_code = 200
+                    mock_response.json.return_value = {"status": "success", "data": {}}
+                    mock_response.headers = {"content-type": "application/json"}
+                    mock_request.return_value = mock_response
+
+                    client.get_regions()
+
+                    # wait()가 호출되었는지 확인
+                    mock_wait.assert_called_once()
+
+    def test_rate_limiter_feedback_on_success(self, client):
+        """API 성공 시 rate limiter feedback 호출 확인"""
+        with patch.object(client, "_initialize_session", return_value=True):
+            with patch.object(client.rate_limiter, "wait"):
+                with patch.object(client.rate_limiter, "on_success") as mock_on_success:
+                    with patch.object(client.session, "request") as mock_request:
+                        mock_response = Mock()
+                        mock_response.status_code = 200
+                        mock_response.json.return_value = {"status": "success", "data": {}}
+                        mock_response.headers = {"content-type": "application/json"}
+                        mock_request.return_value = mock_response
+
+                        client.get_regions()
+
+                        # on_success()가 호출되었는지 확인
+                        mock_on_success.assert_called_once()
+
+    def test_rate_limiter_feedback_on_error(self, client):
+        """API 에러 시 rate limiter feedback 호출 확인"""
+        with patch.object(client, "_initialize_session", return_value=True):
+            with patch.object(client.rate_limiter, "wait"):
+                with patch.object(client.rate_limiter, "on_error") as mock_on_error:
+                    with patch.object(client.session, "request") as mock_request:
+                        mock_response = Mock()
+                        mock_response.status_code = 500
+                        mock_response.json.return_value = {"error": "Internal Server Error"}
+                        mock_response.headers = {"content-type": "application/json"}
+                        mock_request.return_value = mock_response
+
+                        client.get_regions()
+
+                        # on_error()가 호출되었는지 확인
+                        mock_on_error.assert_called_once()
+
+    def test_rate_limiter_feedback_on_rate_limit(self, client):
+        """429 에러 시 rate limiter feedback 호출 확인"""
+        with patch.object(client, "_initialize_session", return_value=True):
+            with patch.object(client.rate_limiter, "wait"):
+                with patch.object(client.rate_limiter, "on_rate_limit_error") as mock_on_rate_limit:
+                    with patch.object(client.session, "request") as mock_request:
+                        mock_response = Mock()
+                        mock_response.status_code = 429
+                        mock_response.json.return_value = {"error": "Too Many Requests"}
+                        mock_response.headers = {"content-type": "application/json"}
+                        mock_request.return_value = mock_response
+
+                        client.get_regions()
+
+                        # on_rate_limit_error()가 호출되었는지 확인
+                        mock_on_rate_limit.assert_called_once()
 
 
 class TestHogangnonoCrawlerIntegrationTDD:
@@ -306,25 +384,23 @@ class TestHogangnonoCrawlerIntegrationTDD:
             # Mock 응답 데이터
             mock_api.return_value = APIResponse(
                 success=True,
-                data={
-                    "data": [
-                        {
-                            "id": "12345",
-                            "name": "테스트아파트",
-                            "address": "서울시 강남구 테스트동",
-                            "lat": 37.5,
-                            "lng": 127.0,
-                            "build_year": "2020",
-                            "households": 500,
-                            "trade": {
-                                "type": "sale",
-                                "area": "84.94",
-                                "price": "150,000",
-                                "floor": "5",
-                            },
-                        }
-                    ]
-                },
+                data=[
+                    {
+                        "id": "12345",
+                        "name": "테스트아파트",
+                        "address": "서울시 강남구 테스트동",
+                        "lat": 37.5,
+                        "lng": 127.0,
+                        "build_year": "2020",
+                        "households": 500,
+                        "trade": {
+                            "type": "sale",
+                            "area": "84.94",
+                            "price": "150,000",
+                            "floor": "5",
+                        },
+                    }
+                ],
             )
 
             complexes, transactions = crawler.crawl_region(
@@ -577,30 +653,3 @@ class TestErrorHandlingTDD:
                 endpoint="/api/v2/apts/1Hq6f/monthly-reports/more",
                 params={"tradeType": 0, "areaNo": 0},
             )
-
-    def test_rate_limiter_integration(self, client):
-        """RateLimiter가 API 호출에 통합되었는지 확인"""
-        # RateLimiter가 초기화되었는지 확인
-        assert hasattr(client, "rate_limiter")
-        assert client.rate_limiter is not None
-
-        # 초기 설정 확인
-        assert client.rate_limiter.current_delay == 2.0
-        assert client.rate_limiter.min_delay == 1.0
-        assert client.rate_limiter.max_delay == 10.0
-
-    def test_rate_limiter_called_before_request(self, client):
-        """API 호출 전 rate limiter wait() 호출 확인"""
-        with patch.object(client.rate_limiter, "wait") as mock_wait:
-            with patch.object(client, "_initialize_session", return_value=True):
-                with patch.object(client.session, "request") as mock_request:
-                    mock_response = Mock()
-                    mock_response.status_code = 200
-                    mock_response.json.return_value = {"status": "success", "data": {}}
-                    mock_response.headers = {"content-type": "application/json"}
-                    mock_request.return_value = mock_response
-
-                    client.get_regions()
-
-                    # wait()가 호출되었는지 확인
-                    mock_wait.assert_called_once()

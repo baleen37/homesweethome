@@ -31,7 +31,6 @@ class TestHogangnonoAPIClient:
         assert client.config == config
         assert client.base_url == "https://hogangnono.com"
         assert isinstance(client.session, Session)
-        assert client.min_delay == 1.0
         assert client._session_initialized is False
 
     def test_build_url(self, client):
