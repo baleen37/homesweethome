@@ -26,7 +26,7 @@ class TestCrawlCoordinatorProgress:
     def test_init_with_progress_tracking(self):
         """Progress tracking 활성화된 상태로 초기화 테스트"""
         coordinator = CrawlCoordinator(
-            config_or_config_or_output_dir=self.temp_dir,
+            config_or_output_dir=self.temp_dir,
             checkpoint_path=self.checkpoint_path,
             enable_progress_tracking=True,
             progress_report_interval=30,

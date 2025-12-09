@@ -561,12 +561,22 @@ class HogangnonoAPIClient:
 
         api_response = APIResponse.from_response(response)
 
+        # Rate limiter 피드백
         if api_response.success:
+            self.rate_limiter.on_success()
             self.logger.info(
                 "API request successful",
                 status=response.status_code,
             )
+        elif api_response.status_code == 429:
+            self.rate_limiter.on_rate_limit_error()
+            self.logger.error(
+                "API request rate limited",
+                status=response.status_code,
+                error=api_response.error,
+            )
         else:
+            self.rate_limiter.on_error()
             self.logger.error(
                 "API request failed",
                 status=response.status_code,
