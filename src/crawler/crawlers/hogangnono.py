@@ -147,13 +147,12 @@ class HogangnonoCrawler(APICrawler):
 
         for item in items:
             try:
-                # 호갱노노 → 네이버 형식으로 매핑
-                mapped_data = self._map_to_naver_format(item)
-                if mapped_data:
-                    apartments.append(mapped_data)
+                # 호갱노노 데이터를 그대로 사용
+                if item:
+                    apartments.append(item)
             except Exception as e:
                 self.logger.error(
-                    "failed_to_map_item",
+                    "failed_to_process_item",
                     item=item,
                     error=str(e),
                 )
@@ -162,115 +161,10 @@ class HogangnonoCrawler(APICrawler):
         self.logger.info(
             "parsed_response",
             total_items=len(items),
-            mapped_items=len(apartments),
+            processed_items=len(apartments),
         )
 
         return apartments
-
-    def _map_to_naver_format(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """호갱노노 데이터를 네이버 형식으로 매핑
-
-        Args:
-            item: 호갱노노 아파트/매물 데이터
-
-        Returns:
-            네이버 CSV 형식으로 매핑된 데이터
-        """
-        try:
-            # 기본 정보 매핑
-            complex_id = str(item.get("id") or item.get("apt_id", ""))
-            if not complex_id:
-                return None
-
-            complex_name = item.get("name", "") or item.get("apt_name", "")
-            address = item.get("address", "") or item.get("full_address", "")
-
-            # 위치 정보
-            lat = item.get("lat") or item.get("latitude")
-            lng = item.get("lng") or item.get("longitude")
-
-            # 건물 기본 정보
-            build_year = item.get("build_year") or item.get("completion_year")
-            households = item.get("households") or item.get("household_count")
-            floors = item.get("floors") or item.get("max_floor")
-
-            # 거래 정보가 있는 경우
-            trade_info = item.get("trade", {}) or item.get("recent_trade", {})
-
-            # 거래 타입 결정
-            trade_type = trade_info.get("type", "sale")
-            if trade_type == "sale":
-                trade_type_code = "A1"
-                trade_type_name = "매매"
-            elif trade_type == "jeonse":
-                trade_type_code = "B1"
-                trade_type_name = "전세"
-            elif trade_type == "monthly":
-                trade_type_code = "B2"
-                trade_type_name = "월세"
-            else:
-                trade_type_code = "A1"
-                trade_type_name = "매매"
-
-            # 매물 상세 정보
-            exclusive_area = trade_info.get("area") or trade_info.get("exclusive_area")
-            if exclusive_area:
-                # 평형으로 변환 (제곱미터 → 평)
-                pyeong = float(exclusive_area) / 3.305785
-                pyeong_type_number = round(pyeong)  # 올바른 반올림 적용
-                pyeong_name = f"{pyeong_type_number}평형"
-            else:
-                pyeong_type_number = 0
-                pyeong_name = ""
-
-            floor = trade_info.get("floor") or trade_info.get("floor_info", "")
-            deal_price = trade_info.get("price") or trade_info.get("deal_price", 0)
-            deposit = trade_info.get("deposit") or trade_info.get("jeonse_price", 0)
-            monthly_rent = trade_info.get("monthly") or trade_info.get("monthly_rent", 0)
-
-            # 거래일
-            trade_date = trade_info.get("date") or trade_info.get("trade_date", "")
-            if trade_date and len(trade_date) >= 8:
-                trade_year = int(trade_date[:4])
-            else:
-                trade_year = 0
-
-            # 결과 조합
-            result = {
-                # 단지 정보 (complexes.csv용)
-                "complex_id": complex_id,
-                "complex_name": complex_name,
-                "address": address,
-                "latitude": lat,
-                "longitude": lng,
-                "build_year": int(build_year) if build_year else 0,
-                "households": int(households) if households else 0,
-                "floors": int(floors) if floors else 0,
-                # 거래 정보 (transactions.csv용)
-                "pyeong_type_number": pyeong_type_number,
-                "pyeong_name": pyeong_name,
-                "trade_type": trade_type_code,
-                "trade_type_name": trade_type_name,
-                "trade_date": trade_date,
-                "trade_year": trade_year,
-                "floor": str(floor),
-                "deal_price": int(str(deal_price).replace(",", "")) if deal_price else 0,
-                "deposit": int(str(deposit).replace(",", "")) if deposit else 0,
-                "monthly_rent": int(str(monthly_rent).replace(",", "")) if monthly_rent else 0,
-                "trade_category": trade_type,
-                "is_delete": "N",
-                "is_renew": "N",
-            }
-
-            return result
-
-        except Exception as e:
-            self.logger.error(
-                "mapping_error",
-                item=item,
-                error=str(e),
-            )
-            return None
 
     def crawl_region(
         self,
@@ -335,34 +229,21 @@ class HogangnonoCrawler(APICrawler):
             items = self.parse_response(first_page_data)
 
             for item in items:
-                # 단지 정보
+                # 단지 정보 추출 (호갱노노 원본 형식)
                 complex_info = {
-                    "complex_id": item["complex_id"],
-                    "complex_name": item["complex_name"],
+                    "id": item.get("id", ""),
+                    "name": item.get("name", ""),
                     "address": item.get("address", ""),
-                    "latitude": item.get("latitude"),
-                    "longitude": item.get("longitude"),
+                    "lat": item.get("lat"),
+                    "lng": item.get("lng"),
                     "build_year": item.get("build_year", 0),
                     "households": item.get("households", 0),
                     "floors": item.get("floors", 0),
                 }
                 all_complexes.append(complex_info)
 
-                # 거래 정보
-                transaction_info = {
-                    k: v
-                    for k, v in item.items()
-                    if k
-                    not in [
-                        "address",
-                        "latitude",
-                        "longitude",
-                        "build_year",
-                        "households",
-                        "floors",
-                    ]
-                }
-                all_transactions.append(transaction_info)
+                # 전체 아이템을 거래 정보로 추가 (데이터 분리 없이 통으로 저장)
+                all_transactions.append(item)
 
             # 페이지네이션 처리 (필요시)
             page = 2
@@ -405,21 +286,8 @@ class HogangnonoCrawler(APICrawler):
 
                 # 데이터 추가
                 for item in items:
-                    # 거래 정보만 추가 (단지 정보는 중복 제외)
-                    transaction_info = {
-                        k: v
-                        for k, v in item.items()
-                        if k
-                        not in [
-                            "address",
-                            "latitude",
-                            "longitude",
-                            "build_year",
-                            "households",
-                            "floors",
-                        ]
-                    }
-                    all_transactions.append(transaction_info)
+                    # 전체 아이템을 거래 정보로 추가
+                    all_transactions.append(item)
 
                 page += 1
 
@@ -486,7 +354,7 @@ class HogangnonoCrawler(APICrawler):
         complexes: List[Dict[str, Any]],
         transactions: List[Dict[str, Any]],
     ) -> None:
-        """호갱노노 데이터를 네이버 형식 CSV로 저장
+        """호갱노노 데이터를 CSV로 저장
 
         Args:
             complexes: 단지 정보 리스트

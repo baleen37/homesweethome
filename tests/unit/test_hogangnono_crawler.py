@@ -98,13 +98,10 @@ class TestHogangnonoCrawler:
         result = crawler.parse_response(response_data)
         assert len(result) == 1
 
-        # 매핑된 데이터 확인
+        # 원본 데이터 확인
         item = result[0]
-        assert item["complex_id"] == "12345"
-        assert item["complex_name"] == "테스트아파트"
-        assert item["trade_type"] == "A1"
-        assert item["trade_type_name"] == "매매"
-        assert item["pyeong_type_number"] == 26  # 84.95 / 3.305785
+        assert item["id"] == "12345"
+        assert item["name"] == "테스트아파트"
 
     def test_parse_response_different_trade_types(self, crawler):
         """다양한 거래 타입 파싱 테스트"""
@@ -142,52 +139,16 @@ class TestHogangnonoCrawler:
         assert len(result) == 3
 
         # 매매
-        assert result[0]["trade_type"] == "A1"
-        assert result[0]["deal_price"] == 500000000
+        assert result[0]["id"] == "1"
+        assert result[0]["name"] == "매매아파트"
 
         # 전세
-        assert result[1]["trade_type"] == "B1"
-        assert result[1]["deposit"] == 300000000
+        assert result[1]["id"] == "2"
+        assert result[1]["name"] == "전세아파트"
 
         # 월세
-        assert result[2]["trade_type"] == "B2"
-        assert result[2]["deposit"] == 100000000
-        assert result[2]["monthly_rent"] == 500000
-
-    def test_map_to_naver_format(self, crawler):
-        """네이버 형식 매핑 테스트"""
-        hogangnono_item = {
-            "id": "test123",
-            "name": "테스트단지",
-            "address": "서울특별시 강남구",
-            "latitude": 37.5,
-            "longitude": 127.0,
-            "completion_year": "2019",
-            "household_count": 300,
-            "max_floor": 20,
-            "trade": {
-                "type": "sale",
-                "exclusive_area": "59.34",
-                "floor_info": "10",
-                "deal_price": "800,000,000",
-                "trade_date": "2024-12-01",
-            },
-        }
-
-        result = crawler._map_to_naver_format(hogangnono_item)
-        assert result is not None
-
-        # 단지 정보
-        assert result["complex_id"] == "test123"
-        assert result["complex_name"] == "테스트단지"
-        assert result["build_year"] == 2019
-        assert result["households"] == 300
-
-        # 거래 정보
-        assert result["trade_type"] == "A1"
-        assert result["pyeong_type_number"] == 18  # 59.34 / 3.305785
-        assert result["deal_price"] == 800000000
-        assert result["trade_year"] == 2024
+        assert result[2]["id"] == "3"
+        assert result[2]["name"] == "월세아파트"
 
     def test_crawl_region_success(self, crawler):
         """지역 크롤링 성공 테스트"""
@@ -253,8 +214,8 @@ class TestHogangnonoCrawler:
         """CSV 저장 테스트"""
         complexes = [
             {
-                "complex_id": "1",
-                "complex_name": "아파트1",
+                "id": "1",
+                "name": "아파트1",
                 "address": "주소1",
                 "build_year": 2020,
                 "households": 100,
@@ -264,7 +225,12 @@ class TestHogangnonoCrawler:
 
         transactions = [
             {
-                "complex_id": "1",
+                "id": "1",
+                "name": "아파트1",
+                "address": "주소1",
+                "build_year": 2020,
+                "households": 100,
+                "floors": 10,
                 "trade_type": "A1",
                 "deal_price": 500000000,
                 "trade_date": "20241201",
