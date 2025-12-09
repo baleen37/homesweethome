@@ -275,7 +275,6 @@ class HogangnonoCrawler(APICrawler):
         region_bounds: Optional[Tuple[float, float, float, float]] = None,
         apt_type: str = "apart",
         trade_type: Optional[str] = None,
-        max_pages: int = 10,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """지역별 매물 수집
 
@@ -283,10 +282,13 @@ class HogangnonoCrawler(APICrawler):
             region_bounds: 크롤링할 지역 좌표 (lat_min, lng_min, lat_max, lng_max)
             apt_type: 매물 타입 (apart/officetel/house)
             trade_type: 거래 타입 (sale/jeonse/monthly)
-            max_pages: 최대 페이지 수
 
         Returns:
             (단지 목록, 거래내역 목록) 튜플
+
+        Note:
+            호갱노노 API는 페이지네이션을 지원하지 않음
+            최대 600개의 항목을 한 번에 반환
         """
         if region_bounds:
             self.region_bounds = region_bounds
@@ -298,7 +300,6 @@ class HogangnonoCrawler(APICrawler):
             bounds=self.region_bounds,
             apt_type=apt_type,
             trade_type=trade_type,
-            max_pages=max_pages,
         )
 
         # 검색 파라미터 설정
@@ -362,64 +363,13 @@ class HogangnonoCrawler(APICrawler):
                 }
                 all_transactions.append(transaction_info)
 
-            # 페이지네이션 처리 (필요시)
-            page = 2
-            while page <= max_pages:
-                self.logger.info(
-                    "fetching_page",
-                    page=page,
-                    max_pages=max_pages,
-                )
-
-                # 다음 페이지 파라미터
-                next_params = search_params.to_dict()
-                next_params["page"] = page
-
-                # API 호출
-                api_response = self.hogangnono_client._make_request(
-                    method="GET",
-                    endpoint="/cluster/ajax/articleList",
-                    params=next_params,
-                )
-
-                if not api_response.success:
-                    self.logger.warning(
-                        "failed_to_fetch_page",
-                        page=page,
-                        error=api_response.error,
-                    )
-                    break
-
-                # 데이터 파싱
-                page_data = api_response.data or {}
-                items = self.parse_response(page_data)
-
-                if not items:
-                    self.logger.info(
-                        "no_more_items",
-                        page=page,
-                    )
-                    break
-
-                # 데이터 추가
-                for item in items:
-                    # 거래 정보만 추가 (단지 정보는 중복 제외)
-                    transaction_info = {
-                        k: v
-                        for k, v in item.items()
-                        if k
-                        not in [
-                            "address",
-                            "latitude",
-                            "longitude",
-                            "build_year",
-                            "households",
-                            "floors",
-                        ]
-                    }
-                    all_transactions.append(transaction_info)
-
-                page += 1
+            # 호갱노노 API는 페이지네이션을 지원하지 않음
+            # 모든 데이터는 첫 번째 호출에서 반환됨 (최대 600개)
+            self.logger.info(
+                "hogangnono_no_pagination",
+                total_items=len(all_complexes),
+                note="Hogangnono API returns all data at once, no pagination supported",
+            )
 
         except Exception as e:
             self.logger.error(
@@ -607,7 +557,6 @@ class HogangnonoCrawler(APICrawler):
             region_bounds=self.region_bounds,
             apt_type="apart",
             trade_type="sale",
-            max_pages=10,
         )
 
         # CSV 저장
@@ -633,7 +582,6 @@ class HogangnonoCrawler(APICrawler):
         region_bounds: Optional[Tuple[float, float, float, float]] = None,
         apt_type: str = "apart",
         trade_type: Optional[str] = None,
-        max_pages: int = 10,
     ) -> None:
         """크롤링과 저장을 한 번에 수행
 
@@ -641,14 +589,12 @@ class HogangnonoCrawler(APICrawler):
             region_bounds: 크롤링할 지역 좌표
             apt_type: 매물 타입
             trade_type: 거래 타입
-            max_pages: 최대 페이지 수
         """
         # 데이터 수집
         complexes, transactions = self.crawl_region(
             region_bounds=region_bounds,
             apt_type=apt_type,
             trade_type=trade_type,
-            max_pages=max_pages,
         )
 
         # CSV 저장
