@@ -577,3 +577,30 @@ class TestErrorHandlingTDD:
                 endpoint="/api/v2/apts/1Hq6f/monthly-reports/more",
                 params={"tradeType": 0, "areaNo": 0},
             )
+
+    def test_rate_limiter_integration(self, client):
+        """RateLimiter가 API 호출에 통합되었는지 확인"""
+        # RateLimiter가 초기화되었는지 확인
+        assert hasattr(client, "rate_limiter")
+        assert client.rate_limiter is not None
+
+        # 초기 설정 확인
+        assert client.rate_limiter.current_delay == 2.0
+        assert client.rate_limiter.min_delay == 1.0
+        assert client.rate_limiter.max_delay == 10.0
+
+    def test_rate_limiter_called_before_request(self, client):
+        """API 호출 전 rate limiter wait() 호출 확인"""
+        with patch.object(client.rate_limiter, "wait") as mock_wait:
+            with patch.object(client, "_initialize_session", return_value=True):
+                with patch.object(client.session, "request") as mock_request:
+                    mock_response = Mock()
+                    mock_response.status_code = 200
+                    mock_response.json.return_value = {"status": "success", "data": {}}
+                    mock_response.headers = {"content-type": "application/json"}
+                    mock_request.return_value = mock_response
+
+                    client.get_regions()
+
+                    # wait()가 호출되었는지 확인
+                    mock_wait.assert_called_once()
