@@ -14,6 +14,7 @@ from .base import BaseCrawler
 from ..config import CrawlerConfig
 from ..api.hogangnono_client import HogangnonoAPIClient, SearchParams
 from ..utils.browser_manager import BrowserManager
+from ..utils.checkpoint import CheckpointManager
 from ..rate_limiter import AdaptiveRateLimiter
 from ..writers.hogangnono_csv_writer import HogangnonoCSVWriter
 
@@ -50,6 +51,10 @@ class HogangnonoCrawler(BaseCrawler):
         if output_dir.endswith(".csv"):
             output_dir = str(Path(output_dir).parent)
         self.csv_writer = HogangnonoCSVWriter(output_dir=output_dir)
+
+        # CheckpointManager 초기화
+        checkpoint_path = Path(output_dir) / "checkpoint.json"
+        self.checkpoint_manager = CheckpointManager(str(checkpoint_path))
 
         # 기본 URL
         self.base_url = "https://hogangnono.com"
@@ -394,6 +399,9 @@ class HogangnonoCrawler(BaseCrawler):
         # Rate limiting 적용
         self.rate_limiter.wait()
 
+        # region_key 생성 (district와 dong을 조합)
+        region_key = f"{district}_{dong or 'all'}"
+
         try:
             search_query = f"{district} {dong or ''}".strip()
             encoded_query = search_query.replace(" ", "%20")
@@ -416,12 +424,26 @@ class HogangnonoCrawler(BaseCrawler):
                 # 성공 시 rate limiter 알림
                 self.rate_limiter.on_success()
 
+                # 5. 체크포인트에 region 완료 기록
+                import time
+
+                self.checkpoint_manager.save(
+                    region_key,
+                    {
+                        "district": district,
+                        "dong": dong,
+                        "listings_count": len(listings),
+                        "completed_at": time.time(),
+                    },
+                )
+
                 self.logger.info(
                     "region_crawl_completed",
                     district=district,
                     dong=dong,
                     search_query=search_query,
                     listings_count=len(listings),
+                    region_key=region_key,
                 )
 
                 return listings
@@ -433,11 +455,15 @@ class HogangnonoCrawler(BaseCrawler):
             else:
                 self.rate_limiter.on_error()
 
+            # 실패한 region 기록
+            self.checkpoint_manager.add_failed_dong(region_key, str(e))
+
             self.logger.error(
                 "failed_to_crawl_region",
                 district=district,
                 dong=dong,
                 error=str(e),
+                region_key=region_key,
             )
             return []
 
@@ -784,3 +810,179 @@ class HogangnonoCrawler(BaseCrawler):
             CSV 파일 통계 정보
         """
         return self.csv_writer.get_stats()
+
+    def should_skip_region(self, district: str, dong: Optional[str] = None) -> bool:
+        """지역이 이미 처리되었는지 확인
+
+        Args:
+            district: 구 이름
+            dong: 동 이름
+
+        Returns:
+            이미 처리되었으면 True, 아니면 False
+        """
+        region_key = f"{district}_{dong or 'all'}"
+        return self.checkpoint_manager.is_processed(region_key)
+
+    def crawl_multiple_regions(
+        self,
+        regions: List[dict[str, Any]],
+        resume: bool = True,
+    ) -> dict[str, Any]:
+        """여러 지역을 순차적으로 크롤링
+
+        Args:
+            regions: 크롤링할 지역 리스트
+                [{'district': '강남구', 'dong': '역삼동'}, ...]
+            resume: True이면 체크포인트부터 이어서 진행
+
+        Returns:
+            크롤링 결과 통계
+        """
+        stats = {
+            "total_regions": len(regions),
+            "regions_processed": 0,
+            "regions_skipped": 0,
+            "total_listings": 0,
+            "failed_regions": [],
+            "start_time": None,
+            "end_time": None,
+        }
+
+        import time
+
+        stats["start_time"] = time.time()
+
+        # Rate limiter 상태 복원
+        if resume:
+            self.checkpoint_manager.restore_rate_limiter_state(self.rate_limiter)
+
+        for region in regions:
+            district = region["district"]
+            dong = region.get("dong")
+
+            # 이미 처리된 지역 건너뛰기
+            if resume and self.should_skip_region(district, dong):
+                self.logger.info(
+                    "skipping_already_processed_region",
+                    district=district,
+                    dong=dong,
+                )
+                stats["regions_skipped"] += 1
+                continue
+
+            # 지역 크롤링
+            try:
+                listings = self.crawl_region(district, dong)
+                stats["total_listings"] += len(listings)
+                stats["regions_processed"] += 1
+
+                # Rate limiter 상태 저장
+                self.checkpoint_manager._save_legacy(rate_limiter=self.rate_limiter)
+
+            except Exception as e:
+                error_msg = f"Error crawling region {district}_{dong or 'all'}: {str(e)}"
+                self.logger.error(error_msg)
+                stats["failed_regions"].append(error_msg)
+
+        stats["end_time"] = time.time()
+        stats["duration"] = stats["end_time"] - stats["start_time"]
+
+        self.logger.info(
+            "multiple_regions_crawl_completed",
+            total_regions=stats["total_regions"],
+            regions_processed=stats["regions_processed"],
+            regions_skipped=stats["regions_skipped"],
+            total_listings=stats["total_listings"],
+            failed_count=len(stats["failed_regions"]),
+            duration=stats["duration"],
+        )
+
+        return stats
+
+    def get_checkpoint_summary(self) -> dict[str, Any]:
+        """체크포인트 상태 요약 반환
+
+        Returns:
+            체크포인트 상태 요약
+        """
+        return self.checkpoint_manager.get_progress_summary()
+
+    def retry_failed_regions(self, max_retries: int = 3) -> dict[str, Any]:
+        """실패한 지역 재시도
+
+        Args:
+            max_retries: 최대 재시도 횟수
+
+        Returns:
+            재시도 결과 통계
+        """
+        stats = {
+            "failed_regions": [],
+            "retry_success": [],
+            "retry_failed": [],
+            "total_retried": 0,
+        }
+
+        # 실패한 지역 목록 가져오기
+        checkpoint_data = self.checkpoint_manager.load()
+        if not checkpoint_data:
+            return stats
+
+        failed_dongs = checkpoint_data.get("failed_dongs", [])
+        if not failed_dongs:
+            self.logger.info("no_failed_regions_to_retry")
+            return stats
+
+        # failed_dongs 복사본으로 작업 (iteration 중 수정 방지)
+        failed_dongs_copy = failed_dongs.copy()
+        for failed_entry in failed_dongs_copy:
+            dong_code = failed_entry.get("dong_code", "")
+            retry_count = failed_entry.get("retry_count", 0)
+
+            if retry_count >= max_retries:
+                self.logger.warning(
+                    "region_max_retries_exceeded",
+                    dong_code=dong_code,
+                    retry_count=retry_count,
+                )
+                continue
+
+            # dong_code에서 district와 dong 추출
+            parts = dong_code.split("_")
+            if len(parts) >= 1:
+                district = parts[0]
+                dong = parts[1] if len(parts) > 1 and parts[1] != "all" else None
+
+                # 재시도
+                try:
+                    self.logger.info(
+                        "retrying_failed_region",
+                        dong_code=dong_code,
+                        district=district,
+                        dong=dong,
+                        retry_count=retry_count + 1,
+                    )
+
+                    self.crawl_region(district, dong)
+                    stats["retry_success"].append(dong_code)
+                    stats["total_retried"] += 1
+
+                    # 실패 목록에서 제거
+                    failed_dongs.remove(failed_entry)
+                    checkpoint_data["failed_dongs"] = failed_dongs
+                    self.checkpoint_manager.save(checkpoint_data)
+
+                except Exception as e:
+                    self.logger.error(
+                        "region_retry_failed",
+                        dong_code=dong_code,
+                        error=str(e),
+                    )
+                    stats["retry_failed"].append(dong_code)
+
+                    # 재시도 횟수 업데이트
+                    failed_entry["retry_count"] = retry_count + 1
+                    self.checkpoint_manager.save(dong_code, failed_entry)
+
+        return stats
