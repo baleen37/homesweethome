@@ -1,0 +1,103 @@
+{
+  "data": [
+    {
+      "id": "cUe4",
+      "category": 1,
+      "name": "고속터미널",
+      "description": "3호선",
+      "content": null,
+      "lat": 37.50454885557265,
+      "lng": 127.00512100872538,
+      "address": null,
+      "likes": 0,
+      "isExpired": 0,
+      "dong": null,
+      "dist": 51
+    },
+    {
+      "id": "1Ant80",
+      "category": 10,
+      "name": "강남점",
+      "description": "엔터식스",
+      "content": null,
+      "lat": 37.50473843407837,
+      "lng": 127.00435634245402,
+      "address": null,
+      "likes": 0,
+      "isExpired": 0,
+      "dong": null,
+      "dist": 64
+    },
+    {
+      "id": "1Asu0e",
+      "category": 10,
+      "name": "강남점",
+      "description": "신세계백화점",
+      "content": null,
+      "lat": 37.505305699999994,
+      "lng": 127.0042795,
+      "address": "서울특별시 서초구 반포동 19번지 3호",
+      "likes": 0,
+      "isExpired": 0,
+      "dong": "반포동",
+      "dist": 72
+    },
+    {
+      "id": "zpsfd",
+      "category": 1,
+      "name": "고속터미널",
+      "description": "9호선",
+      "content": null,
+      "lat": 37.5059814899483,
+      "lng": 127.004211793489,
+      "address": null,
+      "likes": 0,
+      "isExpired": 0,
+      "dong": null,
+      "dist": 128
+    },
+    {
+      "id": "zpt5e",
+      "category": 1,
+      "name": "고속터미널",
+      "description": "7호선",
+      "content": null,
+      "lat": 37.5033865633062,
+      "lng": 127.005007834609,
+      "address": null,
+      "likes": 0,
+      "isExpired": 0,
+      "dong": null,
+      "dist": 180
+    },
+    {
+      "id": "1Hbs9b",
+      "category": 9,
+      "name": "학교법인가톨릭학원가톨릭대학교서울성모병원",
+      "description": "종합병원",
+      "content": null,
+      "lat": 37.5009444,
+      "lng": 127.0051154,
+      "address": null,
+      "likes": 0,
+      "isExpired": 0,
+      "dong": null,
+      "dist": 451
+    },
+    {
+      "id": "1Asy80",
+      "category": 10,
+      "name": "뉴코아 강남점",
+      "description": "이랜드리테일(뉴코아)",
+      "content": null,
+      "lat": 37.5092292,
+      "lng": 127.0074671,
+      "address": "서울특별시 서초구 잠원동 70번지 5호 뉴코아백화점빌딩",
+      "likes": 0,
+      "isExpired": 0,
+      "dong": "잠원동",
+      "dist": 516
+    }
+  ],
+  "status": "success"
+}
