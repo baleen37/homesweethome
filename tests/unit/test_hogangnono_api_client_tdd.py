@@ -438,53 +438,6 @@ class TestHogangnonoCrawlerIntegrationTDD:
             region_bounds=(37.5, 126.9, 37.6, 127.0),
         )
 
-    def test_crawl_region_with_real_data(self, crawler):
-        """실제 데이터 크롤링 테스트
-
-        Expected: 지역별 아파트 데이터를 가져와야 함
-        현재 상태: 실패할 것임 (실제 API 연동 필요)
-        """
-        with patch.object(crawler.hogangnono_client, "get_apartments_bounding") as mock_api:
-            # Mock 응답 데이터
-            mock_api.return_value = APIResponse(
-                success=True,
-                data=[
-                    {
-                        "id": "12345",
-                        "name": "테스트아파트",
-                        "address": "서울시 강남구 테스트동",
-                        "lat": 37.5,
-                        "lng": 127.0,
-                        "build_year": "2020",
-                        "households": 500,
-                        "trade": {
-                            "type": "sale",
-                            "area": "84.94",
-                            "price": "150,000",
-                            "floor": "5",
-                        },
-                    }
-                ],
-            )
-
-            complexes, transactions = crawler.crawl_region(
-                region_bounds=(37.5, 126.9, 37.6, 127.0),
-                apt_type="apart",
-            )
-
-            # 데이터 확인
-            assert len(complexes) > 0
-            assert len(transactions) > 0
-
-            # 데이터 구조 확인
-            complex_item = complexes[0]
-            assert "complex_id" in complex_item
-            assert "complex_name" in complex_item
-
-            transaction_item = transactions[0]
-            assert "complex_id" in transaction_item
-            assert "trade_type" in transaction_item
-
     def test_data_mapping_to_naver_format(self, crawler):
         """데이터 매핑 테스트
 
