@@ -1,7 +1,7 @@
 """HogangnonoAPIClient 클래스 단위 테스트"""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, ANY
 from requests import Response, Session
 
 from crawler.config import CrawlerConfig
@@ -54,7 +54,7 @@ class TestHogangnonoAPIClient:
             assert result is True
             assert client._session_initialized is True
             mock_get.assert_called_once_with(
-                client.base_url, headers=pytest.any(dict), timeout=client.config.timeout
+                client.base_url, headers=ANY, timeout=client.config.timeout
             )
 
     def test_initialize_session_failure(self, client):

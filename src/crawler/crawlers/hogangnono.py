@@ -4,6 +4,7 @@ APICrawler를 상속받아 호갱노노 부동산 데이터를 수집합니다.
 """
 
 import json
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -632,56 +633,261 @@ class HogangnonoCrawler(APICrawler):
             self.logger.error("failed_to_save_ranks", error=str(e))
             raise
 
-    def crawl(self, district_filter: Optional[List[str]] = None) -> Dict[str, Any]:
-        """크롤링 실행 (main.py와의 호환성을 위한 메서드)
+    def _filter_districts(
+        self,
+        all_regions: Dict[str, Any],
+        regions: Optional[List[str]],
+        districts: Optional[List[str]],
+    ) -> List[Dict[str, Any]]:
+        """지역 필터링
 
         Args:
-            district_filter: 크롤링할 구 리스트 (예: ["강남구", "서초구"])
+            all_regions: get_regions() 응답 데이터
+            regions: 시/도 코드 리스트
+            districts: 구/군 코드 리스트 (우선순위 높음)
+
+        Returns:
+            필터링된 구/군 목록
+        """
+        # districts가 명시되면 해당 구/군만 반환
+        if districts:
+            result = []
+            for region in all_regions.get("regionList", []):
+                for child in region.get("children", []):
+                    if child["regionCode"] in districts:
+                        result.append(child)
+            return result
+
+        # regions가 명시되면 해당 시/도의 모든 구/군 반환
+        if regions:
+            result = []
+            for region in all_regions.get("regionList", []):
+                if region["regionCode"] in regions:
+                    result.extend(region.get("children", []))
+            return result
+
+        # 기본값: 서울만
+        default_regions = ["11"]
+        result = []
+        for region in all_regions.get("regionList", []):
+            if region["regionCode"] in default_regions:
+                result.extend(region.get("children", []))
+        return result
+
+    def _crawl_district(self, district: Dict[str, Any], full_period: bool) -> None:
+        """단일 구/군 크롤링
+
+        Args:
+            district: 구/군 정보 딕셔너리
+            full_period: 전체 기간 수집 여부
+        """
+        district_code = district["regionCode"]
+        district_name = district["name"]
+
+        self.logger.info(
+            "crawling_district", district_code=district_code, district_name=district_name
+        )
+
+        # 2-1. 단지 목록 수집
+        apartments = self._fetch_apartments_in_district(district)
+        self.logger.info("apartments_fetched", district=district_name, count=len(apartments))
+
+        # 2-2. 각 단지 상세 정보 및 실거래 내역 수집
+        for apt in apartments:
+            apt_id = apt.get("aptHash")
+            if not apt_id:
+                self.logger.warning("missing_apt_id", apartment=apt)
+                continue
+
+            try:
+                # 단지 상세 정보
+                apt_detail_response = self.hogangnono_client.get_apartment_detail(apt_id)
+                if not apt_detail_response.success:
+                    self.logger.error(
+                        "failed_to_get_detail", apt_id=apt_id, error=apt_detail_response.error
+                    )
+                    # 404는 건너뛰기, 나머지는 예외 발생
+                    if apt_detail_response.status_code != 404:
+                        raise Exception(
+                            f"Failed to get detail for {apt_id}: {apt_detail_response.error}"
+                        )
+                    continue
+
+                # 실거래 내역
+                transactions_response = self.hogangnono_client.get_apartment_transactions(
+                    apt_id,
+                    trade_type=0,  # 매매
+                    full_period=full_period,
+                )
+                if not transactions_response.success:
+                    self.logger.error(
+                        "failed_to_get_transactions",
+                        apt_id=apt_id,
+                        error=transactions_response.error,
+                    )
+                    raise Exception(
+                        f"Failed to get transactions for {apt_id}: {transactions_response.error}"
+                    )
+
+                # 데이터 병합 및 저장
+                self._save_apartment_data(apt, apt_detail_response.data, transactions_response.data)
+
+            except Exception as e:
+                self.logger.error("apartment_processing_failed", apt_id=apt_id, error=str(e))
+                raise  # 실패 시 즉시 중단
+
+        self.logger.info("district_crawling_completed", district=district_name)
+
+    def _fetch_apartments_in_district(self, district: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """구/군 내 모든 단지 수집
+
+        좌표 기반 bounding API 사용
+        TODO: 구/군을 여러 그리드로 분할하여 수집 (현재는 단순 구현)
+
+        Args:
+            district: 구/군 정보
+
+        Returns:
+            단지 목록
+        """
+        # 구/군 코드로 좌표 범위 계산 (간단한 예시)
+        # 실제로는 구/군별 좌표 매핑 테이블 필요
+        # TODO: 구/군별 정확한 좌표 매핑
+        bbox = (126.7, 37.4, 127.2, 37.7)
+
+        search_params = SearchParams(
+            bbox=bbox,
+            level=14,
+            tradeType=0,  # 매매
+            aptType=1,  # 아파트
+        )
+
+        response = self.hogangnono_client.get_apartments_bounding(search_params)
+        if not response.success:
+            raise Exception(f"Failed to fetch apartments: {response.error}")
+
+        # 응답 데이터 파싱
+        apartments = response.data or []
+        return apartments
+
+    def _save_apartment_data(
+        self,
+        apt: Dict[str, Any],
+        apt_detail: Optional[Dict[str, Any]],
+        transactions: Optional[Dict[str, Any]],
+    ) -> None:
+        """단지 정보 및 실거래 내역 CSV 저장
+
+        Args:
+            apt: 단지 기본 정보 (bounding API)
+            apt_detail: 단지 상세 정보 (detail API)
+            transactions: 실거래 내역 (transactions API)
+        """
+        # 단지 정보 병합
+        complex_data = {**apt}
+        if apt_detail:
+            complex_data.update(apt_detail)
+
+        # 단지 정보 저장
+        self.hogangnono_writer.save_complexes([complex_data])
+
+        # 실거래 내역 저장
+        if transactions and "shortTermReport" in transactions:
+            transaction_list = []
+            for report in transactions["shortTermReport"]:
+                for trade in report.get("trades", []):
+                    trade_data = {"aptHash": apt["aptHash"], "date": report["date"], **trade}
+                    transaction_list.append(trade_data)
+
+            if transaction_list:
+                self.hogangnono_writer.save_transactions(transaction_list)
+
+    def crawl(
+        self,
+        regions: Optional[List[str]] = None,
+        districts: Optional[List[str]] = None,
+        full_period: bool = False,
+    ) -> Dict[str, Any]:
+        """전체 크롤링 실행
+
+        Args:
+            regions: 시/도 코드 리스트 (기본값: ["11"] 서울)
+            districts: 구/군 코드 리스트 (우선순위 높음)
+            full_period: 전체 기간 실거래 내역 수집 여부
 
         Returns:
             크롤링 통계 정보
         """
-        from ..coordinator import CrawlCoordinator
+        start_time = time.time()
 
-        # CrawlCoordinator 초기화
-        coordinator = CrawlCoordinator(
-            config_or_output_dir=self.config,
-            checkpoint_path=self.output_dir / "checkpoint.json",
-        )
+        # 1. 지역 정보 수집
+        self.logger.info("fetching_regions")
+        regions_response = self.hogangnono_client.get_regions()
+        if not regions_response.success:
+            raise Exception(f"Failed to get regions: {regions_response.error}")
 
-        # 현재는 region_bounds 기반으로만 크롤링 지원
-        # district_filter는 나중에 구현 필요
-        if district_filter:
-            self.logger.warning(
-                "district_filter_not_supported",
-                districts=district_filter,
-                message="Currently only bounding box based crawling is supported",
-            )
+        all_regions = regions_response.data
+        target_districts = self._filter_districts(all_regions, regions, districts)
+        self.logger.info("target_districts_filtered", count=len(target_districts))
 
-        # 데이터 수집
-        complexes, transactions = self.crawl_region(
-            region_bounds=self.region_bounds,
-            apt_type="apart",
-            trade_type="sale",
-        )
+        # 2. Checkpoint 로드
+        checkpoint_path = self.output_dir / "checkpoint.json"
+        completed_districts = []
+        if checkpoint_path.exists():
+            with open(checkpoint_path, "r", encoding="utf-8") as f:
+                checkpoint = json.load(f)
+                completed_districts = checkpoint.get("completed_districts", [])
+            self.logger.info("checkpoint_loaded", completed_count=len(completed_districts))
 
-        # CSV 저장
-        self.save_to_csv(complexes, transactions)
+        # 3. 구/군별 크롤링
+        processed_count = 0
+        for district in target_districts:
+            district_code = district["regionCode"]
 
-        # 통계 정보 반환
+            if district_code in completed_districts:
+                self.logger.info(
+                    "district_skipped", district=district["name"], reason="already_completed"
+                )
+                continue
+
+            self._crawl_district(district, full_period)
+            self._save_checkpoint(district, checkpoint_path)
+            processed_count += 1
+
+        # 4. 통계 반환
+        duration = time.time() - start_time
         stats = {
-            "dongs_processed": 1,  # region 기반이라 동 단위 개념 없음
-            "total_dongs": 1,
-            "total_complexes_processed": len(complexes),
-            "total_complexes": len(complexes),
-            "total_transactions_collected": len(transactions),
-            "duration_seconds": 0,  # 시간 추적 로직은 나중에 구현
+            "dongs_processed": processed_count,
+            "total_dongs": len(target_districts),
+            "duration_seconds": duration,
         }
 
-        # 체크포인트 매니저 설정 (main.py에서 접근)
-        self.checkpoint_manager = coordinator.checkpoint_manager
+        self.logger.info("crawling_completed", **stats)
 
         return stats
+
+    def _save_checkpoint(self, district: Dict[str, Any], checkpoint_path: Path) -> None:
+        """Checkpoint 저장"""
+        # 기존 checkpoint 로드
+        checkpoint = {}
+        if checkpoint_path.exists():
+            with open(checkpoint_path, "r", encoding="utf-8") as f:
+                checkpoint = json.load(f)
+
+        # 완료된 구/군 추가
+        completed = checkpoint.get("completed_districts", [])
+        district_code = district["regionCode"]
+        if district_code not in completed:
+            completed.append(district_code)
+
+        checkpoint["completed_districts"] = completed
+        checkpoint["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+
+        # 저장
+        with open(checkpoint_path, "w", encoding="utf-8") as f:
+            json.dump(checkpoint, f, ensure_ascii=False, indent=2)
+
+        self.logger.info("checkpoint_saved", district=district["name"])
 
     def crawl_and_save(
         self,
