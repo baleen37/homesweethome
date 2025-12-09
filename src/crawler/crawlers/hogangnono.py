@@ -229,15 +229,17 @@ class HogangnonoCrawler(APICrawler):
             items = self.parse_response(first_page_data)
 
             for item in items:
-                # 단지 정보 추출 (호갱노노 원본 형식)
+                # 단지 정보 추출 (CSV 스키마에 맞는 형식)
                 complex_info = {
-                    "id": item.get("id", ""),
-                    "name": item.get("name", ""),
+                    "complex_id": item.get("id", ""),
+                    "complex_name": item.get("name", ""),
+                    "real_estate_type": "아파트",
+                    "completion_year_month": str(item.get("build_year", "202001")) + "01",
+                    "total_dong_count": 1,  # 기본값
+                    "total_household_count": item.get("households", 0),
                     "address": item.get("address", ""),
                     "lat": item.get("lat"),
                     "lng": item.get("lng"),
-                    "build_year": item.get("build_year", 0),
-                    "households": item.get("households", 0),
                     "floors": item.get("floors", 0),
                 }
                 all_complexes.append(complex_info)
