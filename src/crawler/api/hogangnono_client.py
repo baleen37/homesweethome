@@ -36,8 +36,6 @@ class SearchParams:
         areaTo: 최대 전용면적 (㎡)
         priceFrom: 최소 가격 (만원)
         priceTo: 최대 가격 (만원)
-        aptType: 아파트 유형 (-1: 전체)
-        rentType: 임대 유형 (0:전체, 1:주택, 2:오피스텔)
         map: 지도 종류 (google)
     """
 
@@ -47,15 +45,6 @@ class SearchParams:
 
     # 유효한 tradeType 값
     VALID_TRADE_TYPES = {0, 1, 2}  # 0:매매, 1:전세, 2:월세
-
-    # 유효한 aptType 값
-    VALID_APT_TYPES = {-1, 0, 1, 2}  # -1:전체, 0:아파트, 1:주상복합, 2:오피스텔
-
-    # 유효한 priceType 값
-    VALID_PRICE_TYPES = {0, 1, 2}  # 0:전체, 1:매매, 2:전세
-
-    # 유효한 rentType 값
-    VALID_RENT_TYPES = {0, 1, 2}  # 0:전체, 1:월세, 2:단기임대
 
     def __init__(
         self,
@@ -69,12 +58,24 @@ class SearchParams:
         areaTo: Optional[float] = None,
         priceFrom: Optional[int] = None,
         priceTo: Optional[int] = None,
-        aptType: Optional[int] = -1,
-        priceType: Optional[int] = 0,
-        rentType: Optional[int] = 0,
         map: str = "google",
         bbox: Optional[tuple[float, float, float, float]] = None,
+        aptType: Optional[int] = None,  # Added missing aptType parameter
     ):
+        # Initialize all attributes to avoid AttributeError
+        self.startX = startX
+        self.endX = endX
+        self.startY = startY
+        self.endY = endY
+        self.level = level
+        self.tradeType = tradeType
+        self.areaFrom = areaFrom
+        self.areaTo = areaTo
+        self.priceFrom = priceFrom
+        self.priceTo = priceTo
+        self.map = map
+        self.bbox = bbox
+        self.aptType = aptType
         """초기화
 
         Args:
@@ -88,9 +89,6 @@ class SearchParams:
             areaTo: 최대 전용면적
             priceFrom: 최소 가격
             priceTo: 최대 가격
-            aptType: 아파트 유형
-            priceType: 가격 유형
-            rentType: 임대 유형
             map: 지도 종류
             bbox: (lng_min, lat_min, lng_max, lat_max) 형태의 좌표
         """
@@ -124,21 +122,6 @@ class SearchParams:
         self.priceFrom = priceFrom
         self.priceTo = priceTo
 
-        # aptType 유효성 검사
-        if aptType is not None and aptType not in self.VALID_APT_TYPES:
-            raise ValueError(f"aptType must be one of {self.VALID_APT_TYPES}, got {aptType}")
-        self.aptType = aptType
-
-        # priceType 유효성 검사 (새 파라미터)
-        if priceType is not None and priceType not in self.VALID_PRICE_TYPES:
-            raise ValueError(f"priceType must be one of {self.VALID_PRICE_TYPES}, got {priceType}")
-        self.priceType = priceType
-
-        # rentType 유효성 검사 (새 파라미터)
-        if rentType is not None and rentType not in self.VALID_RENT_TYPES:
-            raise ValueError(f"rentType must be one of {self.VALID_RENT_TYPES}, got {rentType}")
-        self.rentType = rentType
-
         self.map = map
 
     def to_dict(self) -> dict[str, Any]:
@@ -168,15 +151,13 @@ class SearchParams:
             params["priceFrom"] = self.priceFrom
         if self.priceTo is not None:
             params["priceTo"] = self.priceTo
-        if self.aptType is not None:
-            params["aptType"] = self.aptType
-        if hasattr(self, "priceType") and self.priceType is not None:
-            params["priceType"] = self.priceType
-        if hasattr(self, "rentType") and self.rentType is not None:
-            params["rentType"] = self.rentType
 
         # 항상 포함
         params["map"] = self.map
+
+        # aptType 포함
+        if self.aptType is not None:
+            params["aptType"] = self.aptType
 
         # 호갱노노 API 특정 파라미터
         params["screenWidth"] = 1200
@@ -653,12 +634,28 @@ class HogangnonoAPIClient:
         """
         params = search_params.to_dict()
 
-        # 호갱노노 API 엔드포인트
-        return self._make_request(
-            method="GET",
-            endpoint="/api/v2/pois-bounding",
-            params=params,
-        )
+        # 호갱노노 API 엔드포인트 (아파트 데이터용)
+        # Try different endpoints
+        endpoints = [
+            "/api/apt/bounding",  # Original v1 endpoint
+            "/api/v2/apt/bounding",  # New v2 endpoint
+            "/api/apt/list",  # Alternative endpoint
+        ]
+
+        for endpoint in endpoints:
+            try:
+                return self._make_request(
+                    method="GET",
+                    endpoint=endpoint,
+                    params=params,
+                )
+            except Exception as e:
+                if "Not Found" in str(e) or "400" in str(e):
+                    continue
+                raise e
+
+        # If all endpoints fail, raise an error
+        raise Exception("All API endpoints failed for bounding box query")
 
     @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_ranking(self, rank_type: str = "daily", limit: int = 100) -> APIResponse:
@@ -855,6 +852,25 @@ class HogangnonoAPIClient:
         params = {"tradeType": trade_type, "areaNo": area_no}
 
         return self._make_request(method="GET", endpoint=endpoint, params=params)
+
+    def get_complexes_by_district(self, district_code: str) -> APIResponse:
+        """구/군별 단지 목록 조회
+
+        Args:
+            district_code: 구/군 코드
+
+        Returns:
+            APIResponse 객체
+        """
+        params = {
+            "districtCode": district_code,
+        }
+
+        return self._make_request(
+            method="GET",
+            endpoint="/api/apt/by-district",
+            params=params,
+        )
 
     def close(self) -> None:
         """세션 종료"""
@@ -1205,28 +1221,49 @@ class HogangnonoAPIClient:
             APIResponse with regionList data
 
         Example Response:
-            {
-                "data": {
-                    "regionList": [
+            [
+                {
+                    "regionCode": "11",
+                    "name": "서울",
+                    "fullName": "서울특별시",
+                    "children": [
                         {
-                            "regionCode": "11",
-                            "name": "서울",
-                            "fullName": "서울특별시",
-                            "children": [
-                                {
-                                    "regionCode": "11680",
-                                    "name": "강남구",
-                                    "fullName": "서울특별시 강남구"
-                                }
-                            ]
+                            "regionCode": "11680",
+                            "name": "강남구",
+                            "fullName": "서울특별시 강남구"
                         }
                     ]
-                },
-                "status": "success"
-            }
+                }
+            ]
         """
         params = {}
         if region_code:
             params["regionCode"] = region_code
 
-        return self._make_request(method="GET", endpoint="/api/v2/regions", params=params)
+        # regions API는 인증 헤더가 필요 없으므로 간단한 헤더 사용
+        headers = {
+            "User-Agent": self.config.user_agent,
+            "Accept": "application/json",
+        }
+
+        response = self._make_request(
+            method="GET", endpoint="/api/v2/regions", params=params, headers=headers
+        )
+
+        # 응답 데이터가 리스트 형태인지 확인
+        if response.success and response.data:
+            if isinstance(response.data, list):
+                # 리스트 형태로 반환되면 그대로 사용
+                pass
+            elif isinstance(response.data, dict) and "data" in response.data:
+                # data 객체에서 regionList 추출
+                if "regionList" in response.data["data"]:
+                    response.data = response.data["data"]["regionList"]
+                else:
+                    # data 객체가 있지만 regionList가 없는 경우 원본 데이터 유지
+                    pass
+            else:
+                # 예상치 못한 구조인 경우 원본 데이터 유지
+                pass
+
+        return response

@@ -15,6 +15,7 @@ from ..config import CrawlerConfig
 from ..writers.transaction_csv_writer import TransactionCSVWriter
 from ..writers.complexes_csv_writer import ComplexesCSVWriter
 from ..writers.hogangnono_csv_writer import HogangnonoCSVWriter
+from ..utils.checkpoint import CheckpointManager
 
 
 class HogangnonoCrawler(APICrawler):
@@ -89,7 +90,8 @@ class HogangnonoCrawler(APICrawler):
         self.hogangnono_client = HogangnonoAPIClient(config)
 
         # 체크포인트 매니저 (main.py에서 접근 필요)
-        self.checkpoint_manager = None
+        self.checkpoint_manager = CheckpointManager(str(self.output_dir / "checkpoint.json"))
+        self.checkpoint_manager.load()
 
         # 동 코드 매핑 정보 로드
         self.dong_code_mapping = self._load_dong_code_mapping()
@@ -428,7 +430,6 @@ class HogangnonoCrawler(APICrawler):
             bbox=(lng_min, lat_min, lng_max, lat_max),  # (lng_min, lat_min, lng_max, lat_max)
             level=14,
             tradeType=0 if trade_type == "sale" else 1 if trade_type == "jeonse" else 2,
-            aptType=1 if apt_type == "apart" else -1,
         )
 
         # 데이터 수집
@@ -649,29 +650,41 @@ class HogangnonoCrawler(APICrawler):
         Returns:
             필터링된 구/군 목록
         """
+        # API 응답이 리스트 형태인지 확인
+        if not isinstance(all_regions, list):
+            # 만약 딕셔너리 형태라면 regionList 키로 접근 시도
+            if isinstance(all_regions, dict) and "regionList" in all_regions:
+                all_regions = all_regions["regionList"]
+            else:
+                # 리스트 형태가 아니면 빈 리스트 반환
+                return []
+
         # districts가 명시되면 해당 구/군만 반환
         if districts:
             result = []
-            for region in all_regions.get("regionList", []):
-                for child in region.get("children", []):
-                    if child["regionCode"] in districts:
-                        result.append(child)
+            for region in all_regions:
+                if isinstance(region, dict) and "children" in region:
+                    for child in region["children"]:
+                        if child["regionCode"] in districts:
+                            result.append(child)
             return result
 
         # regions가 명시되면 해당 시/도의 모든 구/군 반환
         if regions:
             result = []
-            for region in all_regions.get("regionList", []):
-                if region["regionCode"] in regions:
-                    result.extend(region.get("children", []))
+            for region in all_regions:
+                if isinstance(region, dict) and "regionCode" in region and "children" in region:
+                    if region["regionCode"] in regions:
+                        result.extend(region["children"])
             return result
 
         # 기본값: 서울만
         default_regions = ["11"]
         result = []
-        for region in all_regions.get("regionList", []):
-            if region["regionCode"] in default_regions:
-                result.extend(region.get("children", []))
+        for region in all_regions:
+            if isinstance(region, dict) and "regionCode" in region and "children" in region:
+                if region["regionCode"] in default_regions:
+                    result.extend(region["children"])
         return result
 
     def _crawl_district(self, district: Dict[str, Any], full_period: bool) -> None:
@@ -759,16 +772,37 @@ class HogangnonoCrawler(APICrawler):
             bbox=bbox,
             level=14,
             tradeType=0,  # 매매
-            aptType=1,  # 아파트
+            aptType=1,  # 아파트만
         )
 
-        response = self.hogangnono_client.get_apartments_bounding(search_params)
-        if not response.success:
-            raise Exception(f"Failed to fetch apartments: {response.error}")
+        # Try bounding API first
+        try:
+            response = self.hogangnono_client.get_apartments_bounding(search_params)
+            if response.success:
+                apartments = response.data or []
+                if apartments:
+                    return apartments
+        except Exception as e:
+            self.logger.warning("bounding_api_failed_fallback", error=str(e))
 
-        # 응답 데이터 파싱
-        apartments = response.data or []
-        return apartments
+        # Fallback: Try to get complexes using get_complex_list with district code
+        self.logger.info("trying_get_complex_list_fallback")
+
+        district_code = district["regionCode"]
+        try:
+            # Try to get complexes by district code using get_complex_list
+            # Convert district code to dong code format (simplified approach)
+            dong_code = district_code + "000"  # Convert to dong level
+            complexes_response = self.hogangnono_client.get_complex_list(
+                dong_code, bounds=f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
+            )
+            if complexes_response.success:
+                return complexes_response.data or []
+        except Exception as e:
+            self.logger.warning("get_complex_list_failed", error=str(e))
+
+        # If all methods fail, raise error
+        raise Exception("Failed to fetch apartments using all available methods")
 
     def _save_apartment_data(
         self,
