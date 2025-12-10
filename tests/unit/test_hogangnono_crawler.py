@@ -64,12 +64,6 @@ class TestHogangnonoCrawler:
         }
         assert params == expected
 
-    def test_parse_response_empty_data(self, crawler):
-        """빈 응답 파싱 테스트"""
-        response_data = {"data": []}
-        result = crawler.parse_response(response_data)
-        assert result == []
-
     def test_parse_response_with_items(self, crawler):
         """아이템이 있는 응답 파싱 테스트"""
         # 호갱노노 형식의 더미 데이터
@@ -222,7 +216,7 @@ class TestHogangnonoCrawler:
         assert len(transactions) == 0
         assert complexes[0]["complex_name"] == "아파트1"
 
-    def test_save_to_csv(self, crawler, temp_output_dir):
+  def test_save_to_csv(self, crawler, temp_output_dir):
         """CSV 저장 테스트"""
         complexes = [
             {

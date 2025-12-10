@@ -1,6 +1,7 @@
 """APIResponse 클래스 단위 테스트"""
 
 import json
+import pytest
 from unittest.mock import Mock
 from requests import Response
 
@@ -9,6 +10,31 @@ from crawler.api.hogangnono_client import APIResponse
 
 class TestAPIResponse:
     """APIResponse 클래스 테스트"""
+
+    @pytest.mark.parametrize(
+        "response_data,expected_success,expected_error",
+        [
+            ({"success": True, "data": {"items": [1, 2, 3]}}, True, None),
+            ({"items": [1, 2, 3]}, True, None),
+            ({"success": False, "error": "Invalid parameters"}, False, "Invalid parameters"),
+            (None, False, "Null response data"),
+            ("invalid json", False, "JSON decode error"),
+        ],
+    )
+    def test_from_response_various_cases(self, response_data, expected_success, expected_error):
+        """다양한 응답 케이스 테스트"""
+        mock_response = Mock(spec=Response)
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = response_data
+
+        api_response = APIResponse.from_response(mock_response)
+
+        assert api_response.success is expected_success
+        if expected_error:
+            assert expected_error in api_response.error
+        else:
+            assert api_response.error is None
 
     def test_from_response_success_json_with_data(self):
         """성공적인 JSON 응답 파싱 테스트 (data 필드 포함)"""
@@ -201,3 +227,40 @@ class TestAPIResponse:
         # success 필드가 있으므로 data 필드만 반환
         assert api_response.data == {"items": [1, 2, 3]}
         assert api_response.status_code == 200
+
+    def test_from_response_empty_response(self):
+        """빈 응답 테스트"""
+        mock_response = Mock(spec=Response)
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {}
+
+        api_response = APIResponse.from_response(mock_response)
+
+        assert api_response.success is True
+        assert api_response.data == {}
+        assert api_response.error is None
+
+    def test_from_response_null_response(self):
+        """널 응답 테스트"""
+        mock_response = Mock(spec=Response)
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = None
+
+        api_response = APIResponse.from_response(mock_response)
+
+        assert api_response.success is False
+        assert "Null response data" in api_response.error
+
+    def test_from_response_malformed_json(self):
+        """잘못된 JSON 형식 테스트"""
+        mock_response = Mock(spec=Response)
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.text = "{invalid: json}"
+
+        api_response = APIResponse.from_response(mock_response)
+
+        assert api_response.success is False
+        assert "JSON decode error" in api_response.error
