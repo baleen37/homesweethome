@@ -71,44 +71,6 @@ class SiteConfig(BaseModel):
         return v
 
 
-class NaverConfig(SiteConfig):
-    """네이버 부동산 전용 설정"""
-
-    name: Literal["naver"] = Field(default="naver", description="사이트 이름")
-    base_url: str = Field(default="https://m.land.naver.com", description="네이버 부동산 기본 URL")
-
-    # API 관련
-    api_complex_list: str = Field(
-        default="/cluster/ajax/complexList", description="단지 목록 API 경로"
-    )
-    api_complex_detail: str = Field(
-        default="/cluster/ajax/complexDetail", description="단지 상세 API 경로"
-    )
-    api_article_list: str = Field(
-        default="/cluster/ajax/articleList", description="매물 목록 API 경로"
-    )
-
-    # 페이징
-    page_size: int = Field(default=20, description="한 페이지당 조회 건수")
-    max_page: int = Field(default=100, description="최대 조회 페이지")
-
-    # 필터링 기본값
-    default_trade_type: str = Field(
-        default="A1", description="기본 거래 유형 (A1:매매, B1:전세, B2:월세)"
-    )
-    default_realty_type: str = Field(default="APT", description="기본 부동산 타입")
-
-    @field_validator("page_size")
-    @classmethod
-    def validate_page_size(cls, v: int) -> int:
-        """page_size 범위 검증"""
-        if v < 1:
-            raise ValueError("page_size은 1 이상이어야 합니다")
-        if v > 100:
-            raise ValueError("page_size은 100 이하여야 합니다")
-        return v
-
-
 class HogangnonoConfig(SiteConfig):
     """호갱노노 전용 설정"""
 
@@ -159,8 +121,7 @@ class CrawlerConfig(BaseModel):
     """크롤러 설정을 관리하는 클래스"""
 
     # 사이트 설정
-    site: Literal["naver", "hogangnono"] = Field(default="naver", description="크롤링할 사이트")
-    naver: NaverConfig = Field(default_factory=NaverConfig, description="네이버 설정")
+    site: Literal["hogangnono"] = Field(default="hogangnono", description="크롤링할 사이트")
     hogangnono: HogangnonoConfig = Field(
         default_factory=HogangnonoConfig, description="호갱노노 설정"
     )
