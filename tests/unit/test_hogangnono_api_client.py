@@ -462,3 +462,213 @@ class TestGetApartmentTransactions:
 
             assert response.success is True
             assert response.data["shortTermReport"] == []
+
+
+class TestFetchDongCodes:
+    """fetch_dong_codes 메서드 테스트"""
+
+    def test_fetch_dong_codes_success(self, client):
+        """정상적인 동 코드 조회"""
+        mock_response_data = {
+            "status": "success",
+            "data": {
+                "matched": {
+                    "region": {
+                        "list": [
+                            {
+                                "local_type": "local3",
+                                "local3_name": "역삼동",
+                                "local3_code": "11680500",
+                            },
+                            {
+                                "local_type": "local3",
+                                "local3_name": "개포동",
+                                "local3_code": "11680600",
+                            },
+                            {
+                                "local_type": "local2",  # 구 정보 (무시해야 함)
+                                "local2_name": "강남구",
+                                "local2_code": "11680",
+                            },
+                        ]
+                    }
+                }
+            },
+        }
+
+        mock_response = Mock(spec=requests.Response)
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+
+        # APIResponse를 직접 mock
+        api_response = Mock(spec=APIResponse)
+        api_response.success = True
+        api_response.data = mock_response_data
+
+        with patch.object(client, "_make_request", return_value=api_response):
+            dongs = client.fetch_dong_codes("강남구")
+
+            assert len(dongs) == 2
+            assert dongs["역삼동"] == "11680500"
+            assert dongs["개포동"] == "11680600"
+            assert "강남구" not in dongs  # 구 정보는 포함되지 않아야 함
+
+    def test_fetch_dong_codes_with_coordinates(self, client):
+        """좌표와 함께 동 코드 조회"""
+        mock_response_data = {
+            "status": "success",
+            "data": {
+                "matched": {
+                    "region": {
+                        "list": [
+                            {
+                                "local_type": "local3",
+                                "local3_name": "서교동",
+                                "local3_code": "11440500",
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+
+        mock_response = Mock(spec=requests.Response)
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+
+        api_response = Mock(spec=APIResponse)
+        api_response.success = True
+        api_response.data = mock_response_data
+
+        with patch.object(client, "_make_request", return_value=api_response) as mock_request:
+            dongs = client.fetch_dong_codes("마포구", lat=37.5568, lng=126.9236)
+
+            # Check that _make_request was called with correct parameters
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+            assert call_args.args[0] == "GET"  # method
+            assert call_args.args[1] == "https://hogangnono.com/api/v2/searches/new"  # URL
+            assert call_args.kwargs["params"]["query"] == "마포구"
+            assert call_args.kwargs["params"]["y"] == 37.5568
+            assert call_args.kwargs["params"]["x"] == 126.9236
+
+            assert len(dongs) == 1
+            assert dongs["서교동"] == "11440500"
+
+    def test_fetch_dong_codes_api_failure(self, client):
+        """API 응답 실패"""
+        api_response = Mock(spec=APIResponse)
+        api_response.success = False
+        api_response.error = "API Error"
+
+        with patch.object(client, "_make_request", return_value=api_response):
+            dongs = client.fetch_dong_codes("강남구")
+
+            assert dongs == {}
+
+    def test_fetch_dong_codes_status_not_success(self, client):
+        """API 응답의 status가 success가 아닌 경우"""
+        mock_response_data = {"status": "error", "message": "Invalid query"}
+
+        api_response = Mock(spec=APIResponse)
+        api_response.success = True
+        api_response.data = mock_response_data
+
+        with patch.object(client, "_make_request", return_value=api_response):
+            dongs = client.fetch_dong_codes("강남구")
+
+            assert dongs == {}
+
+    def test_fetch_dong_codes_no_region_data(self, client):
+        """region 데이터가 없는 경우"""
+        mock_response_data = {"status": "success", "data": {"matched": {}}}
+
+        api_response = Mock(spec=APIResponse)
+        api_response.success = True
+        api_response.data = mock_response_data
+
+        with patch.object(client, "_make_request", return_value=api_response):
+            dongs = client.fetch_dong_codes("강남구")
+
+            assert dongs == {}
+
+    def test_fetch_dong_codes_no_local3_data(self, client):
+        """local_type이 local3인 데이터가 없는 경우"""
+        mock_response_data = {
+            "status": "success",
+            "data": {
+                "matched": {
+                    "region": {
+                        "list": [
+                            {
+                                "local_type": "local2",
+                                "local2_name": "강남구",
+                                "local2_code": "11680",
+                            },
+                            {
+                                "local_type": "local1",
+                                "local1_name": "서울특별시",
+                                "local1_code": "11",
+                            },
+                        ]
+                    }
+                }
+            },
+        }
+
+        api_response = Mock(spec=APIResponse)
+        api_response.success = True
+        api_response.data = mock_response_data
+
+        with patch.object(client, "_make_request", return_value=api_response):
+            dongs = client.fetch_dong_codes("강남구")
+
+            assert dongs == {}
+
+    def test_fetch_dong_codes_incomplete_data(self, client):
+        """일부 데이터가 누락된 경우"""
+        mock_response_data = {
+            "status": "success",
+            "data": {
+                "matched": {
+                    "region": {
+                        "list": [
+                            {
+                                "local_type": "local3",
+                                "local3_name": "역삼동",
+                                # local3_code 누락
+                            },
+                            {
+                                "local_type": "local3",
+                                # local3_name 누락
+                                "local3_code": "11680600",
+                            },
+                            {
+                                "local_type": "local3",
+                                "local3_name": "개포동",
+                                "local3_code": "11680600",
+                            },
+                        ]
+                    }
+                }
+            },
+        }
+
+        api_response = Mock(spec=APIResponse)
+        api_response.success = True
+        api_response.data = mock_response_data
+
+        with patch.object(client, "_make_request", return_value=api_response):
+            dongs = client.fetch_dong_codes("강남구")
+
+            # 완전한 데이터만 포함
+            assert len(dongs) == 1
+            assert dongs["개포동"] == "11680600"
+            assert "역삼동" not in dongs
+
+    def test_fetch_dong_codes_request_exception(self, client):
+        """요청 중 예외 발생"""
+        with patch.object(client, "_make_request", side_effect=Exception("Network error")):
+            dongs = client.fetch_dong_codes("강남구")
+
+            assert dongs == {}
