@@ -315,3 +315,177 @@ class TestCrawlCoordinator:
         assert rate_limiter_state["current_delay"] <= 0.05  # max_delay 이하
         assert rate_limiter_state["success_count"] > 0
         assert rate_limiter_state["error_count"] == 0
+
+
+class TestCrawlCoordinatorHelpers:
+    """CrawlCoordinator 헬퍼 메서드 테스트 클래스"""
+
+    @pytest.fixture
+    def temp_dir(self):
+        """임시 디렉토리 fixture"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    @pytest.fixture
+    def coordinator(self, temp_dir):
+        """CrawlCoordinator fixture"""
+        return CrawlCoordinator(temp_dir)
+
+    def test_extract_pyeong_type_numbers_dict(self, coordinator):
+        """딕셔너리 형태의 pyeong_types에서 평형 번호 추출 테스트"""
+        detail = {
+            "pyeong_types": {
+                "1": {"pyeong_name": "84A"},
+                "2": {"pyeong_name": "84B"},
+            }
+        }
+        result = coordinator._extract_pyeong_type_numbers(detail, "C001")
+        assert result == ["1", "2"]
+
+    def test_extract_pyeong_type_numbers_list(self, coordinator):
+        """리스트 형태의 pyeong_types에서 평형 번호 추출 테스트"""
+        detail = {
+            "pyeong_types": [
+                {"pyeong_type_number": "1", "pyeong_name": "84A"},
+                {"pyeong_type_number": "2", "pyeong_name": "84B"},
+                {"pyeongTypeNo": "3", "pyeong_name": "84C"},  # 다른 필드명
+            ]
+        }
+        result = coordinator._extract_pyeong_type_numbers(detail, "C001")
+        assert result == ["1", "2", "3"]
+
+    def test_extract_pyeong_type_numbers_empty(self, coordinator):
+        """빈 pyeong_types 처리 테스트"""
+        detail = {"pyeong_types": []}
+        result = coordinator._extract_pyeong_type_numbers(detail, "C001")
+        assert result == []
+
+        detail = {"pyeong_types": None}
+        result = coordinator._extract_pyeong_type_numbers(detail, "C001")
+        assert result == []
+
+    def test_extract_pyeong_type_numbers_invalid_type(self, coordinator):
+        """잘못된 타입의 pyeong_types 처리 테스트"""
+        detail = {"pyeong_types": "invalid"}
+        result = coordinator._extract_pyeong_type_numbers(detail, "C001")
+        assert result == []
+
+    def test_collect_transactions_for_complex(self, coordinator):
+        """단지의 거래내역 수집 테스트"""
+        # Mock fetch function
+        mock_fetch = Mock(
+            side_effect=lambda complex_id, pyeong_type, trade_type: [
+                {
+                    "complex_id": complex_id,
+                    "pyeong_type_number": pyeong_type,
+                    "trade_type": trade_type,
+                    "trade_price": "100000000",
+                }
+            ]
+        )
+
+        # Mock transaction writer
+        coordinator.transaction_writer = Mock()
+        coordinator.transaction_writer.append = Mock()
+
+        pyeong_type_numbers = ["1", "2"]
+        result = coordinator._collect_transactions_for_complex(
+            "C001", pyeong_type_numbers, mock_fetch
+        )
+
+        # 2 pyeong_types * 3 trade_types = 6 calls
+        assert mock_fetch.call_count == 6
+        assert len(result) == 6
+        # append is called for each fetch call that returns transactions (all 6 calls)
+        assert coordinator.transaction_writer.append.call_count == 6
+
+    def test_collect_transactions_for_complex_empty(self, coordinator):
+        """빈 평형 타입 목록으로 거래내역 수집 테스트"""
+        mock_fetch = Mock()
+        result = coordinator._collect_transactions_for_complex("C001", [], mock_fetch)
+
+        assert mock_fetch.call_count == 0
+        assert result == []
+
+    def test_handle_complex_processing_error(self, coordinator, caplog):
+        """단지 처리 에러 핸들링 테스트"""
+        # Mock progress tracker
+        coordinator.progress_tracker = Mock()
+        coordinator.progress_tracker.add_error = Mock()
+
+        error = Exception("Test error")
+        complex_data = {"complex_id": "C001"}
+        dong_stats = {"errors": []}
+
+        coordinator._handle_complex_processing_error(error, complex_data, dong_stats)
+
+        # 에러가 통계에 추가되었는지 확인
+        assert len(dong_stats["errors"]) == 1
+        assert "Test error" in dong_stats["errors"][0]
+
+        # Progress tracker가 호출되었는지 확인
+        coordinator.progress_tracker.add_error.assert_called_once()
+
+    def test_update_progress_for_complex_no_tracker(self, coordinator):
+        """Progress tracker가 없을 때 단지 진행 상황 업데이트 테스트"""
+        coordinator.progress_tracker = None
+        # Should not raise any error
+        coordinator._update_progress_for_complex("C001", "Test Complex", [], is_start=True)
+        coordinator._update_progress_for_complex("C001", "Test Complex", [], is_start=False)
+
+    def test_update_progress_for_complex_with_tracker(self, coordinator):
+        """Progress tracker가 있을 때 단지 진행 상황 업데이트 테스트"""
+        coordinator.progress_tracker = Mock()
+        coordinator.progress_tracker.start_complex = Mock()
+        coordinator.progress_tracker.complete_complex = Mock()
+
+        coordinator._update_progress_for_complex("C001", "Test Complex", [], is_start=True)
+        coordinator.progress_tracker.start_complex.assert_called_once_with("C001", "Test Complex")
+
+        coordinator._update_progress_for_complex(
+            "C001", "Test Complex", [{"id": 1}], is_start=False
+        )
+        coordinator.progress_tracker.complete_complex.assert_called_once_with(
+            "C001", "Test Complex", 1
+        )
+
+    def test_update_progress_for_dong_no_tracker(self, coordinator):
+        """Progress tracker가 없을 때 동 진행 상황 업데이트 테스트"""
+        coordinator.progress_tracker = None
+        dong_stats = {
+            "complexes_count": 5,
+            "complexes_processed": 3,
+            "transactions_collected": 10,
+            "errors": [],
+        }
+
+        # Should not raise any error
+        coordinator._update_progress_for_dong("D001", "Test Dong", dong_stats, is_start=True)
+        coordinator._update_progress_for_dong("D001", "Test Dong", dong_stats, is_start=False)
+
+    def test_update_progress_for_dong_with_tracker(self, coordinator):
+        """Progress tracker가 있을 때 동 진행 상황 업데이트 테스트"""
+        coordinator.progress_tracker = Mock()
+        coordinator.progress_tracker.start_dong = Mock()
+        coordinator.progress_tracker.complete_dong = Mock()
+        coordinator.progress_tracker.update_rate_limiter_delay = Mock()
+
+        # Mock rate limiter
+        coordinator.rate_limiter = Mock()
+        coordinator.rate_limiter.current_delay = 5.0
+
+        dong_stats = {
+            "complexes_count": 5,
+            "complexes_processed": 3,
+            "transactions_collected": 10,
+            "errors": ["error1"],
+        }
+
+        coordinator._update_progress_for_dong("D001", "Test Dong", dong_stats, is_start=True)
+        coordinator.progress_tracker.start_dong.assert_called_once_with("D001", "Test Dong", 5)
+
+        coordinator._update_progress_for_dong("D001", "Test Dong", dong_stats, is_start=False)
+        coordinator.progress_tracker.complete_dong.assert_called_once_with(
+            "D001", "Test Dong", 3, 10, ["error1"]
+        )
+        coordinator.progress_tracker.update_rate_limiter_delay.assert_called_once_with(5.0)

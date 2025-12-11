@@ -101,6 +101,182 @@ class CrawlCoordinator:
 
         self.logger = structlog.get_logger()
 
+    def _extract_pyeong_type_numbers(self, detail: Dict[str, Any], complex_id: str) -> List[str]:
+        """단지 상세 정보에서 평형 타입 번호를 추출
+
+        Args:
+            detail: 단지 상세 정보
+            complex_id: 단지 ID (로그용)
+
+        Returns:
+            유효한 평형 타입 번호 리스트
+        """
+        pyeong_types = detail.get("pyeong_types", [])
+        pyeong_type_numbers = []
+
+        if isinstance(pyeong_types, dict):
+            # pyeong_types가 딕셔너리인 경우 (key: 평형 타입 번호)
+            pyeong_type_numbers = list(pyeong_types.keys())
+        elif isinstance(pyeong_types, list):
+            # pyeong_types가 리스트인 경우
+            for item in pyeong_types:
+                if isinstance(item, dict):
+                    # 각 아이템이 딕셔너리인 경우 pyeong_type_number 추출
+                    if "pyeong_type_number" in item:
+                        pyeong_type_numbers.append(item["pyeong_type_number"])
+                    elif "pyeongTypeNo" in item:
+                        # 다른 가능한 필드명
+                        pyeong_type_numbers.append(item["pyeongTypeNo"])
+                    else:
+                        self.logger.warning(
+                            "pyeong_item_missing_type_number",
+                            complex_id=complex_id,
+                            item=item,
+                        )
+                else:
+                    self.logger.warning(
+                        "invalid_pyeong_item_type",
+                        complex_id=complex_id,
+                        item_type=type(item),
+                        item=item,
+                    )
+        elif pyeong_types:
+            # 예상치 못한 타입인 경우 (문자열, 숫자 등)
+            self.logger.warning(
+                "unexpected_pyeong_types_type",
+                complex_id=complex_id,
+                pyeong_types_type=type(pyeong_types),
+                pyeong_types_value=str(pyeong_types)[:200],
+            )
+        else:
+            # pyeong_types가 비어있는 경우
+            self.logger.info("no_pyeong_types_found", complex_id=complex_id)
+
+        return pyeong_type_numbers
+
+    def _collect_transactions_for_complex(
+        self,
+        complex_id: str,
+        pyeong_type_numbers: List[str],
+        fetch_transaction_history: Callable[..., Any],
+    ) -> List[Dict[str, Any]]:
+        """단지의 모든 거래내역을 수집
+
+        Args:
+            complex_id: 단지 ID
+            pyeong_type_numbers: 평형 타입 번호 리스트
+            fetch_transaction_history: 거래내역 조회 함수
+
+        Returns:
+            수집된 모든 거래내역 리스트
+        """
+        all_transactions = []
+
+        if not pyeong_type_numbers:
+            self.logger.info(
+                "skipping_transaction_collection",
+                complex_id=complex_id,
+                reason="no_valid_pyeong_type_numbers",
+            )
+            return all_transactions
+
+        for pyeong_type_number in pyeong_type_numbers:
+            # 모든 거래 유형 조회 (매매, 전세, 월세)
+            for trade_type in self.TRADE_TYPES:
+                self.rate_limiter.wait()
+
+                transactions = fetch_transaction_history(
+                    complex_id,
+                    int(pyeong_type_number),  # 문자열일 수 있으므로 정수로 변환
+                    trade_type,
+                )
+
+                if transactions:
+                    # 거래내역을 즉시 CSV에 append
+                    self.transaction_writer.append(transactions)
+                    all_transactions.extend(transactions)
+
+        return all_transactions
+
+    def _handle_complex_processing_error(
+        self,
+        error: Exception,
+        complex: Dict[str, Any],
+        dong_stats: Dict[str, Any],
+    ) -> None:
+        """단지 처리 중 에러를 처리
+
+        Args:
+            error: 발생한 에러
+            complex: 처리 중이던 단지 정보
+            dong_stats: 동 통계 정보 (에러를 추가하기 위함)
+        """
+        error_msg = f"Error processing complex {complex.get('complex_id', 'unknown')}: {str(error)}"
+        self.logger.error("complex_error", error=error_msg)
+        dong_stats["errors"].append(error_msg)
+        self.stats["errors"].append(error_msg)
+
+        # Progress tracking: 에러 기록
+        if self.progress_tracker:
+            self.progress_tracker.add_error(error_msg)
+
+        # 에러 시 rate limiter 페널티
+        self.rate_limiter.on_error()
+
+    def _update_progress_for_complex(
+        self,
+        complex_id: str,
+        complex_name: str,
+        all_transactions: List[Dict[str, Any]],
+        is_start: bool = True,
+    ) -> None:
+        """단지 처리 진행 상황을 업데이트
+
+        Args:
+            complex_id: 단지 ID
+            complex_name: 단지명
+            all_transactions: 수집된 거래내역
+            is_start: True이면 시작, False이면 완료
+        """
+        if not self.progress_tracker:
+            return
+
+        if is_start:
+            self.progress_tracker.start_complex(complex_id, complex_name)
+        else:
+            self.progress_tracker.complete_complex(complex_id, complex_name, len(all_transactions))
+
+    def _update_progress_for_dong(
+        self,
+        dong_code: str,
+        dong_name: str,
+        dong_stats: Dict[str, Any],
+        is_start: bool = True,
+    ) -> None:
+        """동 처리 진행 상황을 업데이트
+
+        Args:
+            dong_code: 동 코드
+            dong_name: 동 이름
+            dong_stats: 동 통계 정보
+            is_start: True이면 시작, False이면 완료
+        """
+        if not self.progress_tracker:
+            return
+
+        if is_start:
+            self.progress_tracker.start_dong(dong_code, dong_name, dong_stats["complexes_count"])
+        else:
+            self.progress_tracker.complete_dong(
+                dong_code,
+                dong_name,
+                dong_stats["complexes_processed"],
+                dong_stats["transactions_collected"],
+                dong_stats["errors"],
+            )
+            # Rate limiter 상태 업데이트
+            self.progress_tracker.update_rate_limiter_delay(self.rate_limiter.current_delay)
+
     def crawl_dong(
         self,
         dong_code: str,
@@ -124,10 +300,7 @@ class CrawlCoordinator:
         self.logger.info("crawling_dong", dong_code=dong_code, dong_name=dong_name)
 
         # Progress tracking: 동 처리 시작
-        if self.progress_tracker:
-            self.progress_tracker.start_dong(dong_code, dong_name, len(complexes))
-
-        dong_stats: Dict[str, Any] = {
+        dong_stats = {
             "dong_code": dong_code,
             "dong_name": dong_name,
             "complexes_count": len(complexes),
@@ -135,6 +308,7 @@ class CrawlCoordinator:
             "transactions_collected": 0,
             "errors": [],
         }
+        self._update_progress_for_dong(dong_code, dong_name, dong_stats, is_start=True)
 
         # 각 단지 처리
         for complex in complexes:
@@ -146,8 +320,9 @@ class CrawlCoordinator:
                 self.logger.info("processing_complex", complex_id=complex_id)
 
                 # Progress tracking: 단지 처리 시작
-                if self.progress_tracker:
-                    self.progress_tracker.start_complex(complex_id, complex.get("complex_name", ""))
+                self._update_progress_for_complex(
+                    complex_id, complex.get("complex_name", ""), [], is_start=True
+                )
 
                 # 1. 단지 상세 정보 조회
                 detail = fetch_complex_detail(complex_id)
@@ -155,82 +330,19 @@ class CrawlCoordinator:
                     dong_stats["errors"].append(f"Failed to fetch detail for complex {complex_id}")
                     continue
 
-                # 2. 거래내역 조회 (평형별, 거래 유형별)
-                all_transactions = []
-                pyeong_types = detail.get("pyeong_types", [])
+                # 2. 평형 타입 번호 추출
+                pyeong_type_numbers = self._extract_pyeong_type_numbers(detail, complex_id)
 
-                # pyeong_types 데이터 타입 검증 및 변환
-                pyeong_type_numbers = []
+                # 3. 거래내역 수집
+                all_transactions = self._collect_transactions_for_complex(
+                    complex_id, pyeong_type_numbers, fetch_transaction_history
+                )
 
-                if isinstance(pyeong_types, dict):
-                    # pyeong_types가 딕셔너리인 경우 (key: 평형 타입 번호)
-                    pyeong_type_numbers = list(pyeong_types.keys())
-                elif isinstance(pyeong_types, list):
-                    # pyeong_types가 리스트인 경우
-                    for item in pyeong_types:
-                        if isinstance(item, dict):
-                            # 각 아이템이 딕셔너리인 경우 pyeong_type_number 추출
-                            if "pyeong_type_number" in item:
-                                pyeong_type_numbers.append(item["pyeong_type_number"])
-                            elif "pyeongTypeNo" in item:
-                                # 다른 가능한 필드명
-                                pyeong_type_numbers.append(item["pyeongTypeNo"])
-                            else:
-                                self.logger.warning(
-                                    "pyeong_item_missing_type_number",
-                                    complex_id=complex_id,
-                                    item=item,
-                                )
-                        else:
-                            self.logger.warning(
-                                "invalid_pyeong_item_type",
-                                complex_id=complex_id,
-                                item_type=type(item),
-                                item=item,
-                            )
-                elif pyeong_types:
-                    # 예상치 못한 타입인 경우 (문자열, 숫자 등)
-                    self.logger.warning(
-                        "unexpected_pyeong_types_type",
-                        complex_id=complex_id,
-                        pyeong_types_type=type(pyeong_types),
-                        pyeong_types_value=str(pyeong_types)[:200],
-                    )
-                else:
-                    # pyeong_types가 비어있는 경우
-                    self.logger.info("no_pyeong_types_found", complex_id=complex_id)
+                # 4. 통계 업데이트
+                dong_stats["transactions_collected"] += len(all_transactions)
+                self.stats["total_transactions_collected"] += len(all_transactions)
 
-                # 유효한 평형 타입 번호가 있는 경우에만 거래내역 조회
-                if pyeong_type_numbers:
-                    for pyeong_type_number in pyeong_type_numbers:
-                        # 모든 거래 유형 조회 (매매, 전세, 월세)
-                        for trade_type in self.TRADE_TYPES:
-                            self.rate_limiter.wait()
-
-                            transactions = fetch_transaction_history(
-                                complex_id,
-                                int(pyeong_type_number),  # 문자열일 수 있으므로 정수로 변환
-                                trade_type,
-                            )
-
-                            if transactions:
-                                # 거래내역을 즉시 CSV에 append
-                                self.transaction_writer.append(transactions)
-                                all_transactions.extend(transactions)
-
-                                dong_stats["transactions_collected"] += len(transactions)
-                                self.stats["total_transactions_collected"] += len(transactions)
-                else:
-                    # 평형 정보가 없는 경우에도 로그 남김
-                    self.logger.info(
-                        "skipping_transaction_collection",
-                        complex_id=complex_id,
-                        reason="no_valid_pyeong_type_numbers",
-                    )
-
-                # 3. 거래내역 통계 계산하여 단지 정보 저장
-                # append 메서드가 이미 정규화를 수행하므로 all_transactions를 그대로 사용
-                # append_with_statistics에서 내부적으로 다시 정규화함
+                # 5. 단지 정보 저장 (거래내역 통계 포함)
                 self.complexes_writer.append_with_statistics(
                     complex_data={**complex, **detail},
                     transactions=all_transactions,
@@ -240,28 +352,15 @@ class CrawlCoordinator:
                 self.stats["total_complexes_processed"] += 1
 
                 # Progress tracking: 단지 처리 완료
-                if self.progress_tracker:
-                    self.progress_tracker.complete_complex(
-                        complex_id, complex.get("complex_name", ""), len(all_transactions)
-                    )
+                self._update_progress_for_complex(
+                    complex_id, complex.get("complex_name", ""), all_transactions, is_start=False
+                )
 
                 # 성공 시 rate limiter 보상
                 self.rate_limiter.on_success()
 
             except Exception as e:
-                error_msg = (
-                    f"Error processing complex {complex.get('complex_id', 'unknown')}: {str(e)}"
-                )
-                self.logger.error("complex_error", error=error_msg)
-                dong_stats["errors"].append(error_msg)
-                self.stats["errors"].append(error_msg)
-
-                # Progress tracking: 에러 기록
-                if self.progress_tracker:
-                    self.progress_tracker.add_error(error_msg)
-
-                # 에러 시 rate limiter 페널티
-                self.rate_limiter.on_error()
+                self._handle_complex_processing_error(e, complex, dong_stats)
 
         # 동 단위 체크포인트 저장
         if self.checkpoint_manager:
@@ -278,16 +377,7 @@ class CrawlCoordinator:
         )
 
         # Progress tracking: 동 처리 완료
-        if self.progress_tracker:
-            self.progress_tracker.complete_dong(
-                dong_code,
-                dong_name,
-                dong_stats["complexes_processed"],
-                dong_stats["transactions_collected"],
-                dong_stats["errors"],
-            )
-            # Rate limiter 상태 업데이트
-            self.progress_tracker.update_rate_limiter_delay(self.rate_limiter.current_delay)
+        self._update_progress_for_dong(dong_code, dong_name, dong_stats, is_start=False)
 
         return dong_stats
 
