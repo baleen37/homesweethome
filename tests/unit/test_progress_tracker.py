@@ -30,7 +30,7 @@ class TestProgressTracker:
 
     def test_init(self):
         """초기화 테스트"""
-        assert self.tracker.output_dir == self.temp_dir
+        assert self.tracker.file_handler.output_dir == self.temp_dir
         assert self.tracker.report_interval == 1
         assert self.tracker.stats["total_dongs"] == 0
         assert self.tracker.stats["completed_dongs"] == 0
@@ -217,8 +217,7 @@ class TestProgressTracker:
             errors=[],
         )
 
-        # 로그 파일 활성화
-        self.tracker._setup_file_logging()
+        # 로그 파일은 이제 초기화 시 자동으로 설정됨
 
         # 크롤링 완료
         self.tracker.finish_crawling()

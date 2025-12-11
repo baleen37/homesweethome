@@ -5,14 +5,14 @@ the progress of long-running crawling operations with real-time statistics,
 performance metrics, and ETA calculations.
 """
 
-import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 import structlog
 
+from crawler.file_log_handler import FileLogHandler
 from crawler.statistics_calculator import StatisticsCalculator
 
 
@@ -35,19 +35,15 @@ class ProgressTracker:
             report_interval: 리포트 출력 간격 (초)
             log_file: 추가 로그 파일 경로 (선택적)
         """
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
         # 리포트 간격 설정
         self.report_interval = report_interval
         self.last_report_time: float = 0.0
 
         # 로그 설정
         self.logger = structlog.get_logger()
-        self.log_file = None
-        if log_file:
-            self.log_file = open(self.output_dir / log_file, "w", encoding="utf-8")
-            self._setup_file_logging()
+
+        # 파일 로그 핸들러
+        self.file_handler = FileLogHandler(output_dir, log_file)
 
         # 통계 데이터
         self.stats: Dict[str, Any] = {
@@ -70,27 +66,6 @@ class ProgressTracker:
         self.timings: List[Dict[str, Any]] = []
         self.current_dong_start: float = 0.0
         self.current_complex_start: float = 0.0
-
-        # 진행 상황 저장 파일
-        self.progress_file = self.output_dir / "progress.json"
-
-    def _setup_file_logging(self) -> None:
-        """파일 로깅 설정"""
-        if self.log_file:
-            # JSON 형식으로 구조화된 로그 기록
-            self.log_file.write(
-                json.dumps(
-                    {
-                        "timestamp": time.time(),
-                        "level": "INFO",
-                        "event": "progress_tracking_started",
-                        "output_dir": str(self.output_dir),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-            self.log_file.flush()
 
     def start_crawling(
         self,
@@ -138,22 +113,7 @@ class ProgressTracker:
         )
 
         # 파일 로그에도 기록
-        if self.log_file:
-            self.log_file.write(
-                json.dumps(
-                    {
-                        "timestamp": time.time(),
-                        "level": "INFO",
-                        "event": "dong_started",
-                        "dong_code": dong_code,
-                        "dong_name": dong_name,
-                        "complex_count": complex_count,
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-            self.log_file.flush()
+        self.file_handler.log_dong_started(dong_code, dong_name, complex_count)
 
     def complete_dong(
         self,
@@ -291,20 +251,7 @@ class ProgressTracker:
         self.logger.error("crawling_error", error=error)
 
         # 파일 로그에도 기록
-        if self.log_file:
-            self.log_file.write(
-                json.dumps(
-                    {
-                        "timestamp": time.time(),
-                        "level": "ERROR",
-                        "event": "error_occurred",
-                        "error": error,
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-            self.log_file.flush()
+        self.file_handler.log_error(error)
 
     def get_progress_summary(self) -> Dict[str, Any]:
         """진행 상황 요약을 반환
@@ -367,20 +314,7 @@ class ProgressTracker:
         self.last_report_time = current_time
 
         # 파일 로그에도 기록
-        if self.log_file:
-            self.log_file.write(
-                json.dumps(
-                    {
-                        "timestamp": current_time,
-                        "level": "INFO",
-                        "event": "progress_report",
-                        "summary": summary,
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-            self.log_file.flush()
+        self.file_handler.log_progress_report(summary)
 
     def _check_report_interval(self) -> None:
         """리포트 출력 간격을 확인하고 필요 시 출력"""
@@ -390,12 +324,10 @@ class ProgressTracker:
         """진행 상황을 파일에 저장"""
         progress_data = {
             **self.stats,
-            "current_time": time.time(),
             "summary": self.get_progress_summary(),
         }
 
-        with open(self.progress_file, "w", encoding="utf-8") as f:
-            json.dump(progress_data, f, ensure_ascii=False, indent=2)
+        self.file_handler.save_progress(progress_data)
 
     def _format_duration(self, seconds: float) -> str:
         """초를 사람이 읽기 쉬운 형식으로 변환
@@ -424,21 +356,8 @@ class ProgressTracker:
         self.print_progress_report(force=True)
 
         # 파일 로그 마무리
-        if self.log_file:
-            self.log_file.write(
-                json.dumps(
-                    {
-                        "timestamp": time.time(),
-                        "level": "INFO",
-                        "event": "crawling_finished",
-                        "final_summary": final_summary,
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-            self.log_file.close()
-            self.log_file = None
+        self.file_handler.log_crawling_finished(final_summary)
+        self.file_handler.close()
 
         # 최종 진행 상황 저장
         self._save_progress()
@@ -449,13 +368,4 @@ class ProgressTracker:
         Returns:
             저장된 진행 상황 데이터 또는 None
         """
-        if self.progress_file.exists():
-            try:
-                with open(self.progress_file, "r", encoding="utf-8") as f:
-                    return cast(Dict[str, Any], json.load(f))
-            except Exception as e:
-                self.logger.warning(
-                    "failed_to_load_progress",
-                    error=str(e),
-                )
-        return None
+        return self.file_handler.load_progress()
