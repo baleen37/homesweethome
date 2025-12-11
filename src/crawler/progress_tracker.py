@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional, cast
 
 import structlog
 
+from crawler.statistics_calculator import StatisticsCalculator
+
 
 class ProgressTracker:
     """크롤링 진행 상황 추적기
@@ -190,11 +192,9 @@ class ProgressTracker:
         )
 
         # 최근 10개의 동 타이밍으로 평균 계산
-        recent_dong_timings = [t for t in self.timings if t["type"] == "dong"][-10:]
-        if recent_dong_timings:
-            self.stats["avg_dong_time"] = sum(t["duration"] for t in recent_dong_timings) / len(
-                recent_dong_timings
-            )
+        self.stats["avg_dong_time"] = StatisticsCalculator.compute_average_timing(
+            self.timings, "dong", 10
+        )
 
         self.logger.info(
             "dong_processing_completed",
@@ -258,11 +258,9 @@ class ProgressTracker:
         )
 
         # 최근 50개의 단지 타이밍으로 평균 계산
-        recent_complex_timings = [t for t in self.timings if t["type"] == "complex"][-50:]
-        if recent_complex_timings:
-            self.stats["avg_complex_time"] = sum(
-                t["duration"] for t in recent_complex_timings
-            ) / len(recent_complex_timings)
+        self.stats["avg_complex_time"] = StatisticsCalculator.compute_average_timing(
+            self.timings, "complex", 50
+        )
 
         # 디버그 레벨로 로그
         self.logger.debug(
@@ -314,73 +312,10 @@ class ProgressTracker:
         Returns:
             진행 상황 요약 딕셔너리
         """
-        current_time = time.time()
-        elapsed = current_time - self.stats["start_time"]
-
-        # 진행률 계산
-        dong_progress = (
-            (self.stats["completed_dongs"] / self.stats["total_dongs"] * 100)
-            if self.stats["total_dongs"] > 0
-            else 0
+        return StatisticsCalculator.calculate_comprehensive_stats(
+            stats=self.stats,
+            timings=self.timings,
         )
-        complex_progress = (
-            (self.stats["completed_complexes"] / self.stats["total_complexes"] * 100)
-            if self.stats["total_complexes"] > 0
-            else 0
-        )
-
-        # 남은 시간 예측
-        remaining_dongs = self.stats["total_dongs"] - self.stats["completed_dongs"]
-        eta_seconds = 0
-
-        if self.stats["avg_dong_time"] > 0 and remaining_dongs > 0:
-            eta_seconds = self.stats["avg_dong_time"] * remaining_dongs
-
-        # 성능 지표
-        avg_complexes_per_hour = 0
-        avg_transactions_per_hour = 0
-
-        if elapsed > 0:
-            avg_complexes_per_hour = (self.stats["completed_complexes"] / elapsed) * 3600
-            avg_transactions_per_hour = (self.stats["collected_transactions"] / elapsed) * 3600
-
-        # 에러율
-        total_operations = self.stats["completed_complexes"] + self.stats["completed_dongs"]
-        error_rate = (
-            (self.stats["error_count"] / total_operations * 100) if total_operations > 0 else 0
-        )
-
-        return {
-            "elapsed_time_seconds": elapsed,
-            "elapsed_time_formatted": self._format_duration(elapsed),
-            "eta_seconds": eta_seconds,
-            "eta_formatted": self._format_duration(eta_seconds)
-            if eta_seconds > 0
-            else "계산 중...",
-            # 진행률
-            "dong_progress_percent": round(dong_progress, 1),
-            "completed_dongs": self.stats["completed_dongs"],
-            "total_dongs": self.stats["total_dongs"],
-            "remaining_dongs": remaining_dongs,
-            "complex_progress_percent": round(complex_progress, 1),
-            "completed_complexes": self.stats["completed_complexes"],
-            "total_complexes": self.stats["total_complexes"],
-            "remaining_complexes": self.stats["total_complexes"]
-            - self.stats["completed_complexes"],
-            # 수집된 데이터
-            "collected_transactions": self.stats["collected_transactions"],
-            # 성능 지표
-            "avg_complex_time_seconds": round(self.stats["avg_complex_time"], 1),
-            "avg_dong_time_seconds": round(self.stats["avg_dong_time"], 1),
-            "complexes_per_hour": round(avg_complexes_per_hour, 1),
-            "transactions_per_hour": round(avg_transactions_per_hour, 1),
-            # 현재 상태
-            "rate_limiter_delay": round(self.stats["rate_limiter_delay"], 1),
-            "error_count": self.stats["error_count"],
-            "error_rate_percent": round(error_rate, 1),
-            # 마지막 업데이트 시간
-            "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
 
     def print_progress_report(self, force: bool = False) -> None:
         """진행 상황 리포트를 출력
@@ -471,17 +406,7 @@ class ProgressTracker:
         Returns:
             형식화된 시간 문자열
         """
-        if seconds < 60:
-            return f"{seconds:.0f}초"
-        elif seconds < 3600:
-            minutes = seconds / 60
-            return f"{minutes:.0f}분"
-        elif seconds < 86400:
-            hours = seconds / 3600
-            return f"{hours:.1f}시간"
-        else:
-            days = seconds / 86400
-            return f"{days:.1f}일"
+        return StatisticsCalculator.format_duration(seconds)
 
     def finish_crawling(self) -> None:
         """크롤링 완료를 기록"""
