@@ -4,7 +4,9 @@ This module provides the strategy interface and concrete implementations
 for different data transformation requirements across various CSV writers.
 """
 
+import re
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Any, Dict, List, Protocol
 
 
@@ -97,8 +99,6 @@ class BaseDataTransformationStrategy(ABC):
             return 0
 
         try:
-            import re
-
             # Return 0 for basement
             if re.search(r"[bB지하]", floor_str):
                 return 0
@@ -129,8 +129,6 @@ class BaseDataTransformationStrategy(ABC):
             amount_str = amount_str.replace(",", "")
 
             # Extract numbers
-            import re
-
             numbers = re.findall(r"\d+", amount_str)
             if numbers:
                 return int(numbers[0])
@@ -148,8 +146,6 @@ class BaseDataTransformationStrategy(ABC):
         Returns:
             Tuple of (formatted_date as YYYY-MM-DD, year as int)
         """
-        from datetime import datetime
-
         if not date_str:
             return "", datetime.now().year
 
