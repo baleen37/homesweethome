@@ -246,17 +246,22 @@ class TestHogangnonoCrawler:
         transactions_file = temp_output_dir / "hogangnono_transactions.csv"
 
         assert complexes_file.exists()
-        # The current implementation doesn't create transactions file when no transactions
-        # assert transactions_file.exists()
+        # transactions 파일은 데이터가 있을 때만 생성됨
+        if transactions:
+            assert transactions_file.exists()
+        else:
+            # 트랜잭션이 없을 경우 파일이 생성되지 않아야 함
+            assert not transactions_file.exists()
 
         # 내용 확인
         with open(complexes_file, "r", encoding="utf-8") as f:
             content = f.read()
             assert "아파트1" in content
 
-        with open(transactions_file, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "500000000" in content
+        if transactions:
+            with open(transactions_file, "r", encoding="utf-8") as f:
+                content = f.read()
+                assert "500000000" in content
 
     def test_crawl_and_save_integration(self, crawler):
         """크롤링과 저장 통합 테스트"""
@@ -290,10 +295,11 @@ class TestHogangnonoCrawler:
 
         # 파일이 생성되었는지 확인
         complexes_file = crawler.output_dir / "hogangnono_complexes.csv"
+        transactions_file = crawler.output_dir / "hogangnono_transactions.csv"
 
         assert complexes_file.exists()
-        # The current implementation doesn't create transactions file when no transactions
-        # assert (crawler.output_dir / "hogangnono_transactions.csv").exists()
+        # 트랜잭션이 없을 경우 파일이 생성되지 않아야 함
+        assert not transactions_file.exists()
 
     def test_filter_districts_all_seoul(self, crawler):
         """서울 전체 구 필터링"""
