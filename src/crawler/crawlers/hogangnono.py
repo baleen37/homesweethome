@@ -621,7 +621,11 @@ class HogangnonoCrawler(APICrawler):
             try:
                 response = self.hogangnono_client.get_apartments_bounding(search_params)
                 if response.success:
-                    apartments = response.data or []
+                    apartments = (
+                        response.data.get("data", [])
+                        if isinstance(response.data, dict)
+                        else response.data or []
+                    )
 
                     # 정확히 600개 결과가 반환되면 POI 제한에 도달한 것으로 판단
                     if len(apartments) == 600:

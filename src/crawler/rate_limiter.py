@@ -22,11 +22,14 @@ class AdaptiveRateLimiter:
     - Other errors: Maintains current delay
     """
 
-    def __init__(self) -> None:
-        """Initialize rate limiter with default values."""
-        self.current_delay: float = 5.0  # Initial delay in seconds
-        self.min_delay: Final[float] = 1.5  # Minimum allowed delay
-        self.max_delay: Final[float] = 10.0  # Maximum allowed delay
+    def __init__(
+        self, initial_delay: float = 5.0, min_delay: float = 1.5, max_delay: float = 10.0
+    ) -> None:
+        """Initialize rate limiter with custom values."""
+        self.initial_delay: float = initial_delay  # Store initial delay for reset
+        self.current_delay: float = initial_delay  # Initial delay in seconds
+        self.min_delay: Final[float] = min_delay  # Minimum allowed delay
+        self.max_delay: Final[float] = max_delay  # Maximum allowed delay
         self.error_count: int = 0  # Consecutive 429 error count
         self.success_count: int = 0  # Consecutive success count
         self._last_wait_time: float | None = None  # Track last wait call
@@ -124,7 +127,7 @@ class AdaptiveRateLimiter:
 
     def reset(self) -> None:
         """Reset rate limiter to initial state."""
-        self.current_delay = 5.0
+        self.current_delay = self.initial_delay  # Use the initial delay passed to __init__
         self.error_count = 0
         self.success_count = 0
         self._last_wait_time = None

@@ -31,13 +31,13 @@ class IntegrationTestReportGenerator:
         <body>
             <div class="header">
                 <h1>Crawling System Integration Test Report</h1>
-                <p>Generated: {datetime.fromtimestamp(data['timestamp'])}</p>
-                <p>Total Duration: {data['total_duration']:.2f} seconds</p>
+                <p>Generated: {datetime.fromtimestamp(data["timestamp"])}</p>
+                <p>Total Duration: {data["total_duration"]:.2f} seconds</p>
             </div>
 
             <div class="summary">
                 <h2>Summary</h2>
-                <p>Passed: {data['summary']['passed_phases']}/{data['summary']['total_phases']} phases</p>
+                <p>Passed: {data["summary"]["passed_phases"]}/{data["summary"]["total_phases"]} phases</p>
             </div>
 
             <h2>Phase Details</h2>
@@ -47,11 +47,15 @@ class IntegrationTestReportGenerator:
             status_class = "success" if result.get("success") else "failure"
             status_text = "PASSED" if result.get("success") else "FAILED"
 
+            error_output = ""
+            if not result.get("success"):
+                error_output = f"<pre>{result['stderr']}</pre>"
+
             html += f"""
             <div class="phase {status_class}">
                 <h3>{phase_name} - {status_text}</h3>
-                <p>Duration: {result.get('duration', 0):.2f} seconds</p>
-                {f'<pre>{result["stderr"]}</pre>' if not result.get('success') else ''}
+                <p>Duration: {result.get("duration", 0):.2f} seconds</p>
+                {error_output}
             </div>
             """
 

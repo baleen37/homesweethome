@@ -69,9 +69,9 @@ class TestCheckpointManager:
         missing_keys = expected_keys - actual_keys
 
         assert len(missing_keys) == 0, f"Missing keys: {missing_keys}"
-        assert len(actual_keys) == len(
-            expected_keys
-        ), f"Expected {len(expected_keys)} keys, got {len(actual_keys)}"
+        assert len(actual_keys) == len(expected_keys), (
+            f"Expected {len(expected_keys)} keys, got {len(actual_keys)}"
+        )
 
     def test_checkpoint_recovery_after_corruption(self, tmp_path):
         """손상된 체크포인트 파일 복구 테스트"""

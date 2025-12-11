@@ -413,16 +413,16 @@ class TestHogangnonoAPIClientTDD:
 
             # 메서드의 __func__를 통해 데코레이터 적용 확인
             # Retryable decorator는 wrapper function을 반환
-            assert (
-                "wrapper" in method.__name__
-            ), f"{method_name} should be wrapped by retry decorator"
+            assert "wrapper" in method.__name__, (
+                f"{method_name} should be wrapped by retry decorator"
+            )
 
             # 또는 decorator가 적용되었는지 소스 코드에서 확인
             unbound_method = getattr(client.__class__, method_name)
             # 데코레이터가 적용된 메서드는 wrapper function을 가짐
-            assert (
-                hasattr(unbound_method, "__name__") and "wrapper" in unbound_method.__name__
-            ), f"{method_name} should be wrapped by retry decorator"
+            assert hasattr(unbound_method, "__name__") and "wrapper" in unbound_method.__name__, (
+                f"{method_name} should be wrapped by retry decorator"
+            )
 
     def test_retry_behavior_on_transient_errors(self, client):
         """일시적 오류 시 재시도 동작 테스트"""

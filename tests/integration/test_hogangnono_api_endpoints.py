@@ -307,9 +307,9 @@ class TestHogangnonoAPIEndpoints:
 
         # 서울 25개 구 검증
         assert "children" in seoul, "서울에 children 필드가 없음"
-        assert (
-            len(seoul["children"]) == 25
-        ), f"서울 구 개수 오류: {len(seoul['children'])}개 (예상: 25개)"
+        assert len(seoul["children"]) == 25, (
+            f"서울 구 개수 오류: {len(seoul['children'])}개 (예상: 25개)"
+        )
 
         # 구 데이터 필드 검증
         for district in seoul["children"]:
@@ -530,7 +530,7 @@ class TestHogangnonoAPIEndpoints:
             status_codes.append(response.status_code)
             response_times.append(elapsed)
 
-            print(f"  {i+1}. Status: {response.status_code}, Time: {elapsed:.2f}s")
+            print(f"  {i + 1}. Status: {response.status_code}, Time: {elapsed:.2f}s")
 
             time.sleep(0.5)  # 0.5초 간격
 
@@ -592,7 +592,7 @@ class TestHogangnonoAPIEndpoints:
         # 분할된 각 박스에 대해 API 호출
         for i, (lat_min, lng_min, lat_max, lng_max) in enumerate(divided_boxes):
             print(
-                f"\nFetching POIs from box {i+1}/4: ({lat_min:.3f}, {lng_min:.3f}) to ({lat_max:.3f}, {lng_max:.3f})"
+                f"\nFetching POIs from box {i + 1}/4: ({lat_min:.3f}, {lng_min:.3f}) to ({lat_max:.3f}, {lng_max:.3f})"
             )
 
             params = {
@@ -606,14 +606,14 @@ class TestHogangnonoAPIEndpoints:
 
             response = session.get("https://hogangnono.com/api/v2/pois-bounding", params=params)
 
-            assert (
-                response.status_code == 200
-            ), f"API call failed for box {i+1}: {response.status_code}"
+            assert response.status_code == 200, (
+                f"API call failed for box {i + 1}: {response.status_code}"
+            )
 
             data = response.json()
             box_pois = data.get("data", [])
 
-            print(f"  Box {i+1}: Found {len(box_pois)} POIs")
+            print(f"  Box {i + 1}: Found {len(box_pois)} POIs")
 
             # 카테고리별 집계
             categories = {}
@@ -621,7 +621,7 @@ class TestHogangnonoAPIEndpoints:
                 cat = poi.get("category", "unknown")
                 categories[cat] = categories.get(cat, 0) + 1
 
-            print(f"  Box {i+1} Categories: {categories}")
+            print(f"  Box {i + 1} Categories: {categories}")
             all_pois.extend(box_pois)
 
             # Rate limiting 딜레이

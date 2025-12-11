@@ -1,16 +1,13 @@
 import pytest
 import time
 
-# These imports will fail initially - that's expected for TDD
-# from crawler.rate_limiter import AdaptiveRateLimiter
+# Import test setup to configure path and mocks
+
+from crawler.rate_limiter import AdaptiveRateLimiter
 
 
 def test_rate_limiter_adapts_to_real_api_responses(integration_test_dir):
     """Test that rate limiter adapts to actual API responses"""
-    try:
-        from crawler.rate_limiter import AdaptiveRateLimiter
-    except ImportError as e:
-        pytest.fail(f"AdaptiveRateLimiter not implemented: {e}")
 
     limiter = AdaptiveRateLimiter()
     limiter.current_delay = 5.0  # Start with 5 second delay
@@ -98,9 +95,9 @@ def test_rate_limiter_boundary_conditions(integration_test_dir):
         limiter.on_success()
 
     # Delay should not go below min_delay (1.5)
-    assert (
-        limiter.current_delay >= 1.5
-    ), f"Delay should not go below minimum, got {limiter.current_delay}"
+    assert limiter.current_delay >= 1.5, (
+        f"Delay should not go below minimum, got {limiter.current_delay}"
+    )
 
     # Test maximum delay boundary
     limiter.current_delay = 10.0  # Set to maximum
@@ -108,9 +105,9 @@ def test_rate_limiter_boundary_conditions(integration_test_dir):
         limiter.on_rate_limit_error()
 
     # Delay should not exceed max_delay (10.0)
-    assert (
-        limiter.current_delay <= 10.0
-    ), f"Delay should not exceed maximum, got {limiter.current_delay}"
+    assert limiter.current_delay <= 10.0, (
+        f"Delay should not exceed maximum, got {limiter.current_delay}"
+    )
 
 
 def test_rate_limiter_statistics_tracking(integration_test_dir):

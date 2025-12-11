@@ -49,9 +49,9 @@ def test_full_gangnam_crawling_workflow(integration_test_dir):
         complex_errors = validator.validate_csv_format(complexes_csv, "complexes")
 
         # Allow some missing columns for now since we're using actual data
-        assert (
-            len(transaction_errors) <= 2
-        ), f"Too many Transaction CSV errors: {transaction_errors}"
+        assert len(transaction_errors) <= 2, (
+            f"Too many Transaction CSV errors: {transaction_errors}"
+        )
         assert len(complex_errors) <= 2, f"Too many Complex CSV errors: {complex_errors}"
 
         # Verify data content if files are not empty

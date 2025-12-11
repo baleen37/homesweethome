@@ -2,8 +2,57 @@
 
 import pytest
 from pathlib import Path
-from crawler.config import CrawlerConfig
 from typing import Any, Dict
+
+# Import and install mock_structlog FIRST before importing any modules that use structlog
+from tests.mock_structlog import install_mock
+
+# Check if structlog is installed
+try:
+    import structlog  # noqa: F401
+except ImportError:
+    # Install the mock if structlog is not available
+    install_mock()
+
+# Mock other optional dependencies that might not be installed in test environment
+try:
+    from dotenv import load_dotenv  # noqa: F401
+except ImportError:
+    import sys
+    from unittest.mock import Mock
+
+    # Create a mock load_dotenv function
+    sys.modules["dotenv"] = Mock()
+    sys.modules["dotenv"].load_dotenv = Mock()
+
+try:
+    from pydantic import BaseModel  # noqa: F401
+except ImportError:
+    import sys
+    from unittest.mock import Mock
+
+    # Create a minimal mock for pydantic
+    mock_pydantic = Mock()
+
+    # Mock BaseModel
+    class MockBaseModel:
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+        def model_dump(self):
+            return self.__dict__
+
+    mock_pydantic.BaseModel = MockBaseModel
+    mock_pydantic.Field = lambda default=None, **kwargs: default
+    mock_pydantic.field_validator = lambda field_name, **kwargs: lambda func: func
+    mock_pydantic.model_validator = lambda mode, **kwargs: lambda func: func
+    mock_pydantic.ValidationError = ValueError
+
+    sys.modules["pydantic"] = mock_pydantic
+
+# Now we can safely import crawler modules
+from crawler.config import CrawlerConfig
 
 
 def pytest_addoption(parser):

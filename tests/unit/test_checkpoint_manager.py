@@ -4,6 +4,8 @@ from unittest.mock import Mock
 
 import pytest
 
+# Import test setup to configure path and mocks
+
 from crawler.rate_limiter import AdaptiveRateLimiter
 from crawler.utils.checkpoint import CheckpointManager
 

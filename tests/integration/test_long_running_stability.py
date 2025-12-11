@@ -45,9 +45,9 @@ def test_memory_usage_stability_during_crawling(integration_test_dir):
     memory_increase_per_minute = memory_increase / ((end_time - start_time) / 60)
 
     assert success, "Crawling should complete successfully"
-    assert (
-        memory_increase_per_minute < 50
-    ), f"Memory leak detected: {memory_increase_per_minute:.2f} MB/min"
+    assert memory_increase_per_minute < 50, (
+        f"Memory leak detected: {memory_increase_per_minute:.2f} MB/min"
+    )
     assert final_memory < initial_memory + 500, f"Excessive memory usage: {final_memory:.2f} MB"
 
 
@@ -137,9 +137,9 @@ def test_graceful_shutdown_handling(integration_test_dir):
     assert coordinator.output_dir.exists(), "Output directory should exist"
 
     # Check that writer methods exist
-    assert hasattr(
-        coordinator.transaction_writer, "write"
-    ), "Transaction writer should have write method"
+    assert hasattr(coordinator.transaction_writer, "write"), (
+        "Transaction writer should have write method"
+    )
     assert hasattr(coordinator.complexes_writer, "write"), "Complex writer should have write method"
 
 

@@ -682,14 +682,14 @@ class TestRateLimiting:
         client = HogangnonoAPIClient(config)
 
         # 초기값 확인
-        assert (
-            client.rate_limiter.current_delay == 2.0
-        ), f"Expected 2.0, got {client.rate_limiter.current_delay}"
-        assert (
-            client.rate_limiter.min_delay == 1.0
-        ), f"Expected 1.0, got {client.rate_limiter.min_delay}"
+        assert client.rate_limiter.current_delay == 2.0, (
+            f"Expected 2.0, got {client.rate_limiter.current_delay}"
+        )
+        assert client.rate_limiter.min_delay == 1.0, (
+            f"Expected 1.0, got {client.rate_limiter.min_delay}"
+        )
 
         # 최대값 확인
-        assert (
-            client.rate_limiter.max_delay == 10.0
-        ), f"Expected 10.0, got {client.rate_limiter.max_delay}"
+        assert client.rate_limiter.max_delay == 10.0, (
+            f"Expected 10.0, got {client.rate_limiter.max_delay}"
+        )

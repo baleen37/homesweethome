@@ -1,8 +1,9 @@
 """Tests for AdaptiveRateLimiter class."""
 
+# Import test setup to configure path and mocks
+
 import time
 from unittest.mock import patch
-
 
 from crawler.rate_limiter import AdaptiveRateLimiter
 
