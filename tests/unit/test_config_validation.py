@@ -20,15 +20,15 @@ class TestConfigValidation:
         with pytest.raises(ValueError, match="page_size은 1 이상이어야 합니다"):
             CrawlerConfig(page_size=0)
 
-        # page_size가 100 초과인 경우
-        with pytest.raises(ValueError, match="page_size은 100 이하여야 합니다"):
-            CrawlerConfig(page_size=101)
+        # page_size가 200 초과인 경우 (Hogangnono는 200까지 허용)
+        with pytest.raises(ValueError, match="page_size은 200 이하여야 합니다"):
+            CrawlerConfig(page_size=201)
 
     def test_negative_timeout_validation(self):
         """음수 timeout 값 검증"""
-        # timeout이 0 미만인 경우
-        with pytest.raises(ValueError, match="timeout은 0 이상이어야 합니다"):
-            CrawlerConfig(timeout=-1)
+        # timeout이 1 미만인 경우 (Hogangnono는 1 이상을 요구)
+        with pytest.raises(ValueError, match="timeout은 1 이상이어야 합니다"):
+            CrawlerConfig(timeout=0)
 
         # timeout이 300 초과인 경우
         with pytest.raises(ValueError, match="timeout은 300 이하여야 합니다"):
@@ -47,10 +47,10 @@ class TestConfigValidation:
     @patch.dict(
         os.environ,
         {
-            "CRAWLER_PAGE_SIZE": "0",
+            "HOGANGNONO_PAGE_SIZE": "0",
             "CRAWLER_TIMEOUT": "301",
             "CRAWLER_RETRY_ATTEMPTS": "-1",
-            "CRAWLER_DELAY_SECONDS": "0.1",
+            "HOGANGNONO_RATE_LIMIT": "0.05",
             "CRAWLER_MAX_WORKERS": "0",
         },
     )
@@ -86,7 +86,7 @@ class TestConfigValidation:
         with pytest.raises(
             ValidationError, match="너무 많은 worker와 짧은 delay는 서버에 부하를 줄 수 있습니다"
         ):
-            CrawlerConfig(max_workers=10, delay_seconds=0.1, use_threading=True)
+            CrawlerConfig(max_workers=10, rate_limit_delay=0.1, use_threading=True)
 
         # timeout이 retry_attempts * retry_delay보다 작은 경우
         with pytest.raises(ValidationError, match="timeout.*전체 재시도 시간"):
@@ -100,7 +100,7 @@ class TestConfigValidation:
             timeout=30,
             retry_attempts=3,
             retry_delay=1,
-            delay_seconds=1.0,
+            rate_limit_delay=1.0,
             max_workers=4,
             use_threading=True,
         )
@@ -109,7 +109,7 @@ class TestConfigValidation:
         assert config.timeout == 30
         assert config.retry_attempts == 3
         assert config.retry_delay == 1
-        assert config.delay_seconds == 1.0
+        assert config.rate_limit_delay == 1.0
         assert config.max_workers == 4
         assert config.use_threading is True
 
@@ -120,14 +120,14 @@ class TestConfigValidation:
             CrawlerConfig(output_file="/nonexistent/directory/data.csv")
 
     def test_delay_range_validation(self):
-        """delay_seconds 범위 검증"""
-        # delay_seconds가 0.1 미만인 경우
-        with pytest.raises(ValueError, match="delay_seconds은 0.1 이상이어야 합니다"):
-            CrawlerConfig(delay_seconds=0.05)
+        """rate_limit_delay 범위 검증"""
+        # rate_limit_delay가 0.1 미만인 경우
+        with pytest.raises(ValueError, match="rate_limit_delay는 0.1 이상이어야 합니다"):
+            CrawlerConfig(rate_limit_delay=0.05)
 
-        # delay_seconds가 60 초과인 경우
-        with pytest.raises(ValueError, match="delay_seconds은 60 이하여야 합니다"):
-            CrawlerConfig(delay_seconds=61)
+        # rate_limit_delay가 60 초과인 경우
+        with pytest.raises(ValueError, match="rate_limit_delay는 60 이하여야 합니다"):
+            CrawlerConfig(rate_limit_delay=61)
 
     def test_max_workers_validation(self):
         """max_workers 범위 검증"""

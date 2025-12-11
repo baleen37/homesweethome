@@ -8,9 +8,9 @@ def test_config_default_values() -> None:
     assert config.timeout == 30
     assert config.headless is True
     assert config.output_file is None
-    assert config.page_size == 20
+    assert config.page_size == 50  # Updated to match Hogangnono default
     assert config.retry_attempts == 3
-    assert config.delay_seconds == 2.0
+    assert config.rate_limit_delay == 2.0  # Updated from delay_seconds
     assert config.use_threading is False
     assert config.max_workers == 4
 
