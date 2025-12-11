@@ -550,6 +550,25 @@ A: 모든 가격은 만원 단위입니다. 예를 들어 276,500은 2억 7,650�
 **Q: 응답 데이터의 시간대는 어떻게 되나요?**
 A: 모든 날짜/시간은 한국 시간 기준이며, monthly-reports의 date 필드는 해당 월의 마지막 일자 15:00으로 설정됩니다.
 
+### Implementation Notes
+
+#### Bounding Box Division
+Our implementation automatically divides bounding boxes when 600 POIs are detected:
+- Uses simple 2x2 grid division (4 sub-boxes)
+- Automatically retries with divided boxes when limit reached
+- Maintains rate limiting across all sub-requests
+
+#### Rate Limiting
+We've optimized our rate limiting based on API guide recommendations:
+- Initial delay: 2 seconds (reduced from 5)
+- Minimum delay: 1 second (reduced from 1.5)
+- Adaptive adjustment based on API responses
+
+#### Session Management
+- Automatic recovery on 401/403 errors
+- Session cookies managed transparently
+- Headers standardized per API guide requirements
+
 ### 변경 로그
 
 #### v2.1 (2025-12-11)
