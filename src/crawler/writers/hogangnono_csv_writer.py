@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any, List, Dict
 from datetime import datetime
 
-from crawler.writers.csv_writer import CSVWriter
+from crawler.writers.hogangnono_complexes_writer import HogangnonoComplexesCSVWriter
+from crawler.writers.hogangnono_transactions_writer import HogangnonoTransactionsCSVWriter
 
 
 class HogangnonoCSVWriter:
@@ -21,39 +22,8 @@ class HogangnonoCSVWriter:
     """
 
     # 네이버 CSV 형식 필드명 (기존 TransactionCSVWriter와 동일)
-    COMPLEXES_FIELDNAMES = [
-        "complex_id",
-        "complex_name",
-        "real_estate_type",
-        "completion_year_month",
-        "total_dong_count",
-        "total_household_count",
-        "min_area",
-        "max_area",
-        "deal_count",
-        "lease_count",
-        "rent_count",
-        "pyeong_types",
-        "fetched_at",
-    ]
-
-    TRANSACTIONS_FIELDNAMES = [
-        "complex_id",
-        "complex_name",
-        "pyeong_type_number",
-        "pyeong_name",
-        "trade_type",
-        "trade_type_name",
-        "trade_date",
-        "trade_year",
-        "floor",
-        "deal_price",
-        "deposit",
-        "monthly_rent",
-        "trade_category",
-        "is_delete",
-        "is_renew",
-    ]
+    COMPLEXES_FIELDNAMES = HogangnonoComplexesCSVWriter.FIELDNAMES
+    TRANSACTIONS_FIELDNAMES = HogangnonoTransactionsCSVWriter.FIELDNAMES
 
     def __init__(self, output_dir: str = "output") -> None:
         """HogangnonoCSVWriter 초기화
@@ -65,13 +35,9 @@ class HogangnonoCSVWriter:
         self.complexes_path = self.output_dir / "complexes.csv"
         self.transactions_path = self.output_dir / "transactions.csv"
 
-        # CSV writer 인스턴스 생성
-        self.complexes_writer = CSVWriter(self.complexes_path)
-        self.transactions_writer = CSVWriter(self.transactions_path)
-
-        # 파일 생성 여부 추적
-        self._complexes_file_exists = self.complexes_path.exists()
-        self._transactions_file_exists = self.transactions_path.exists()
+        # 전용 CSV writer 인스턴스 생성
+        self.complexes_writer = HogangnonoComplexesCSVWriter(self.complexes_path)
+        self.transactions_writer = HogangnonoTransactionsCSVWriter(self.transactions_path)
 
     def save_complexes(self, complexes_data: List[Dict[str, Any]]) -> None:
         """단지 데이터를 complexes.csv로 저장
@@ -85,17 +51,8 @@ class HogangnonoCSVWriter:
         # 출력 디렉토리 생성
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # 네이버 형식으로 변환
-        naver_format_data = [
-            self.transform_complex_to_naver_format(complex_data) for complex_data in complexes_data
-        ]
-
-        # 파일이 존재하지 않으면 헤더 포함하여 쓰기
-        mode = "a" if self._complexes_file_exists else "w"
-        self.complexes_writer.write(naver_format_data, mode=mode)
-
-        if mode == "w":
-            self._complexes_file_exists = True
+        # 전용 writer를 사용하여 데이터 저장 (내부에서 정규화됨)
+        self.complexes_writer.append(complexes_data)
 
     def save_transactions(self, transactions_data: List[Dict[str, Any]]) -> None:
         """거래내역 데이터를 transactions.csv로 저장
@@ -109,18 +66,8 @@ class HogangnonoCSVWriter:
         # 출력 디렉토리 생성
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # 네이버 형식으로 변환
-        naver_format_data = [
-            self.transform_transaction_to_naver_format(transaction)
-            for transaction in transactions_data
-        ]
-
-        # 파일이 존재하지 않으면 헤더 포함하여 쓰기
-        mode = "a" if self._transactions_file_exists else "w"
-        self.transactions_writer.write(naver_format_data, mode=mode)
-
-        if mode == "w":
-            self._transactions_file_exists = True
+        # 전용 writer를 사용하여 데이터 저장 (내부에서 정규화됨)
+        self.transactions_writer.append(transactions_data)
 
     def transform_to_naver_format(
         self, hogangnono_data: Dict[str, Any], data_type: str = "complex"
@@ -398,37 +345,12 @@ class HogangnonoCSVWriter:
         Returns:
             파일 통계 정보
         """
-        stats = {
-            "complexes_file_size": 0,
-            "transactions_file_size": 0,
-            "complexes_record_count": 0,
-            "transactions_record_count": 0,
+        complexes_info = self.complexes_writer.get_file_info()
+        transactions_info = self.transactions_writer.get_file_info()
+
+        return {
+            "complexes_file_size": complexes_info["file_size"],
+            "transactions_file_size": transactions_info["file_size"],
+            "complexes_record_count": complexes_info["record_count"],
+            "transactions_record_count": transactions_info["record_count"],
         }
-
-        try:
-            if self.complexes_path.exists():
-                stats["complexes_file_size"] = self.complexes_path.stat().st_size
-
-                # 레코드 수 계산 (헤더 제외)
-                with open(self.complexes_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                    if lines:
-                        stats["complexes_record_count"] = len(lines) - 1
-
-        except Exception:
-            pass
-
-        try:
-            if self.transactions_path.exists():
-                stats["transactions_file_size"] = self.transactions_path.stat().st_size
-
-                # 레코드 수 계산 (헤더 제외)
-                with open(self.transactions_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                    if lines:
-                        stats["transactions_record_count"] = len(lines) - 1
-
-        except Exception:
-            pass
-
-        return stats

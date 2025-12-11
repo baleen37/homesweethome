@@ -153,17 +153,17 @@ class TestTransactionCSVWriter(TestCase):
             # 다른 필드들은 누락
         }
 
-        normalized = self.writer._normalize_transaction(incomplete_transaction)
+        normalized = self.writer._normalize_row(incomplete_transaction)
 
         # 모든 필드가 있는지 확인
         for field in TransactionCSVWriter.FIELDNAMES:
             self.assertIn(field, normalized)
 
         # 누락된 필드가 기본값으로 채워졌는지 확인
-        self.assertEqual(normalized["pyeong_type_number"], 0)
-        self.assertEqual(normalized["deal_price"], 0)
-        self.assertEqual(normalized["deposit"], 0)
-        self.assertEqual(normalized["monthly_rent"], 0)
+        self.assertEqual(normalized["pyeong_type_number"], "0")
+        self.assertEqual(normalized["deal_price"], "0")
+        self.assertEqual(normalized["deposit"], "0")
+        self.assertEqual(normalized["monthly_rent"], "0")
         self.assertEqual(normalized["is_delete"], False)
         self.assertEqual(normalized["is_renew"], False)
         self.assertEqual(normalized["trade_type"], "")
@@ -181,7 +181,7 @@ class TestTransactionCSVWriter(TestCase):
         ]
 
         for i, case in enumerate(test_cases):
-            normalized = self.writer._normalize_transaction(case)  # type: ignore[arg-type]
+            normalized = self.writer._normalize_row(case)  # type: ignore[arg-type]
             case_dict: dict[str, Any] = case  # type: ignore[assignment]
             self.assertEqual(
                 normalized["is_delete"],

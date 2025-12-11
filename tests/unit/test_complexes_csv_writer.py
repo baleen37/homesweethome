@@ -132,7 +132,7 @@ class TestComplexesCSVWriter(TestCase):
             # 다른 필드들은 누락
         }
 
-        normalized = self.writer._normalize_complex_data(incomplete_data)
+        normalized = self.writer._normalize_row(incomplete_data)
 
         # 모든 필드가 있는지 확인
         for field in ComplexesCSVWriter.FIELDNAMES:
