@@ -110,42 +110,6 @@ class HogangnonoCrawler(APICrawler):
                 return json.load(f)
         return {}
 
-    def fetch_dong_codes(
-        self, district_name: str, lat: float = None, lng: float = None
-    ) -> Dict[str, str]:
-        """API를 통해 동 코드 정보 가져오기"""
-        search_url = "https://hogangnono.com/api/v2/searches/new"
-        params = {"query": district_name}
-        if lat is not None:
-            params["y"] = lat
-        if lng is not None:
-            params["x"] = lng
-
-        try:
-            response = self.session.get(search_url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-
-            if data.get("status") != "success":
-                return {}
-
-            dongs = {}
-            matched = data.get("data", {}).get("matched", {})
-
-            if "region" in matched:
-                for item in matched["region"].get("list", []):
-                    if item.get("local_type") == "local3":  # 동 정보
-                        dong_name = item.get("local3_name", "")
-                        dong_code = item.get("local3_code", "")
-                        if dong_name and dong_code:
-                            dongs[dong_name] = dong_code
-
-            return dongs
-
-        except Exception as e:
-            self.logger.error("fetch_dong_codes_error", district=district_name, error=str(e))
-            return {}
-
     def get_dong_code(self, district_name: str, dong_name: str) -> Optional[str]:
         """동 이름으로 코드 조회"""
         # 캐시된 정보 확인
@@ -153,7 +117,7 @@ class HogangnonoCrawler(APICrawler):
             return self.dong_code_mapping[district_name].get(dong_name)
 
         # API에서 가져오기
-        dongs = self.fetch_dong_codes(district_name)
+        dongs = self.hogangnono_client.fetch_dong_codes(district_name)
         if dongs:
             # 캐시 업데이트
             if district_name not in self.dong_code_mapping:
