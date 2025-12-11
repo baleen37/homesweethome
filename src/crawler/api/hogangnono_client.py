@@ -584,6 +584,34 @@ class HogangnonoAPIClient:
 
         api_response = APIResponse.from_response(response)
 
+        # Auto-recover from auth errors (401/403)
+        if response.status_code in [401, 403]:
+            self.logger.warning(
+                "Auth error detected, reinitializing session",
+                status_code=response.status_code,
+                error=api_response.error,
+            )
+            # Reset session and retry once
+            self._session_initialized = False
+            if self._initialize_session():
+                self.logger.info("Session reinitialized, retrying request")
+                response = self.session.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    json=data,
+                    headers=request_headers,
+                    timeout=self.config.timeout,
+                )
+                api_response = APIResponse.from_response(response)
+            else:
+                self.logger.error("Failed to reinitialize session")
+                return APIResponse(
+                    success=False,
+                    error="Failed to reinitialize session after auth error",
+                    status_code=response.status_code,
+                )
+
         # Rate limiter 피드백
         if api_response.success:
             self.rate_limiter.on_success()

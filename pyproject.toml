@@ -61,4 +61,5 @@ dev = [
     "vulture>=2.14",
     "mypy>=1.19.0",
     "ruff>=0.14.8",
+    "requests-mock>=1.12.1",
 ]
