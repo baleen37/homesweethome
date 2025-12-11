@@ -185,7 +185,6 @@ class TestHogangnonoAPIClientTDD:
         """API 헤더 구조 테스트
 
         Expected: 올바른 API 요청 헤더를 생성해야 함
-        현재 상태: 실패할 것임 (헤더 필수 값 누락 가능)
         """
         headers = client._get_api_headers()
 
@@ -197,12 +196,24 @@ class TestHogangnonoAPIClientTDD:
         assert "X-Requested-With" in headers
         assert headers["X-Requested-With"] == "XMLHttpRequest"
 
+        # 헤더 값 검증
+        assert "application/json, text/plain, */*" in headers["Accept"]
+        assert "no-cache" in headers["Cache-Control"]
+        assert "Pragma" in headers
+        assert "Sec-Ch-Ua" in headers
+        assert "Sec-Ch-Ua-Mobile" in headers
+        assert "Sec-Ch-Ua-Platform" in headers
+        assert "Sec-Fetch-Dest" in headers
+        assert "Sec-Fetch-Mode" in headers
+        assert "Sec-Fetch-Site" in headers
+        assert "Referer" in headers
+        assert "Origin" in headers
+
     @patch("requests.Session.request")
     def test_make_request_with_cookies(self, mock_request, client):
         """쿠키와 함께 요청 테스트
 
         Expected: 세션 쿠키를 포함하여 API 요청을 보내야 함
-        현재 상태: 실패할 것임 (쿠키 처리 미완성)
         """
         # Mock 응답 설정
         mock_response = Mock()
@@ -229,13 +240,36 @@ class TestHogangnonoAPIClientTDD:
 
             # 헤더 확인
             assert "headers" in call_kwargs
-            assert call_kwargs["headers"]["User-Agent"] == client.config.user_agent
+            headers = call_kwargs["headers"]
+
+            # 헤더 필드 검증
+            assert "User-Agent" in headers
+            assert "Accept" in headers
+            assert "Referer" in headers
+            assert "Origin" in headers
+            assert "X-Requested-With" in headers
+            assert headers["X-Requested-With"] == "XMLHttpRequest"
+
+            # 헤더 값 검증
+            assert "application/json, text/plain, */*" in headers["Accept"]
+            assert "no-cache" in headers["Cache-Control"]
+            assert "Pragma" in headers
+            assert "Sec-Ch-Ua" in headers
+            assert "Sec-Ch-Ua-Mobile" in headers
+            assert "Sec-Ch-Ua-Platform" in headers
+            assert "Sec-Fetch-Dest" in headers
+            assert "Sec-Fetch-Mode" in headers
+            assert "Sec-Fetch-Site" in headers
+            assert "Referer" in headers
+            assert "Origin" in headers
+
+            # User-Agent 확인
+            assert headers["User-Agent"] == client.config.user_agent
 
     def test_get_apartments_bounding_endpoint(self, client):
         """아파트 바운딩 엔드포인트 테스트
 
         Expected: 올바른 엔드포인트로 요청을 보내야 함
-        현재 상태: 실패할 것임 (엔드포인트 불확실)
         """
         search_params = SearchParams(
             bbox=(126.8781, 37.4132, 127.1834, 37.7151),
@@ -589,7 +623,10 @@ class TestErrorHandlingTDD:
             assert len(response.data["regionList"]) > 0
 
             mock_request.assert_called_once_with(
-                method="GET", endpoint="/api/v2/regions", params={}
+                method="GET",
+                endpoint="/api/v2/regions",
+                params={},
+                headers={"User-Agent": client.config.user_agent, "Accept": "application/json"},
             )
 
     def test_get_apartment_detail_success(self, client):

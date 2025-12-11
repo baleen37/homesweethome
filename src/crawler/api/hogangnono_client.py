@@ -46,6 +46,15 @@ class SearchParams:
     # 유효한 tradeType 값
     VALID_TRADE_TYPES = {0, 1, 2}  # 0:매매, 1:전세, 2:월세
 
+    # 유효한 aptType 값
+    VALID_APT_TYPES = {-1, 0, 1, 2}  # -1:전체, 0:아파트, 1:주상복합, 2:오피스텔
+
+    # 유효한 priceType 값
+    VALID_PRICE_TYPES = {0, 1, 2}  # 0:전체, 1:매매, 2:전세
+
+    # 유효한 rentType 값
+    VALID_RENT_TYPES = {0, 1, 2}  # 0:전체, 1:월세, 2:단기임대
+
     def __init__(
         self,
         startX: Optional[float] = None,
@@ -58,9 +67,11 @@ class SearchParams:
         areaTo: Optional[float] = None,
         priceFrom: Optional[int] = None,
         priceTo: Optional[int] = None,
+        aptType: Optional[int] = -1,  # Restore default value for backward compatibility
+        priceType: Optional[int] = 0,
+        rentType: Optional[int] = 0,
         map: str = "google",
         bbox: Optional[tuple[float, float, float, float]] = None,
-        aptType: Optional[int] = None,  # Added missing aptType parameter
     ):
         # Initialize all attributes to avoid AttributeError
         self.startX = startX
@@ -122,6 +133,21 @@ class SearchParams:
         self.priceFrom = priceFrom
         self.priceTo = priceTo
 
+        # aptType 유효성 검사
+        if aptType is not None and aptType not in self.VALID_APT_TYPES:
+            raise ValueError(f"aptType must be one of {self.VALID_APT_TYPES}, got {aptType}")
+        self.aptType = aptType
+
+        # priceType 유효성 검사 (새 파라미터)
+        if priceType is not None and priceType not in self.VALID_PRICE_TYPES:
+            raise ValueError(f"priceType must be one of {self.VALID_PRICE_TYPES}, got {priceType}")
+        self.priceType = priceType
+
+        # rentType 유효성 검사 (새 파라미터)
+        if rentType is not None and rentType not in self.VALID_RENT_TYPES:
+            raise ValueError(f"rentType must be one of {self.VALID_RENT_TYPES}, got {rentType}")
+        self.rentType = rentType
+
         self.map = map
 
     def to_dict(self) -> dict[str, Any]:
@@ -158,6 +184,14 @@ class SearchParams:
         # aptType 포함
         if self.aptType is not None:
             params["aptType"] = self.aptType
+
+        # priceType 포함
+        if hasattr(self, "priceType") and self.priceType is not None:
+            params["priceType"] = self.priceType
+
+        # rentType 포함
+        if hasattr(self, "rentType") and self.rentType is not None:
+            params["rentType"] = self.rentType
 
         # 호갱노노 API 특정 파라미터
         params["screenWidth"] = 1200
@@ -255,13 +289,13 @@ class APIResponse:
                         error_msg = f"HTTP error: {status_code} {response.reason if hasattr(response, 'reason') else ''} - {data['message']}"
 
                     return cls(
-                        success=not http_error,
-                        data=data if not http_error else None,
+                        success=not http_error and data is not None,
+                        data=data if not http_error and data is not None else None,
                         error=error_msg
                         if error_msg
                         else (
                             None
-                            if not http_error
+                            if not http_error and data is not None
                             else f"HTTP error: {status_code} {response.reason if hasattr(response, 'reason') else ''}"
                         ),
                         status_code=status_code,
@@ -635,27 +669,12 @@ class HogangnonoAPIClient:
         params = search_params.to_dict()
 
         # 호갱노노 API 엔드포인트 (아파트 데이터용)
-        # Try different endpoints
-        endpoints = [
-            "/api/apt/bounding",  # Original v1 endpoint
-            "/api/v2/apt/bounding",  # New v2 endpoint
-            "/api/apt/list",  # Alternative endpoint
-        ]
-
-        for endpoint in endpoints:
-            try:
-                return self._make_request(
-                    method="GET",
-                    endpoint=endpoint,
-                    params=params,
-                )
-            except Exception as e:
-                if "Not Found" in str(e) or "400" in str(e):
-                    continue
-                raise e
-
-        # If all endpoints fail, raise an error
-        raise Exception("All API endpoints failed for bounding box query")
+        # Use the original endpoint for backward compatibility
+        return self._make_request(
+            method="GET",
+            endpoint="/api/v2/pois-bounding",
+            params=params,
+        )
 
     @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_ranking(self, rank_type: str = "daily", limit: int = 100) -> APIResponse:

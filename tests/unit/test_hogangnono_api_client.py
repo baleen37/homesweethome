@@ -16,7 +16,7 @@ from crawler.config import CrawlerConfig
 def config():
     """테스트용 설정 객체"""
     return CrawlerConfig(
-        user_agent="Mozilla/5.0 (Test)",
+        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
         timeout=10,
     )
 
@@ -158,9 +158,19 @@ class TestGetRegions:
 
             client.get_regions(region_code="11")
 
-            mock_request.assert_called_once_with(
-                method="GET", endpoint="/api/v2/regions", params={"regionCode": "11"}
-            )
+            # Verify the call was made with correct parameters and headers
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+
+            # Check method, endpoint, and params
+            assert call_args[0] == "GET"
+            assert call_args[1] == "/api/v2/regions"
+            assert call_args[2]["params"] == {"regionCode": "11"}
+
+            # Check basic headers
+            headers = call_args[2]["headers"]
+            assert headers["User-Agent"] == client.config.user_agent
+            assert "application/json" in headers["Accept"]
 
     def test_get_regions_empty_response(self, client):
         """빈 응답 처리"""
@@ -242,9 +252,19 @@ class TestGetApartmentDetail:
 
             client.get_apartment_detail("1Hq6f")
 
-            mock_request.assert_called_once_with(
-                method="GET", endpoint="/api/v2/apts/1Hq6f", params={}
-            )
+            # Verify the call was made with correct parameters and headers
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+
+            # Check method, endpoint, and params
+            assert call_args[0] == "GET"
+            assert call_args[1] == "/api/v2/apts/1Hq6f"
+            assert call_args[2]["params"] == {}
+
+            # Check basic headers
+            headers = call_args[2]["headers"]
+            assert headers["User-Agent"] == client.config.user_agent
+            assert "application/json" in headers["Accept"]
 
 
 class TestGetApartmentTransactions:
@@ -382,11 +402,19 @@ class TestGetApartmentTransactions:
 
             client.get_apartment_transactions("1Hq6f", trade_type=0, area_no=0)
 
-            mock_request.assert_called_once_with(
-                method="GET",
-                endpoint="/api/v2/apts/1Hq6f/monthly-reports",
-                params={"tradeType": 0, "areaNo": 0},
-            )
+            # Verify the call was made with correct parameters and headers
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+
+            # Check method, endpoint, and params
+            assert call_args[0] == "GET"
+            assert call_args[1] == "/api/v2/apts/1Hq6f/monthly-reports"
+            assert call_args[2]["params"] == {"tradeType": 0, "areaNo": 0}
+
+            # Check basic headers
+            headers = call_args[2]["headers"]
+            assert headers["User-Agent"] == client.config.user_agent
+            assert "application/json" in headers["Accept"]
 
     def test_get_transactions_verify_endpoint_full(self, client):
         """전체 기간 조회 시 올바른 엔드포인트 호출 확인"""
@@ -399,11 +427,19 @@ class TestGetApartmentTransactions:
 
             client.get_apartment_transactions("1Hq6f", trade_type=1, area_no=1, full_period=True)
 
-            mock_request.assert_called_once_with(
-                method="GET",
-                endpoint="/api/v2/apts/1Hq6f/monthly-reports/more",
-                params={"tradeType": 1, "areaNo": 1},
-            )
+            # Verify the call was made with correct parameters and headers
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+
+            # Check method, endpoint, and params
+            assert call_args[0] == "GET"
+            assert call_args[1] == "/api/v2/apts/1Hq6f/monthly-reports/more"
+            assert call_args[2]["params"] == {"tradeType": 1, "areaNo": 1}
+
+            # Check basic headers
+            headers = call_args[2]["headers"]
+            assert headers["User-Agent"] == client.config.user_agent
+            assert "application/json" in headers["Accept"]
 
     def test_get_transactions_invalid_apt_id(self, client):
         """유효하지 않은 아파트 ID"""

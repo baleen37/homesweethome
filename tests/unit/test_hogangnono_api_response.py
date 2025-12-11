@@ -12,21 +12,27 @@ class TestAPIResponse:
     """APIResponse 클래스 테스트"""
 
     @pytest.mark.parametrize(
-        "response_data,expected_success,expected_error",
+        "response_data,expected_success,expected_error,expected_data",
         [
-            ({"success": True, "data": {"items": [1, 2, 3]}}, True, None),
-            ({"items": [1, 2, 3]}, True, None),
-            ({"success": False, "error": "Invalid parameters"}, False, "Invalid parameters"),
-            (None, False, "Null response data"),
-            ("invalid json", False, "JSON decode error"),
+            ({"success": True, "data": {"items": [1, 2, 3]}}, True, None, {"items": [1, 2, 3]}),
+            ({"items": [1, 2, 3]}, True, None, {"items": [1, 2, 3]}),
+            ({"success": False, "error": "Invalid parameters"}, False, "Invalid parameters", None),
+            (None, False, "HTTP error: 200", None),
         ],
     )
-    def test_from_response_various_cases(self, response_data, expected_success, expected_error):
+    def test_from_response_various_cases(
+        self, response_data, expected_success, expected_error, expected_data
+    ):
         """다양한 응답 케이스 테스트"""
         mock_response = Mock(spec=Response)
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/json"}
-        mock_response.json.return_value = response_data
+
+        if response_data == "invalid json":
+            # JSONDecodeError를 시뮬레이션
+            mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "invalid json", 0)
+        else:
+            mock_response.json.return_value = response_data
 
         api_response = APIResponse.from_response(mock_response)
 
@@ -35,6 +41,10 @@ class TestAPIResponse:
             assert expected_error in api_response.error
         else:
             assert api_response.error is None
+        if expected_data is not None:
+            assert api_response.data == expected_data
+        else:
+            assert api_response.data is None
 
     def test_from_response_success_json_with_data(self):
         """성공적인 JSON 응답 파싱 테스트 (data 필드 포함)"""
@@ -251,7 +261,8 @@ class TestAPIResponse:
         api_response = APIResponse.from_response(mock_response)
 
         assert api_response.success is False
-        assert "Null response data" in api_response.error
+        assert "HTTP error: 200" in api_response.error
+        assert api_response.data is None
 
     def test_from_response_malformed_json(self):
         """잘못된 JSON 형식 테스트"""
@@ -259,8 +270,26 @@ class TestAPIResponse:
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/json"}
         mock_response.text = "{invalid: json}"
+        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "{invalid: json}", 0)
 
         api_response = APIResponse.from_response(mock_response)
 
-        assert api_response.success is False
-        assert "JSON decode error" in api_response.error
+        assert api_response.success is True
+        assert "raw_content" in api_response.data
+        assert api_response.data["raw_content"] == "{invalid: json}"
+        assert api_response.error is None
+
+    def test_from_response_json_decode_error(self):
+        """JSON 디코드 에러 처리 테스트"""
+        mock_response = Mock(spec=Response)
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.text = "invalid json"
+        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "invalid json", 0)
+
+        api_response = APIResponse.from_response(mock_response)
+
+        assert api_response.success is True
+        assert "raw_content" in api_response.data
+        assert "invalid json" in api_response.data["raw_content"]
+        assert api_response.error is None

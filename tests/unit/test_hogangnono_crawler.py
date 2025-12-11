@@ -7,6 +7,7 @@ import pytest
 from crawler.config import CrawlerConfig
 from crawler.crawlers.hogangnono import HogangnonoCrawler
 from crawler.api.hogangnono_client import APIResponse
+from crawler.utils.checkpoint import CheckpointManager
 
 
 @pytest.fixture
@@ -216,7 +217,7 @@ class TestHogangnonoCrawler:
         assert len(transactions) == 0
         assert complexes[0]["complex_name"] == "아파트1"
 
-  def test_save_to_csv(self, crawler, temp_output_dir):
+    def test_save_to_csv(self, crawler, temp_output_dir):
         """CSV 저장 테스트"""
         complexes = [
             {
@@ -444,3 +445,9 @@ class TestHogangnonoCrawler:
                         mock_crawl.assert_called_once()
                         assert stats["dongs_processed"] == 1
                         assert stats["total_dongs"] == 1
+
+    def test_checkpoint_manager_initialization(self, crawler):
+        """체크포인트 매니저 초기화 테스트"""
+        assert crawler.checkpoint_manager is not None
+        assert crawler.checkpoint_manager.checkpoint is not None
+        assert isinstance(crawler.checkpoint_manager, CheckpointManager)

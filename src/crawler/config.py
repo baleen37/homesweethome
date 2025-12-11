@@ -413,9 +413,9 @@ class CrawlerConfig(BaseModel):
                     if hasattr(crawler_config.hogangnono, key):
                         setattr(crawler_config.hogangnono, key, value)
 
-            # 호갱노노 API 키 검증
-            if site == "hogangnono" and not crawler_config.hogangnono.api_key:
-                raise ValueError("호갱노노를 사용하려면 HOGANGNONO_API_KEY 환경 변수가 필요합니다")
+            # 호갱노노 API 키 검증 - API 키 없이도 작동하도록 수정
+            # if site == "hogangnono" and not crawler_config.hogangnono.api_key:
+            #     raise ValueError("호갱노노를 사용하려면 HOGANGNONO_API_KEY 환경 변수가 필요합니다")
 
             return crawler_config
         except ValueError as e:
