@@ -540,6 +540,129 @@ class TestHogangnonoCrawlerIntegrationTDD:
         assert crawler.transaction_writer.output_path.exists()
 
 
+class TestBboxDivisionTDD:
+    """bbox 분할 기능 TDD 테스트 - Red 단계"""
+
+    @pytest.fixture
+    def config(self):
+        return CrawlerConfig(
+            user_agent="Test Agent",
+            timeout=10.0,
+        )
+
+    @pytest.fixture
+    def crawler(self, config):
+        from crawler.crawlers.hogangnono import HogangnonoCrawler
+
+        return HogangnonoCrawler(
+            config=config,
+            output_dir="test_output",
+            region_bounds=(37.413294, 126.734086, 37.715133, 127.183394),
+        )
+
+    def test_divide_bounding_box_creates_2x2_grid(self, crawler):
+        """bbox 분할이 2x2 그리드를 생성하는지 테스트
+
+        Expected: bbox를 4개의 작은 영역으로 나누어야 함
+        현재 상태: 실패할 것임 (_divide_bounding_box 메서드가 구현되지 않음)
+        """
+        # 서울시 전체 bbox
+        lat_min, lng_min, lat_max, lng_max = 37.413294, 126.734086, 37.715133, 127.183394
+
+        # 분할 시도
+        boxes = crawler._divide_bounding_box(lat_min, lng_min, lat_max, lng_max)
+
+        # 4개의 박스가 생성되어야 함
+        assert len(boxes) == 4
+
+        # 각 박스는 (lat_min, lng_min, lat_max, lng_max) 형태여야 함
+        for box in boxes:
+            assert len(box) == 4
+            assert box[0] < box[2]  # lat_min < lat_max
+            assert box[1] < box[3]  # lng_min < lng_max
+
+    def test_divide_bounding_box_coordinates(self, crawler):
+        """bbox 분별 시 좌표가 올바르게 계산되는지 테스트
+
+        Expected: 첫 번째와 마지막 박스의 좌표가 예상과 일치해야 함
+        현재 상태: 실패할 것임 (_divide_bounding_box 메서드가 구현되지 않음)
+        """
+        # 서울시 bbox: (37.413294, 126.734086, 37.715133, 127.183394)
+        lat_min, lng_min, lat_max, lng_max = 37.413294, 126.734086, 37.715133, 127.183394
+
+        boxes = crawler._divide_bounding_box(lat_min, lng_min, lat_max, lng_max)
+
+        # 첫 번째 박스 (남서부): (lat_min, lng_min, lat_mid, lng_mid)
+        first_box = boxes[0]
+        expected_lat_mid = (lat_min + lat_max) / 2
+        expected_lng_mid = (lng_min + lng_max) / 2
+
+        assert first_box[0] == pytest.approx(lat_min)  # 남쪽 위도
+        assert first_box[1] == pytest.approx(lng_min)  # 서쪽 경도
+        assert first_box[2] == pytest.approx(expected_lat_mid)  # 중간 위도
+        assert first_box[3] == pytest.approx(expected_lng_mid)  # 중간 경도
+
+        # 마지막 박스 (북동부): (lat_mid, lng_mid, lat_max, lng_max)
+        last_box = boxes[3]
+        assert last_box[0] == pytest.approx(expected_lat_mid)  # 중간 위도
+        assert last_box[1] == pytest.approx(expected_lng_mid)  # 중간 경도
+        assert last_box[2] == pytest.approx(lat_max)  # 북쪽 위도
+        assert last_box[3] == pytest.approx(lng_max)  # 동쪽 경도
+
+    def test_fetch_apartments_detects_600_limit_and_retries(self, crawler):
+        """600개 POI 감지 시 분할하여 재시도하는지 테스트
+
+        Expected: 정확히 600개 결과가 반환되면 bbox를 분할하여 재시도해야 함
+        현재 상태: 실패할 것임 (분할 재시도 로직이 구현되지 않음)
+        """
+        from unittest.mock import Mock, patch
+
+        # Mock district
+        district = {
+            "regionCode": "11680",
+            "name": "강남구",
+        }
+
+        # Mock API client that returns exactly 600 items
+        with patch.object(crawler.hogangnono_client, "get_apartments_bounding") as mock_api:
+            # First call returns 600 items (triggering division)
+            # Subsequent calls return fewer items
+            mock_response_600 = Mock()
+            mock_response_600.success = True
+            mock_response_600.data = [{"id": str(i)} for i in range(600)]  # 600 items
+
+            mock_response_fewer = Mock()
+            mock_response_fewer.success = True
+            mock_response_fewer.data = [{"id": str(i)} for i in range(100)]  # 100 items
+
+            # Configure mock to return 600 first, then fewer on subsequent calls
+            mock_api.side_effect = [
+                mock_response_600,
+                mock_response_fewer,
+                mock_response_fewer,
+                mock_response_fewer,
+            ]
+
+            # Mock _divide_bounding_box
+            with patch.object(
+                crawler,
+                "_divide_bounding_box",
+                return_value=[
+                    (37.4, 126.7, 37.6, 126.9),  # Box 1
+                    (37.4, 126.9, 37.6, 127.1),  # Box 2
+                    (37.6, 126.7, 37.8, 126.9),  # Box 3
+                    (37.6, 126.9, 37.8, 127.1),  # Box 4
+                ],
+            ):
+                apartments = crawler._fetch_apartments_in_district(district)
+
+                # API가 4번 호출되어야 함 (1번 초기 호출 + 3번 분할 호출)
+                assert mock_api.call_count == 4
+
+                # 결과는 모든 호출의 합계여야 함
+                assert len(apartments) == 900  # 600 + 100 + 100 + 100
+
+
 class TestErrorHandlingTDD:
     """에러 핸들링 TDD 테스트 - Red 단계"""
 

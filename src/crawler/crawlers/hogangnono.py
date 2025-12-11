@@ -553,11 +553,39 @@ class HogangnonoCrawler(APICrawler):
 
         self.logger.info("district_crawling_completed", district=district_name)
 
+    def _divide_bounding_box(
+        self, lat_min: float, lng_min: float, lat_max: float, lng_max: float
+    ) -> List[Tuple[float, float, float, float]]:
+        """Bounding box를 2x2 그리드로 분할
+
+        Args:
+            lat_min: 최소 위도
+            lng_min: 최소 경도
+            lat_max: 최대 위도
+            lng_max: 최대 경도
+
+        Returns:
+            분할된 4개의 bounding box 리스트
+            [(lat_min, lng_min, lat_mid, lng_mid), ...]
+        """
+        lat_mid = (lat_min + lat_max) / 2
+        lng_mid = (lng_min + lng_max) / 2
+
+        # 2x2 그리드 생성 (남서 -> 북동 순서)
+        boxes = [
+            (lat_min, lng_min, lat_mid, lng_mid),  # 남서
+            (lat_min, lng_mid, lat_mid, lng_max),  # 남동
+            (lat_mid, lng_min, lat_max, lng_mid),  # 북서
+            (lat_mid, lng_mid, lat_max, lng_max),  # 북동
+        ]
+
+        return boxes
+
     def _fetch_apartments_in_district(self, district: Dict[str, Any]) -> List[Dict[str, Any]]:
         """구/군 내 모든 단지 수집
 
         좌표 기반 bounding API 사용
-        TODO: 구/군을 여러 그리드로 분할하여 수집 (현재는 단순 구현)
+        600개 POI 감지 시 bbox를 분할하여 재시도
 
         Args:
             district: 구/군 정보
@@ -569,42 +597,79 @@ class HogangnonoCrawler(APICrawler):
         # 실제로는 구/군별 좌표 매핑 테이블 필요
         # TODO: 구/군별 정확한 좌표 매핑
         bbox = (126.7, 37.4, 127.2, 37.7)
+        lng_min, lat_min, lng_max, lat_max = bbox
+        # bbox 형식 변환: (lng_min, lat_min, lng_max, lat_max) -> (lat_min, lng_min, lat_max, lng_max)
+        bbox_formatted = (lat_min, lng_min, lat_max, lng_max)
 
-        search_params = SearchParams(
-            bbox=bbox,
-            level=14,
-            tradeType=0,  # 매매
-            aptType=1,  # 아파트만
-        )
-
-        # Try bounding API first
-        try:
-            response = self.hogangnono_client.get_apartments_bounding(search_params)
-            if response.success:
-                apartments = response.data or []
-                if apartments:
-                    return apartments
-        except Exception as e:
-            self.logger.warning("bounding_api_failed_fallback", error=str(e))
-
-        # Fallback: Try to get complexes using get_complex_list with district code
-        self.logger.info("trying_get_complex_list_fallback")
-
-        district_code = district["regionCode"]
-        try:
-            # Try to get complexes by district code using get_complex_list
-            # Convert district code to dong code format (simplified approach)
-            dong_code = district_code + "000"  # Convert to dong level
-            complexes_response = self.hogangnono_client.get_complex_list(
-                dong_code, bounds=f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
+        # 재귀적으로 bbox를 처리하는 함수
+        def fetch_with_bbox(
+            lat_min: float, lng_min: float, lat_max: float, lng_max: float
+        ) -> List[Dict[str, Any]]:
+            search_params = SearchParams(
+                bbox=(
+                    lng_min,
+                    lat_min,
+                    lng_max,
+                    lat_max,
+                ),  # API는 (lng_min, lat_min, lng_max, lat_max) 형식
+                level=14,
+                tradeType=0,  # 매매
+                aptType=1,  # 아파트만
             )
-            if complexes_response.success:
-                return complexes_response.data or []
-        except Exception as e:
-            self.logger.warning("get_complex_list_failed", error=str(e))
 
-        # If all methods fail, raise error
-        raise Exception("Failed to fetch apartments using all available methods")
+            # Try bounding API first
+            try:
+                response = self.hogangnono_client.get_apartments_bounding(search_params)
+                if response.success:
+                    apartments = response.data or []
+
+                    # 정확히 600개 결과가 반환되면 POI 제한에 도달한 것으로 판단
+                    if len(apartments) == 600:
+                        self.logger.info(
+                            "poi_limit_detected",
+                            count=len(apartments),
+                            bbox=(lat_min, lng_min, lat_max, lng_max),
+                            message="Splitting bbox for detailed collection",
+                        )
+
+                        # bbox를 2x2 그리드로 분할
+                        sub_boxes = self._divide_bounding_box(lat_min, lng_min, lat_max, lng_max)
+                        all_apartments = []
+
+                        # 분할된 각 bbox에 대해 재귀적으로 수집
+                        for sub_lat_min, sub_lng_min, sub_lat_max, sub_lng_max in sub_boxes:
+                            sub_apartments = fetch_with_bbox(
+                                sub_lat_min, sub_lng_min, sub_lat_max, sub_lng_max
+                            )
+                            all_apartments.extend(sub_apartments)
+
+                        return all_apartments
+                    elif apartments:
+                        return apartments
+            except Exception as e:
+                self.logger.warning("bounding_api_failed_fallback", error=str(e))
+
+            # Fallback: Try to get complexes using get_complex_list with district code
+            self.logger.info("trying_get_complex_list_fallback")
+
+            district_code = district["regionCode"]
+            try:
+                # Try to get complexes by district code using get_complex_list
+                # Convert district code to dong code format (simplified approach)
+                dong_code = district_code + "000"  # Convert to dong level
+                complexes_response = self.hogangnono_client.get_complex_list(
+                    dong_code, bounds=f"{lng_min},{lat_min},{lng_max},{lat_max}"
+                )
+                if complexes_response.success:
+                    return complexes_response.data or []
+            except Exception as e:
+                self.logger.warning("get_complex_list_failed", error=str(e))
+
+            # If all methods fail, return empty list
+            return []
+
+        # 최상위 bbox로 시작
+        return fetch_with_bbox(*bbox_formatted)
 
     def _save_apartment_data(
         self,
