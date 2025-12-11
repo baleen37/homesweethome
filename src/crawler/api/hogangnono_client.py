@@ -399,11 +399,11 @@ class HogangnonoAPIClient:
         # Rate limiting - 단일 AdaptiveRateLimiter
         from ..rate_limiter import AdaptiveRateLimiter
 
-        self.rate_limiter = AdaptiveRateLimiter()
-        # 초기값 설정 (2초, 최소 1초, 최대 10초)
-        self.rate_limiter.current_delay = 2.0
-        self.rate_limiter.min_delay = 1.0
-        self.rate_limiter.max_delay = 10.0
+        self.rate_limiter = AdaptiveRateLimiter(
+            initial_delay=2.0,  # API 가이드에 따라 5.0에서 2.0으로 변경
+            min_delay=1.0,  # API 가이드에 따라 1.5에서 1.0으로 변경
+            max_delay=10.0,
+        )
 
     def _build_url(self, endpoint: str) -> str:
         """전체 URL 빌드"""

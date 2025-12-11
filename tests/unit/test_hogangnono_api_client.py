@@ -672,3 +672,24 @@ class TestFetchDongCodes:
             dongs = client.fetch_dong_codes("강남구")
 
             assert dongs == {}
+
+
+class TestRateLimiting:
+    """Rate limiting 초기값 테스트"""
+
+    def test_rate_limiting_initial_values(self, config):
+        """Rate limiting은 API 가이드에 따라 2초에서 시작하고 최소 1초를 가져야 함"""
+        client = HogangnonoAPIClient(config)
+
+        # 초기값 확인
+        assert (
+            client.rate_limiter.current_delay == 2.0
+        ), f"Expected 2.0, got {client.rate_limiter.current_delay}"
+        assert (
+            client.rate_limiter.min_delay == 1.0
+        ), f"Expected 1.0, got {client.rate_limiter.min_delay}"
+
+        # 최대값 확인
+        assert (
+            client.rate_limiter.max_delay == 10.0
+        ), f"Expected 10.0, got {client.rate_limiter.max_delay}"
