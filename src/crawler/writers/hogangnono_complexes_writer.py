@@ -4,16 +4,20 @@ This module provides HogangnonoComplexesCSVWriter class that inherits from BaseC
 to handle complexes.csv file for Hogangnono data.
 """
 
+from pathlib import Path
 from typing import Any, Dict
-from datetime import datetime
 
 from crawler.writers.base_csv_writer import BaseCSVWriter
+from crawler.writers.hogangnono_strategy import HogangnonoComplexStrategy
 
 
 class HogangnonoComplexesCSVWriter(BaseCSVWriter):
-    """호갱노노 단지 데이터를 CSV로 저장하는 전용 클래스"""
+    """호갱노노 단지 데이터를 CSV로 저장하는 전용 클래스
 
-    # 네이버 CSV 형식 필드명
+    이 클래스는 Strategy 패턴을 사용하여 호갱노노 데이터를 네이버 형식으로 변환합니다.
+    """
+
+    # 네이버 CSV 형식 필드명 (향후 호환성을 위해 유지)
     FIELDNAMES = [
         "complex_id",
         "complex_name",
@@ -30,46 +34,22 @@ class HogangnonoComplexesCSVWriter(BaseCSVWriter):
         "fetched_at",
     ]
 
-    def _normalize_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        """단지 데이터를 네이버 형식으로 정규화"""
-        # Base 정규화 적용
-        normalized = self._normalize_common_fields(row)
+    def __init__(self, output_path: Path) -> None:
+        """Initialize HogangnonoComplexesCSVWriter with Hogangnono strategy.
 
-        # 추가 정규화가 필요한 경우 여기에 구현
-        if not normalized.get("completion_year_month"):
-            if row.get("buildYear") and str(row["buildYear"]).isdigit():
-                build_year = str(row["buildYear"])
-                normalized["completion_year_month"] = f"{build_year}0101"
+        Args:
+            output_path: Path to the CSV file
+        """
+        # Create and set the Hogangnono complex transformation strategy
+        strategy = HogangnonoComplexStrategy()
+        super().__init__(output_path, strategy=strategy)
 
-        # 필드 매핑
-        field_mapping = {
-            "complex_id": "aptSeq",
-            "complex_name": "aptName",
-            "total_household_count": "householdCnt",
-            "deal_count": "dealCnt",
-        }
+    def _normalize_row_legacy(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Legacy normalization method - not used when strategy is set.
 
-        for naver_field, hogangnono_field in field_mapping.items():
-            if hogangnono_field in row:
-                normalized[naver_field] = (
-                    str(row[hogangnono_field]) if row[hogangnono_field] is not None else ""
-                )
-
-        # 기본값 설정
-        defaults = {
-            "real_estate_type": "아파트",
-            "total_dong_count": "1",
-            "min_area": "33.0",
-            "max_area": "85.0",
-            "lease_count": "0",
-            "rent_count": "0",
-            "pyeong_types": "33평, 59평",
-            "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-        for field, value in defaults.items():
-            if not normalized.get(field):
-                normalized[field] = value
-
-        # FIELDNAMES 순서로 필터링
-        return {field: normalized.get(field, "") for field in self.FIELDNAMES}
+        This method is kept for backward compatibility but should not be called
+        when a strategy is provided.
+        """
+        # This should not be reached when strategy is set
+        # Base class will use the strategy instead
+        return row

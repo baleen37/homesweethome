@@ -6,8 +6,12 @@ for file I/O operations, CSV writer setup, and data normalization.
 
 import csv
 from pathlib import Path
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
 from abc import ABC, abstractmethod
+
+from crawler.writers.data_transformation_strategy import (
+    DataTransformationStrategy,
+)
 
 
 class BaseCSVWriter(ABC):
@@ -17,28 +21,67 @@ class BaseCSVWriter(ABC):
     - File I/O operations (opening, closing files)
     - CSV writer setup
     - Header and row writing patterns
-    - Data normalization
+    - Data normalization through strategy pattern
     - Error handling
+
+    The class now uses the Strategy pattern for data transformation,
+    allowing different normalization logic to be injected.
     """
 
-    # Subclasses must define their fieldnames
+    # Subclasses can define default fieldnames (deprecated in favor of strategy)
     FIELDNAMES: List[str] = []
 
-    def __init__(self, output_path: Path) -> None:
+    def __init__(
+        self, output_path: Path, strategy: Optional[DataTransformationStrategy] = None
+    ) -> None:
         """Initialize BaseCSVWriter.
 
         Args:
             output_path: Path to the CSV file
+            strategy: Data transformation strategy to use. If None, subclasses
+                     should override _normalize_row for backward compatibility.
         """
         self.output_path = output_path
         self._file_exists = output_path.exists()
+        self._strategy = strategy
 
-    @abstractmethod
+    @property
+    def strategy(self) -> Optional[DataTransformationStrategy]:
+        """Get the current transformation strategy."""
+        return self._strategy
+
+    @strategy.setter
+    def strategy(self, strategy: DataTransformationStrategy) -> None:
+        """Set a new transformation strategy."""
+        self._strategy = strategy
+
     def _normalize_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize a single row of data.
 
-        Subclasses must implement this to handle their specific
-        data normalization requirements.
+        This method now uses the strategy pattern if a strategy is set.
+        For backward compatibility, subclasses can still override this method.
+
+        Args:
+            row: Raw data row to normalize
+
+        Returns:
+            Normalized data row with all fields present
+        """
+        if self._strategy:
+            # Use strategy for transformation
+            fieldnames = self._strategy.get_fieldnames()
+            return self._strategy.transform(row, fieldnames)
+
+        # Fall back to abstract method for backward compatibility
+        return self._normalize_row_legacy(row)
+
+    @abstractmethod
+    def _normalize_row_legacy(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Legacy normalization method for backward compatibility.
+
+        Subclasses should implement this if no strategy is provided.
+        This method will be called when _normalize_row falls back
+        due to no strategy being set.
 
         Args:
             row: Raw data row to normalize
@@ -48,6 +91,12 @@ class BaseCSVWriter(ABC):
         """
         pass
 
+    def get_fieldnames(self) -> List[str]:
+        """Get field names based on strategy or class attribute."""
+        if self._strategy:
+            return self._strategy.get_fieldnames()
+        return self.FIELDNAMES.copy()
+
     def write_header(self) -> None:
         """Write CSV header to file.
 
@@ -55,8 +104,11 @@ class BaseCSVWriter(ABC):
         """
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Get fieldnames using get_fieldnames method
+        fieldnames = self.get_fieldnames()
+
         with open(self.output_path, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=self.FIELDNAMES)
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
 
         self._file_exists = True
@@ -74,12 +126,15 @@ class BaseCSVWriter(ABC):
 
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Get fieldnames using get_fieldnames method
+        fieldnames = self.get_fieldnames()
+
         # Auto-detect header writing if not specified
         if write_header is None:
             write_header = mode == "w"
 
         with open(self.output_path, mode, newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=self.FIELDNAMES)
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
 
             if write_header:
                 writer.writeheader()
@@ -148,12 +203,15 @@ class BaseCSVWriter(ABC):
         Returns:
             Dictionary with file information (size, record count, etc.)
         """
+        # Get fieldnames using get_fieldnames method
+        fieldnames = self.get_fieldnames()
+
         info = {
             "file_path": str(self.output_path),
             "file_exists": self._file_exists,
             "file_size": 0,
             "record_count": 0,
-            "fieldnames": self.FIELDNAMES.copy(),
+            "fieldnames": fieldnames.copy(),
         }
 
         if self._file_exists:

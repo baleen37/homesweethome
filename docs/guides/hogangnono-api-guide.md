@@ -3,113 +3,21 @@
 ## 목차
 
 1. [개요](#개요)
-2. [빠른 시작 가이드](#빠른-시작-가이드)
-3. [아키텍처 개요](#아키텍처-개요)
-4. [데이터 흐름](#데이터-흐름)
-5. [핵심 API 엔드포인트](#핵심-api-엔드포인트)
-6. [실제 사용 시나리오](#실제-사용-시나리오)
-7. [에러 핸들링](#에러-핸들링)
-8. [Best Practices](#best-practices)
-9. [성능 최적화](#성능-최적화)
-10. [데이터 매핑](#데이터-매핑)
-11. [테스트 코드 예시](#테스트-코드-예시)
-12. [FAQ](#faq)
-13. [Troubleshooting](#troubleshooting)
+2. [핵심 API 엔드포인트](#핵심-api-엔드포인트)
+3. [데이터 흐름](#데이터-흐름)
+4. [API 상세 명세](#api-상세-명세)
+5. [지역 코드 체계](#지역-코드-체계)
+6. [크롤링 전략](#크롤링-전략)
+7. [주의사항](#주의사항)
 
 ## 개요
 
-호갱노노(https://hogangnono.com)는 부동산 정보 플랫폼으로, 다양한 API 엔드포인트를 통해 아파트 정보와 실거래 데이터를 제공합니다. 이 문서는 호갱노노의 API 구조를 파악하고 크롤러를 구현하기 위한 상세 가이드를 제공합니다.
+호갱노노(https://hogangnono.com) 부동산 정보 플랫폼 API 명세입니다.
 
-### 주요 특징
-
-- **RESTful API**: 표준 HTTP 메서드를 사용하는 RESTful API
-- **JSON 응답**: 모든 응답은 JSON 형식
-- **인증 필요**: 일부 API는 세션 및 쿠키 기반 인증 필요
-- **Rate Limiting**: 과도한 요청 방지를 위한 동적 Rate Limiting
-- **다양한 데이터**: 지역 정보, 아파트 단지, 실거래 내역 등 다양한 데이터 제공
-
-### API 버전
-
-- 현재 안정 버전: **v2**
-- 기본 URL: `https://hogangnono.com`
-
-## 빠른 시작 가이드
-
-### 1. 기본 설정
-
-```python
-from crawler.config import CrawlerConfig
-from crawler.api.hogangnono_client import HogangnonoAPIClient, SearchParams
-
-# 설정 초기화
-config = CrawlerConfig()
-
-# API 클라이언트 생성 (Context Manager 사용 권장)
-with HogangnonoAPIClient(config) as client:
-    # API 호출 시작
-    pass
-```
-
-### 2. 지역 정보 조회
-
-```python
-# 전체 지역 목록 조회
-regions_response = client.get_regions()
-if regions_response.success:
-    regions = regions_response.data
-    print(f"총 {len(regions)}개 지역 조회됨")
-```
-
-### 3. 아파트 검색 (Bounding Box)
-
-```python
-# 검색 파라미터 생성
-search_params = SearchParams(
-    bbox=(126.734086, 37.413294, 127.183394, 37.715133),  # 서울시 좌표
-    level=14,
-    tradeType=0,  # 매매
-    aptType=0,    # 아파트만
-)
-
-# 아파트 검색
-apartments_response = client.get_apartments_bounding(search_params)
-if apartments_response.success:
-    apartments = apartments_response.data
-    print(f"{len(apartments)}개 아파트 조회됨")
-```
-
-### 4. 실거래 내역 조회
-
-```python
-# 특정 아파트의 실거래 내역 조회 (aptHash 사용)
-apt_hash = "1Hq6f"  # 아파트 해시 (POI 조회 시 획득)
-transactions_response = client.get_apartment_transactions(
-    apt_hash=apt_hash,
-    trade_type=0,  # 매매 (0=매매, 1=전세, 2=월세)
-    full_period=False  # 최근 3년 (False=3년, True=전체)
-)
-
-if transactions_response.success:
-    # 응답 데이터 구조에 따른 접근
-    if isinstance(transactions_response.data, dict):
-        transactions = transactions_response.data.get("shortTermReport", [])
-    else:
-        # 데이터가 배열로 직접 올 수도 있음
-        transactions = transactions_response.data if transactions_response.data else []
-
-    print(f"{len(transactions)}개 거래내역 조회됨")
-```
-
-## 아키텍처 개요
-
-최신 코드베이스는 다음과 같은 핵심 컴포넌트로 구성됩니다:
-
-- **HogangnonoAPIClient**: API 통신을 위한 전용 클라이언트 클래스
-- **SearchParams**: 검색 파라미터를 위한 데이터 클래스
-- **APIResponse**: API 응답 래퍼 클래스
-- **HogangnonoDataMapper**: API 응답 데이터를 네이버 형식으로 변환
-- **AdaptiveRateLimiter**: 동적 Rate Limiting 처리
-- **HogangnonoCrawler**: 크롤링 워크플로우를 관리하는 메인 클래스
+- **기본 URL**: `https://hogangnono.com`
+- **API 버전**: v2
+- **인증**: 세션 및 쿠키 기반
+- **Rate Limiting**: 1-2초 간격 권장
 
 ## 데이터 흐름
 
@@ -131,43 +39,13 @@ if transactions_response.success:
 
 ### 1. 지역 정보 API
 
-#### 전체 지역 목록
 ```http
 GET /api/v2/regions
 Headers: {"X-Requested-With": "XMLHttpRequest"}
 ```
 
-**응답 예시:**
-```json
-{
-  "data": {
-    "regionList": [
-      {
-        "regionCode": "11",
-        "name": "서울",
-        "fullName": "서울특별시",
-        "children": [
-          {
-            "regionCode": "11680",
-            "name": "강남구",
-            "fullName": "서울특별시 강남구"
-          },
-          {
-            "regionCode": "11650",
-            "name": "서초구",
-            "fullName": "서울특별시 서초구"
-          }
-          // ... 총 25개 구
-        ]
-      }
-    ]
-  }
-}
-```
-
 ### 2. 아파트 단지 조회 API
 
-#### Bounding Box 기반 조회
 ```http
 GET /api/v2/pois-bounding
 Parameters:
@@ -183,57 +61,8 @@ Parameters:
 - map: "google" (지도 종류)
 ```
 
-#### SearchParams 클래스 사용 예시
-```python
-from crawler.api.hogangnono_client import SearchParams, HogangnonoAPIClient
-
-# 검색 파라미터 생성
-search_params = SearchParams(
-    bbox=(lng_min, lat_min, lng_max, lat_max),  # (경도 최소, 위도 최소, 경도 최대, 위도 최대)
-    level=14,
-    tradeType=0,  # 매매
-    aptType=1,    # 아파트만
-)
-
-# API 호출
-client = HogangnonoAPIClient(config)
-response = client.get_apartments_bounding(search_params)
-```
-
-**응답 예시:**
-```json
-{
-  "data": [
-    {
-      "aptHash": "1Hq6f",
-      "name": "래미안 강남자이",
-      "address": "서울특별시 강남구 개포동",
-      "addressJibun": "서울특별시 강남구 개포동 115-9",
-      "lat": 37.5135,
-      "lng": 127.0434,
-      "buildYear": 2005,
-      "householdCnt": 1012,
-      "minArea": 59.99,
-      "maxArea": 171.79,
-      "minPrice": 80000,
-      "maxPrice": 230000,
-      "cortarNo": "1168010500",
-      "category": "APARTMENT",
-      "tradeType": "A1"
-    }
-  ]
-}
-```
-
-**중요 사항:**
-- `aptId` 필드가 없으며, 대신 `aptHash` 필드를 사용해야 함
-- `aptHash` 값은 실거래 내역 조회 시 사용하는 아파트 고유 ID
-- `cortarNo`는 법정동 코드 (5자리 구 코드 + 4자리 동 코드)
-- 가격 정보는 만원 단위 (예: 80000 = 8억원)
-
 ### 3. 실거래 내역 API
 
-#### 월간 보고서 (최근 3년)
 ```http
 GET /api/v2/apts/{aptId}/monthly-reports
 Parameters:
@@ -241,35 +70,9 @@ Parameters:
 - areaNo: 0 (0=전체)
 ```
 
-#### 전체 기간 실거래
 ```http
 GET /api/v2/apts/{aptId}/monthly-reports/more
 Parameters: 위와 동일
-```
-
-**응답 예시:**
-```json
-{
-  "data": {
-    "shortTermReport": [
-      {
-        "date": "2025-01-31T15:00:00.000Z",
-        "minPrice": 333000,
-        "maxPrice": 346000,
-        "averagePrice": 343000,
-        "volume": 3,
-        "trades": [
-          {
-            "id": 36780389,
-            "price": 340000,
-            "floor": 9,
-            "day": 18
-          }
-        ]
-      }
-    ]
-  }
-}
 ```
 
 ## 지역 코드 체계

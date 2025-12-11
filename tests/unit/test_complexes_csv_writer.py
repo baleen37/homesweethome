@@ -138,9 +138,9 @@ class TestComplexesCSVWriter(TestCase):
         for field in ComplexesCSVWriter.FIELDNAMES:
             self.assertIn(field, normalized)
 
-        # 누락된 필드가 기본값으로 채워졌는지 확인
-        self.assertEqual(normalized["total_transaction_count"], 0)
-        self.assertEqual(normalized["latest_deal_price"], 0)
+        # 누락된 필드가 기본값으로 채워졌는지 확인 (문자열로 비교)
+        self.assertEqual(normalized["total_transaction_count"], "0")
+        self.assertEqual(normalized["latest_deal_price"], "0")
         self.assertEqual(normalized["latest_deal_date"], "")
 
     def test_all_fields_in_fieldnames(self) -> None:

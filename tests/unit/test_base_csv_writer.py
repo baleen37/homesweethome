@@ -15,7 +15,7 @@ class ConcreteTestCSVWriter(BaseCSVWriter):
 
     FIELDNAMES = ["id", "name", "value", "active"]
 
-    def _normalize_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_row_legacy(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Simple normalization for testing."""
         return self._normalize_common_fields(row)
 
