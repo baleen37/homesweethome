@@ -149,8 +149,8 @@ class TestHogangnonoCrawler:
         assert result[2]["deposit"] == 100000000
         assert result[2]["monthly_rent"] == 500000
 
-    def test_map_to_naver_format(self, crawler):
-        """네이버 형식 매핑 테스트"""
+    def test_data_mapper_integration(self, crawler):
+        """DataMapper 연동 테스트"""
         hogangnono_item = {
             "id": "test123",
             "name": "테스트단지",
@@ -169,7 +169,12 @@ class TestHogangnonoCrawler:
             },
         }
 
-        result = crawler._map_to_naver_format(hogangnono_item)
+        # Mock get_dong_code to return a test value
+        with patch.object(crawler, "get_dong_code", return_value="11680500"):
+            result = crawler.data_mapper.map_to_naver_format(
+                hogangnono_item, fetch_dong_code_func=crawler.get_dong_code
+            )
+
         assert result is not None
 
         # 단지 정보
@@ -183,6 +188,10 @@ class TestHogangnonoCrawler:
         assert result["pyeong_type_number"] == 18  # 59.34 / 3.305785
         assert result["deal_price"] == 800000000
         assert result["trade_year"] == 2024
+
+        # 주소 파싱 확인
+        assert result["gu_name"] == "강남구"
+        assert result["dong_name"] == ""  # 주소에 동 정보가 없음
 
     def test_crawl_region_success(self, crawler):
         """지역 크롤링 성공 테스트"""

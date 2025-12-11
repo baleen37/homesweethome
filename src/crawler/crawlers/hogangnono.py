@@ -16,6 +16,7 @@ from ..writers.transaction_csv_writer import TransactionCSVWriter
 from ..writers.complexes_csv_writer import ComplexesCSVWriter
 from ..writers.hogangnono_csv_writer import HogangnonoCSVWriter
 from ..utils.checkpoint import CheckpointManager
+from ..data_mappers import HogangnonoDataMapper
 
 
 class HogangnonoCrawler(APICrawler):
@@ -93,8 +94,10 @@ class HogangnonoCrawler(APICrawler):
         self.checkpoint_manager = CheckpointManager(str(self.output_dir / "checkpoint.json"))
         self.checkpoint_manager.load()
 
-        # 동 코드 매핑 정보 로드
-        self.dong_code_mapping = self._load_dong_code_mapping()
+        # 데이터 매핑을 위한 HogangnonoDataMapper 초기화
+        self.data_mapper = HogangnonoDataMapper(
+            dong_code_mapping_file=self.output_dir / "dong_code_mapping.json"
+        )
 
         self.logger.info(
             "hogangnono_crawler_initialized",
@@ -102,65 +105,20 @@ class HogangnonoCrawler(APICrawler):
             region_bounds=self.region_bounds,
         )
 
-    def _load_dong_code_mapping(self) -> Dict[str, Dict[str, Any]]:
-        """동 코드 매핑 정보 로드"""
-        mapping_file = self.output_dir / "dong_code_mapping.json"
-        if mapping_file.exists():
-            with open(mapping_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return {}
-
     def get_dong_code(self, district_name: str, dong_name: str) -> Optional[str]:
-        """동 이름으로 코드 조회"""
-        # 캐시된 정보 확인
-        if district_name in self.dong_code_mapping:
-            return self.dong_code_mapping[district_name].get(dong_name)
+        """동 이름으로 코드 조회 (DataMapper 위임)"""
+        # 먼저 DataMapper의 캐시된 정보 확인
+        dong_code = self.data_mapper.get_dong_code(district_name, dong_name)
 
-        # API에서 가져오기
-        dongs = self.hogangnono_client.fetch_dong_codes(district_name)
-        if dongs:
-            # 캐시 업데이트
-            if district_name not in self.dong_code_mapping:
-                self.dong_code_mapping[district_name] = {}
-            self.dong_code_mapping[district_name].update(dongs)
+        # 없으면 API에서 가져오기
+        if not dong_code:
+            dongs = self.hogangnono_client.fetch_dong_codes(district_name)
+            if dongs:
+                # DataMapper에 업데이트
+                self.data_mapper.update_dong_code_mapping(district_name, dongs)
+                dong_code = dongs.get(dong_name)
 
-            # 파일에 저장
-            mapping_file = self.output_dir / "dong_code_mapping.json"
-            with open(mapping_file, "w", encoding="utf-8") as f:
-                json.dump(self.dong_code_mapping, f, ensure_ascii=False, indent=2)
-
-            return dongs.get(dong_name)
-
-        return None
-
-    def _parse_gu_dong_from_address(self, address: str) -> tuple[str | None, str | None]:
-        """주소에서 구와 동 이름 추출"""
-        if not address:
-            return None, None
-
-        # 서울특별시가 아닌 경우
-        if "서울특별시" not in address and not address.startswith("서울 "):
-            return None, None
-
-        # 주소 파싱
-        parts = address.split()
-        gu = None
-        dong = None
-
-        for i, part in enumerate(parts):
-            # 구 찾기 (시가 아닌 구)
-            if part.endswith("구") and "시" not in part:
-                gu = part
-                # 다음 파트가 동인지 확인
-                if i + 1 < len(parts):
-                    next_part = parts[i + 1]
-                    # 번지가 포함된 동 처리 (예: 역삼동 825-24)
-                    dong_part = next_part.split("-")[0]
-                    if dong_part.endswith("동"):
-                        dong = dong_part
-                break
-
-        return gu, dong
+        return dong_code
 
     def get_endpoint(self) -> str:
         """API 엔드포인트 반환
@@ -213,7 +171,9 @@ class HogangnonoCrawler(APICrawler):
         for item in items:
             try:
                 # 호갱노노 → 네이버 형식으로 매핑
-                mapped_data = self._map_to_naver_format(item)
+                mapped_data = self.data_mapper.map_to_naver_format(
+                    item, fetch_dong_code_func=self.get_dong_code
+                )
                 if mapped_data:
                     apartments.append(mapped_data)
             except Exception as e:
@@ -231,128 +191,6 @@ class HogangnonoCrawler(APICrawler):
         )
 
         return apartments
-
-    def _map_to_naver_format(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """호갱노노 데이터를 네이버 형식으로 매핑
-
-        Args:
-            item: 호갱노노 아파트/매물 데이터
-
-        Returns:
-            네이버 CSV 형식으로 매핑된 데이터
-        """
-        try:
-            # 기본 정보 매핑
-            complex_id = str(item.get("id") or item.get("apt_id", ""))
-            if not complex_id:
-                return None
-
-            complex_name = item.get("name", "") or item.get("apt_name", "")
-            address = item.get("address", "") or item.get("full_address", "")
-
-            # 위치 정보
-            lat = item.get("lat") or item.get("latitude")
-            lng = item.get("lng") or item.get("longitude")
-
-            # 건물 기본 정보
-            build_year = item.get("build_year") or item.get("completion_year")
-            households = item.get("households") or item.get("household_count")
-            floors = item.get("floors") or item.get("max_floor")
-
-            # 거래 정보가 있는 경우
-            trade_info = item.get("trade", {}) or item.get("recent_trade", {})
-
-            # 거래 타입 결정
-            trade_type = trade_info.get("type", "sale")
-            if trade_type == "sale":
-                trade_type_code = "A1"
-                trade_type_name = "매매"
-            elif trade_type == "jeonse":
-                trade_type_code = "B1"
-                trade_type_name = "전세"
-            elif trade_type == "monthly":
-                trade_type_code = "B2"
-                trade_type_name = "월세"
-            else:
-                trade_type_code = "A1"
-                trade_type_name = "매매"
-
-            # 매물 상세 정보
-            exclusive_area = trade_info.get("area") or trade_info.get("exclusive_area")
-            if exclusive_area:
-                # 평형으로 변환 (제곱미터 → 평)
-                pyeong = float(exclusive_area) / 3.305785
-                pyeong_type_number = round(pyeong)  # 올바른 반올림 적용
-                pyeong_name = f"{pyeong_type_number}평형"
-            else:
-                pyeong_type_number = 0
-                pyeong_name = ""
-
-            floor = trade_info.get("floor") or trade_info.get("floor_info", "")
-            deal_price = trade_info.get("price") or trade_info.get("deal_price", 0)
-            deposit = trade_info.get("deposit") or trade_info.get("jeonse_price", 0)
-            monthly_rent = trade_info.get("monthly") or trade_info.get("monthly_rent", 0)
-
-            # 거래일
-            trade_date = trade_info.get("date") or trade_info.get("trade_date", "")
-            if trade_date and len(trade_date) >= 8:
-                trade_year = int(trade_date[:4])
-            else:
-                trade_year = 0
-
-            # 주소에서 구와 동 정보 추출
-            gu_name, dong_name = self._parse_gu_dong_from_address(address)
-
-            # 동 코드 조회
-            dong_code = None
-            gu_code = None
-            if gu_name and dong_name:
-                dong_code = self.get_dong_code(gu_name, dong_name)
-                if dong_code:
-                    # 구 코드는 동 코드의 앞 5자리
-                    gu_code = dong_code[:5]
-
-            # 결과 조합
-            result = {
-                # 단지 정보 (complexes.csv용)
-                "complex_id": complex_id,
-                "complex_name": complex_name,
-                "address": address,
-                "latitude": lat,
-                "longitude": lng,
-                "build_year": int(build_year) if build_year else 0,
-                "households": int(households) if households else 0,
-                "floors": int(floors) if floors else 0,
-                # 거래 정보 (transactions.csv용)
-                "pyeong_type_number": pyeong_type_number,
-                "pyeong_name": pyeong_name,
-                "trade_type": trade_type_code,
-                "trade_type_name": trade_type_name,
-                "trade_date": trade_date,
-                "trade_year": trade_year,
-                "floor": str(floor),
-                "deal_price": int(str(deal_price).replace(",", "")) if deal_price else 0,
-                "deposit": int(str(deposit).replace(",", "")) if deposit else 0,
-                "monthly_rent": int(str(monthly_rent).replace(",", "")) if monthly_rent else 0,
-                "trade_category": trade_type,
-                "is_delete": "N",
-                "is_renew": "N",
-                # 추가: 행정구역 정보
-                "gu_code": gu_code or "",
-                "dong_code": dong_code or "",
-                "gu_name": gu_name or "",
-                "dong_name": dong_name or "",
-            }
-
-            return result
-
-        except Exception as e:
-            self.logger.error(
-                "mapping_error",
-                item=item,
-                error=str(e),
-            )
-            return None
 
     def crawl_region(
         self,

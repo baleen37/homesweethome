@@ -496,7 +496,11 @@ class TestHogangnonoCrawlerIntegrationTDD:
             },
         }
 
-        mapped_data = crawler._map_to_naver_format(test_item)
+        # Mock get_dong_code to return a test value
+        with patch.object(crawler, "get_dong_code", return_value="11680500"):
+            mapped_data = crawler.data_mapper.map_to_naver_format(
+                test_item, fetch_dong_code_func=crawler.get_dong_code
+            )
 
         # 매핑 결과 확인
         assert mapped_data is not None
