@@ -14,6 +14,11 @@ from crawler.coordinator import CrawlCoordinator
 from crawler.writers.complexes_csv_writer import ComplexesCSVWriter
 from crawler.writers.transaction_csv_writer import TransactionCSVWriter
 
+# Test constants
+PYEONG_TYPES_PER_COMPLEX = 2  # 각 단지당 평형 타입 수 (84A, 84B)
+TRADE_TYPES_COUNT = 3  # 거래 유형 수 (매매, 전세, 월세)
+COMPLEXES_IN_FIRST_DONG = 2  # 역삼1동의 단지 수
+
 
 class TestCrawlCoordinator:
     """CrawlCoordinator 테스트 클래스"""
@@ -130,7 +135,8 @@ class TestCrawlCoordinator:
         # 결과 검증
         assert result["dong_code"] == "1154510200"
         assert result["complexes_processed"] == 2
-        assert result["transactions_collected"] == 12  # 2 complexes * 2 pyeongs * 3 trade types
+        expected_transactions = 2 * PYEONG_TYPES_PER_COMPLEX * TRADE_TYPES_COUNT
+        assert result["transactions_collected"] == expected_transactions
 
         # CSV 파일이 생성되었는지 확인
         assert (temp_dir / "transactions.csv").exists()
@@ -139,12 +145,14 @@ class TestCrawlCoordinator:
         # 거래내역 CSV 내용 확인
         transactions_csv = (temp_dir / "transactions.csv").read_text(encoding="utf-8")
         lines = transactions_csv.strip().split("\n")
-        assert len(lines) == 13  # header + 12 transactions
+        assert len(lines) == 1 + expected_transactions  # header + transactions
         assert "complex_id,complex_name,pyeong_type_number" in lines[0]  # header
 
         # 단지 CSV 내용 확인
         complexes_csv = (temp_dir / "complexes.csv").read_text(encoding="utf-8")
-        assert len(complexes_csv.strip().split("\n")) == 3  # header + 2 complexes
+        assert (
+            len(complexes_csv.strip().split("\n")) == 1 + COMPLEXES_IN_FIRST_DONG
+        )  # header + complexes
 
     def test_crawl_multiple_dongs_with_resume(
         self, temp_dir, mock_fetch_functions, sample_dong_complexes
@@ -393,11 +401,12 @@ class TestCrawlCoordinatorHelpers:
             "C001", pyeong_type_numbers, mock_fetch
         )
 
+        expected_calls = len(pyeong_type_numbers) * TRADE_TYPES_COUNT
         # 2 pyeong_types * 3 trade_types = 6 calls
-        assert mock_fetch.call_count == 6
-        assert len(result) == 6
+        assert mock_fetch.call_count == expected_calls
+        assert len(result) == expected_calls
         # append is called for each fetch call that returns transactions (all 6 calls)
-        assert coordinator.transaction_writer.append.call_count == 6
+        assert coordinator.transaction_writer.append.call_count == expected_calls
 
     def test_collect_transactions_for_complex_empty(self, coordinator):
         """빈 평형 타입 목록으로 거래내역 수집 테스트"""
