@@ -16,9 +16,13 @@
 import os
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+# Export both classes for explicit imports
+__all__ = ["HogangnonoConfig", "CrawlerConfig"]
 
 
 class HogangnonoConfig(BaseModel):
@@ -69,6 +73,19 @@ class HogangnonoConfig(BaseModel):
     # 필터링 기본값
     default_property_type: str = Field(default="apartment", description="기본 매물 타입")
     default_transaction_type: str = Field(default="sale", description="기본 거래 타입")
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str) -> str:
+        """base_url URL 형식 검증"""
+        if not v:
+            raise ValueError("base_url는 필수입니다")
+
+        parsed = urlparse(v)
+        if not parsed.scheme or not parsed.netloc:
+            raise ValueError("base_url은 유효한 URL 형식이어야 합니다")
+
+        return v
 
     @field_validator("api_key")
     @classmethod
@@ -177,7 +194,15 @@ class HogangnonoConfig(BaseModel):
 
     @classmethod
     def from_env(cls, **overrides: int | bool | str | None) -> "HogangnonoConfig":
-        """환경 변수에서 설정 로드"""
+        """
+        환경 변수에서 설정 로드
+
+        환경 변수 우선순위:
+        1. CLI 오버라이드 (overrides 파라미터)
+        2. HOGANGNONO_* 변수
+        3. CRAWLER_* 변수 (하위 호환성)
+        4. 기본값
+        """
         load_dotenv()
 
         # 기본 설정 (기존 CRAWLER_* 변수들)
@@ -248,4 +273,5 @@ class HogangnonoConfig(BaseModel):
 
 
 # Backward compatibility alias
+# TODO: Remove this alias in v2.0
 CrawlerConfig = HogangnonoConfig
