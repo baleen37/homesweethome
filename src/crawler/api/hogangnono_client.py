@@ -21,6 +21,13 @@ try:
 except ImportError:
     Mock = None
 
+# Required headers per API guide
+_REQUIRED_HEADERS = {
+    "X-Requested-With": "XMLHttpRequest",
+    "Referer": "https://hogangnono.com/",
+    "Origin": "https://hogangnono.com",
+}
+
 
 class SearchParams:
     """호갱노노 API 검색 파라미터
@@ -482,7 +489,7 @@ class HogangnonoAPIClient:
         Returns:
             API 요청 헤더 딕셔너리
         """
-        return {
+        headers = {
             "User-Agent": self.config.user_agent,
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
@@ -495,10 +502,9 @@ class HogangnonoAPIClient:
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
-            "Referer": self.base_url,
-            "Origin": self.base_url,
-            "X-Requested-With": "XMLHttpRequest",
+            **_REQUIRED_HEADERS,  # Ensure all required headers are included
         }
+        return headers
 
     def _add_auth_headers(
         self,
