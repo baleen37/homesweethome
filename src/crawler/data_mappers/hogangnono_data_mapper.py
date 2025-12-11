@@ -5,11 +5,25 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
-from structlog import stdlib
+import structlog
 
-logger = stdlib.get_logger()
+logger = structlog.get_logger()
+
+# 상수 정의
+SQM_TO_PYEONG_RATIO = 3.305785
+
+
+class TradeType:
+    """거래 유형 상수"""
+
+    SALE = "A1"
+    SALE_NAME = "매매"
+    JEONSE = "B1"
+    JEONSE_NAME = "전세"
+    MONTHLY = "B2"
+    MONTHLY_NAME = "월세"
 
 
 class HogangnonoDataMapper:
@@ -27,7 +41,7 @@ class HogangnonoDataMapper:
         Args:
             dong_code_mapping_file: 동 코드 매핑 파일 경로
         """
-        self.logger = stdlib.get_logger().bind(component="HogangnonoDataMapper")
+        self.logger = structlog.get_logger().bind(component="HogangnonoDataMapper")
 
         # 동 코드 매핑 정보
         self.dong_code_mapping: Dict[str, Dict[str, Any]] = {}
@@ -99,7 +113,9 @@ class HogangnonoDataMapper:
         return None
 
     def map_to_naver_format(
-        self, item: Dict[str, Any], fetch_dong_code_func: Optional[callable] = None
+        self,
+        item: Dict[str, Any],
+        fetch_dong_code_func: Optional[Callable[[str, str], Optional[str]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """호갱노노 데이터를 네이버 형식으로 매핑
 
@@ -134,23 +150,23 @@ class HogangnonoDataMapper:
             # 거래 타입 결정
             trade_type = trade_info.get("type", "sale")
             if trade_type == "sale":
-                trade_type_code = "A1"
-                trade_type_name = "매매"
+                trade_type_code = TradeType.SALE
+                trade_type_name = TradeType.SALE_NAME
             elif trade_type == "jeonse":
-                trade_type_code = "B1"
-                trade_type_name = "전세"
+                trade_type_code = TradeType.JEONSE
+                trade_type_name = TradeType.JEONSE_NAME
             elif trade_type == "monthly":
-                trade_type_code = "B2"
-                trade_type_name = "월세"
+                trade_type_code = TradeType.MONTHLY
+                trade_type_name = TradeType.MONTHLY_NAME
             else:
-                trade_type_code = "A1"
-                trade_type_name = "매매"
+                trade_type_code = TradeType.SALE
+                trade_type_name = TradeType.SALE_NAME
 
             # 매물 상세 정보
             exclusive_area = trade_info.get("exclusive_area") or trade_info.get("area")
             if exclusive_area:
                 # 평형으로 변환 (제곱미터 → 평)
-                pyeong = float(exclusive_area) / 3.305785
+                pyeong = float(exclusive_area) / SQM_TO_PYEONG_RATIO
                 pyeong_type_number = round(pyeong)  # 올바른 반올림 적용
                 pyeong_name = f"{pyeong_type_number}평형"
             else:
