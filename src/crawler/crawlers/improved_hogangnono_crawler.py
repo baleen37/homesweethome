@@ -431,8 +431,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
             all_regions = regions_response.data
             target_districts = self._filter_districts(all_regions, regions, districts)
 
-            # 2. 체크포인트 로드
-            completed_districts = self.deps.checkpoint_manager.get_completed_districts()
+            # 2. 체크포인트 로드는 개별적으로 수행됨
 
             # 3. 구/군별 크롤링
             total_stats = {
@@ -445,10 +444,10 @@ class ImprovedHogangnonoCrawler(APICrawler):
             }
 
             for district in target_districts:
-                district_code = district["regionCode"]
                 district_name = district["name"]
 
-                if district_code in completed_districts:
+                # 이미 완료된 구/군인지 확인
+                if self.deps.checkpoint_manager.is_district_completed(district_name):
                     self.logger.info(
                         "district_skipped", district=district_name, reason="already_completed"
                     )
@@ -465,9 +464,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
                 total_stats["errors"] += district_stats.get("errors", 0)
 
                 # 체크포인트 저장
-                self.deps.checkpoint_manager.save_district(
-                    district_code, district_name, district_stats
-                )
+                self.deps.checkpoint_manager.add_completed_district(district_name)
 
             # 최종 통계
             self.stats["end_time"] = datetime.now()
