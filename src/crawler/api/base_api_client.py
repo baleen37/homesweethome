@@ -1,12 +1,9 @@
 """Base API client to eliminate common functionality duplication."""
 
 import time
-import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional, Dict
-from pathlib import Path
-import json
 
 import requests
 from requests import Response, Session
@@ -140,28 +137,6 @@ class APIResponse:
                 error=f"Request error: {str(e)}",
                 status_code=error_status_code,
             )
-        except json.JSONDecodeError as e:
-            if status_code == 200:
-                text_content = ""
-                try:
-                    text_content = response.text[:1000]
-                except Exception:
-                    pass
-
-                return cls(
-                    success=True,
-                    data={"raw_content": text_content},
-                    status_code=status_code,
-                )
-            else:
-                error_msg = f"JSON decode error: {str(e)}"
-                if status_code is not None:
-                    error_msg = f"HTTP error: {status_code} - {error_msg}"
-                return cls(
-                    success=False,
-                    error=error_msg,
-                    status_code=status_code,
-                )
         except Exception as e:
             return cls(
                 success=False,
@@ -173,43 +148,18 @@ class APIResponse:
 class BaseAPIClient(ABC):
     """Base API client to eliminate common functionality duplication."""
 
-    def __init__(self, config: Config, base_url: str, cache_dir: Optional[Path] = None):
+    def __init__(self, config: Config, base_url: str):
         """초기화
 
         Args:
             config: 크롤러 설정 객체
             base_url: API 기본 URL
-            cache_dir: API 응답 캐시 디렉토리
         """
         self.config = config
         self.base_url = base_url
         self.session = Session()
         self._session_initialized = False
         self.logger = get_logger()
-
-        # Rate limiting
-        from ..rate_limiter import AdaptiveRateLimiter
-
-        self.rate_limiter = AdaptiveRateLimiter(
-            initial_delay=2.0,
-            min_delay=1.0,
-            max_delay=10.0,
-        )
-
-        # API 응답 캐시
-        self.cache = APIResponseCache(cache_dir)
-
-        # API 응답 통계
-        self.response_stats = {
-            "total_requests": 0,
-            "cache_hits": 0,
-            "cache_misses": 0,
-            "success_count": 0,
-            "error_count": 0,
-            "error_types": {},
-            "average_response_time": 0.0,
-            "response_times": [],
-        }
 
         # 네트워크 설정
         self.timeout = config.TIMEOUT
@@ -302,10 +252,8 @@ class BaseAPIClient(ABC):
         params: Optional[dict[str, Any]] = None,
         data: Optional[dict[str, Any]] = None,
         headers: Optional[dict[str, str]] = None,
-        use_cache: bool = True,
-        cache_ttl: Optional[float] = None,
     ) -> APIResponse:
-        """HTTP 요청 실행 (캐싱, 재시도, 서킷 브레이커 포함)
+        """HTTP 요청 실행 (재시도 포함)
 
         Args:
             method: HTTP 메서드 (GET, POST, etc.)
@@ -313,34 +261,20 @@ class BaseAPIClient(ABC):
             params: 쿼리 파라미터
             data: 요청 바디 데이터
             headers: 추가 헤더
-            use_cache: 캐시 사용 여부
-            cache_ttl: 캐시 만료 시간
 
         Returns:
             APIResponse 객체
         """
-        # 통계 기록 시작
-        self.response_stats["total_requests"] += 1
-        start_time = time.time()
-
-        # 캐시 확인 - GET 요청만 캐싱 적용
-        if use_cache and method.upper() == "GET":
-            cached_response = self.cache.get(method, endpoint, params, data)
-            if cached_response:
-                # 캐시 히트 시 바로 반환
-                self.response_stats["cache_hits"] += 1
-                self.logger.debug("api_response_cache_hit", endpoint=endpoint)
-                return cached_response
-            self.response_stats["cache_misses"] += 1
-
-        # Rate limiting 적용 - API 호출 간격 조절
-        self.rate_limiter.wait()
+        # 기본 딜레이 적용
+        time.sleep(1.0)
 
         # 세션 초기화 확인
         if not self._session_initialized:
             if not self._initialize_session():
-                return self._create_error_response(
-                    "Failed to initialize session", "INIT_ERROR", None
+                return APIResponse(
+                    success=False,
+                    error="Failed to initialize session",
+                    status_code=None,
                 )
 
         # 재시도 로직 적용
@@ -388,14 +322,6 @@ class BaseAPIClient(ABC):
 
             api_response = retryable.execute(make_http_request)
 
-            # 성공 시 캐시 저장
-            if api_response.success and api_response.data and method.upper() == "GET":
-                self.cache.set(method, endpoint, api_response, params, data, cache_ttl)
-
-            # 통계 업데이트
-            response_time = time.time() - start_time
-            self._update_response_stats(api_response, response_time)
-
             return api_response
 
         except requests.exceptions.HTTPError as e:
@@ -403,27 +329,25 @@ class BaseAPIClient(ABC):
             status_code = response.status_code if response else None
 
             if status_code == 404:
-                api_response = APIResponse(success=False, error="404 Not Found", status_code=404)
-                self._update_response_stats(api_response, time.time() - start_time)
-                return api_response
+                return APIResponse(success=False, error="404 Not Found", status_code=404)
 
             raise
 
         except Exception as e:
             error_msg = str(e)
-            error_type = "UNKNOWN_ERROR"
 
             if isinstance(e, requests.exceptions.Timeout):
-                error_type = "TIMEOUT"
+                pass
             elif isinstance(e, requests.exceptions.ConnectionError):
-                error_type = "NETWORK_ERROR"
+                pass
             elif isinstance(e, RetryError):
-                error_type = "MAX_RETRIES_EXCEEDED"
                 error_msg = f"Max retries exceeded: {str(e)}"
 
-            error_response = self._create_error_response(error_msg, error_type, None)
-            self._update_response_stats(error_response, time.time() - start_time)
-            return error_response
+            return APIResponse(
+                success=False,
+                error=error_msg,
+                status_code=None,
+            )
 
     def _is_retryable_error(self, error: Exception) -> bool:
         """에러가 재시도 가능한지 확인"""
@@ -439,49 +363,6 @@ class BaseAPIClient(ABC):
         ]
         return any(pattern in error_msg for pattern in retryable_patterns)
 
-    def _create_error_response(
-        self, error_msg: str, error_type: str, status_code: Optional[int]
-    ) -> APIResponse:
-        """에러 응답 생성"""
-        self.response_stats["error_count"] += 1
-        if error_type not in self.response_stats["error_types"]:
-            self.response_stats["error_types"][error_type] = 0
-        self.response_stats["error_types"][error_type] += 1
-
-        return APIResponse(
-            success=False,
-            error=error_msg,
-            status_code=status_code,
-        )
-
-    def _update_response_stats(self, api_response: APIResponse, response_time: float):
-        """응답 통계 업데이트"""
-        if api_response.success:
-            self.response_stats["success_count"] += 1
-
-        self.response_stats["response_times"].append(response_time)
-        if len(self.response_stats["response_times"]) > 100:
-            self.response_stats["response_times"] = self.response_stats["response_times"][-100:]
-
-        if self.response_stats["response_times"]:
-            self.response_stats["average_response_time"] = sum(
-                self.response_stats["response_times"]
-            ) / len(self.response_stats["response_times"])
-
-    def get_api_stats(self) -> Dict[str, Any]:
-        """API 통계 정보 반환"""
-        stats = self.response_stats.copy()
-        stats.update(self.cache.get_stats())
-
-        if stats["total_requests"] > 0:
-            stats["success_rate"] = stats["success_count"] / stats["total_requests"]
-            stats["cache_hit_rate"] = stats["cache_hits"] / stats["total_requests"]
-        else:
-            stats["success_rate"] = 0.0
-            stats["cache_hit_rate"] = 0.0
-
-        return stats
-
     def close(self) -> None:
         """세션 종료"""
         self.session.close()
@@ -494,89 +375,3 @@ class BaseAPIClient(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager 종료"""
         self.close()
-
-
-@dataclass
-class CacheEntry:
-    """API 응답 캐시 항목"""
-
-    data: Dict[str, Any]
-    cached_at: float
-    ttl: float = 3600.0
-
-    def is_expired(self) -> bool:
-        """캐시 만료 여부 확인"""
-        return time.time() > (self.cached_at + self.ttl)
-
-
-class APIResponseCache:
-    """API 응답 캐시 관리자"""
-
-    def __init__(self, cache_dir: Optional[Path] = None):
-        self.cache_dir = cache_dir
-        self.memory_cache: Dict[str, CacheEntry] = {}
-        self.logger = get_logger().bind(component="APIResponseCache")
-
-        if self.cache_dir:
-            self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-    def _generate_cache_key(
-        self, method: str, url: str, params: Optional[Dict] = None, data: Optional[Dict] = None
-    ) -> str:
-        """요청에 대한 캐시 키 생성"""
-        key_data = {
-            "method": method,
-            "url": url,
-            "params": params or {},
-            "data": data or {},
-        }
-        key_str = json.dumps(key_data, sort_keys=True)
-        return hashlib.md5(key_str.encode()).hexdigest()
-
-    def get(
-        self, method: str, url: str, params: Optional[Dict] = None, data: Optional[Dict] = None
-    ) -> Optional[APIResponse]:
-        """캐시된 응답 가져오기"""
-        cache_key = self._generate_cache_key(method, url, params, data)
-
-        if cache_key in self.memory_cache:
-            entry = self.memory_cache[cache_key]
-            if not entry.is_expired():
-                return APIResponse(
-                    success=True,
-                    data=entry.data,
-                    status_code=200,
-                )
-            else:
-                del self.memory_cache[cache_key]
-
-        return None
-
-    def set(
-        self,
-        method: str,
-        url: str,
-        response: APIResponse,
-        params: Optional[Dict] = None,
-        data: Optional[Dict] = None,
-        ttl: Optional[float] = None,
-    ) -> None:
-        """응답 캐시에 저장"""
-        if not response.success or not response.data:
-            return
-
-        cache_key = self._generate_cache_key(method, url, params, data)
-        entry = CacheEntry(data=response.data, cached_at=time.time(), ttl=ttl or 3600.0)
-        self.memory_cache[cache_key] = entry
-
-    def get_stats(self) -> Dict[str, Any]:
-        """캐시 통계 정보"""
-        return {
-            "memory_entries": len(self.memory_cache),
-            "file_entries": 0,
-            "cache_dir": str(self.cache_dir) if self.cache_dir else None,
-        }
-
-    def clear(self) -> None:
-        """캐시 비우기"""
-        self.memory_cache.clear()

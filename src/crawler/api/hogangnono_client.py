@@ -6,7 +6,6 @@ BaseAPIClient를 상속받아 중복 코드를 제거한 버전
 import types
 from dataclasses import dataclass
 from typing import Any, Optional, List, Dict
-from pathlib import Path
 
 from structlog import get_logger
 
@@ -142,9 +141,9 @@ class HogangnonoAPIClient(BaseAPIClient):
     BaseAPIClient를 상속받아 중복을 제거하고 호갱노노 특화 기능만 구현
     """
 
-    def __init__(self, config: Config, cache_dir: Optional[Path] = None):
+    def __init__(self, config: Config):
         """클라이언트 초기화"""
-        super().__init__(config=config, base_url="https://hogangnono.com", cache_dir=cache_dir)
+        super().__init__(config=config, base_url="https://hogangnono.com")
         self.logger = get_logger().bind(component="HogangnonoAPIClient")
 
     def get_required_headers(self) -> Dict[str, str]:
