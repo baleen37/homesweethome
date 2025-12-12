@@ -172,8 +172,8 @@ class TestHogangnonoCSVWriter:
             assert first_row["deal_price"] == "45000"  # CSV는 문자열 저장
             assert first_row["deposit"] == "0"
             assert first_row["monthly_rent"] == "0"
-            assert first_row["is_delete"] == "false"
-            assert first_row["is_renew"] == "false"
+            assert first_row["is_delete"] == "False"
+            assert first_row["is_renew"] == "False"
 
             # 두 번째 행 검증 (전세)
             second_row = rows[1]
