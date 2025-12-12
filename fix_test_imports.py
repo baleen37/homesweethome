@@ -55,10 +55,22 @@ def find_insert_position(lines: List[str]) -> int:
             pos += 1
         if pos < len(lines):
             pos += 1
+        pos += 1  # Skip the closing triple quotes line
 
     # Skip any blank lines
     while pos < len(lines) and not lines[pos].strip():
         pos += 1
+
+    # Make sure we don't insert inside a function or class
+    # Look for patterns that indicate code block start
+    for i in range(pos, min(pos + 5, len(lines))):
+        line = lines[i].strip()
+        if (
+            line.startswith("def ")
+            or line.startswith("class ")
+            or line.startswith("@pytest.fixture")
+        ):
+            return i
 
     return pos
 
@@ -116,7 +128,13 @@ def main():
 
     fixed_count = 0
     for file_path in sorted(test_files):
-        print(f"\nProcessing {file_path.relative_to(Path.cwd())}:")
+        # Get relative path safely
+        try:
+            rel_path = file_path.relative_to(Path.cwd())
+        except ValueError:
+            rel_path = file_path
+
+        print(f"\nProcessing {rel_path}:")
         if fix_test_file(file_path):
             fixed_count += 1
 

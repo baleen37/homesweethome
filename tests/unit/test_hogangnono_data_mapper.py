@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 
 from crawler.data_mappers.hogangnono_data_mapper import HogangnonoDataMapper
 
+# Import test setup to configure path and mocks
+
 
 @pytest.fixture
 def temp_mapping_file(tmp_path):

@@ -1,20 +1,40 @@
-# HomeSweetHome Crawler Boilerplate
+# 프로젝트 소개
 
-Python 웹 크롤링 + CSV 저장 보일러플레이트
+HomeSweetHome Crawler는 Python 기반 웹 크롤링 프레임워크로, 특히 호갱노노 부동산 데이터 수집에 최적화되어 있습니다.
 
-## 현재 상태 (2025-12-07)
+## 설치 방법
 
-✅ **호갱노노 부동산 크롤링 작동 중**
-- 호갱노노 API 기반으로 안정적인 데이터 수집
-- Rate Limiting: 5초 간격으로 429 에러 방지
-- 단지 목록, 매물 목록 수집 가능
-- 다양한 필터링 옵션 제공 (지역, 매물 유형 등)
+## 🎯 주요 특징
 
-## 현재 목표
+### ✅ 개선 사항 (2025-12-12 리팩토링)
 
-호갱노노 부동산 매물 데이터 크롤링 구현 완료 ✅
+1. **에러 핸들링 강화**
+   - 404 에러 발생 시 자동 스킵
+   - Circuit Breaker 패턴으로 연쇄 실패 방지
+   - 에러 타입별 분류 및 재시도 로직
+   - 일시적/영구적 에러 구분 처리
 
-## 설치
+2. **API 호출 전 유효성 검증**
+   - 아파트 ID 형식 사전 검증
+   - 에러 기록 기반 스킵 로직
+   - 불필요한 API 호출 감소
+
+3. **의존성 주입(DI) 패턴 도입**
+   - 모듈 간 결합도 감소
+   - 테스트 용이성 향상
+   - 설정과 비즈니스 로직 분리
+
+4. **성능 최적화**
+   - 캐싱 전략 (아파트 데이터, 동 코드)
+   - 배치 처리로 메모리 효율화
+   - bbox 분할로 API 제한 우회
+
+5. **환경별 설정 지원**
+   - 개발/스테이징/프로덕션 환경 분리
+   - YAML/JSON 설정 파일 지원
+   - 중앙 설정 관리
+
+## 사용 방법
 
 ### Nix를 사용하는 경우 (권장)
 
@@ -33,7 +53,10 @@ echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc
 cd homesweethome
 direnv allow  # 최초 1회만 실행
 
-# 5. Playwright 브라우저 설치
+# 5. 의존성 설치
+uv sync
+
+# 6. Playwright 브라우저 설치
 uv run playwright install chromium
 ```
 
@@ -50,166 +73,415 @@ uv run playwright install chromium
 uv run pre-commit install
 ```
 
-## 사용
+## 프로젝트 구조
 
-### 기본 사용
-
-```bash
-# 기본 사용 (전체 크롤링)
-uv run python scripts/main.py
-
-# 출력 파일 지정
-uv run python scripts/main.py --output results/data.csv
+```
+homesweethome/
+├── src/
+│   └── crawler/
+│       ├── api/                 # API 클라이언트
+│       ├── crawlers/            # 크롤러 구현
+│       ├── data_mappers/        # 데이터 매핑
+│       ├── models/              # 데이터 모델
+│       ├── utils/               # 유틸리티
+│       ├── validators/          # 데이터 검증
+│       └── writers/             # CSV/파일 출력
+├── config/                      # 환경별 설정
+├── scripts/                     # 실행 스크립트
+├── tests/                       # 테스트 코드
+│   ├── unit/                    # 단위 테스트
+│   └── integration/             # 통합 테스트
+└── docs/                        # 문서
 ```
 
-### 호갱노노 부동산 크롤링
+## 🚀 빠른 시작
+
+### 1. 개선된 크롤러 사용
 
 ```python
-from crawler.crawlers.hogangnono import HogangnonoCrawler
-from crawler.config import CrawlerConfig
+from pathlib import Path
+from crawler.factories import CrawlerFactory
 
-# 환경 변수에서 설정 로드 (기본: 호갱노노)
-config = CrawlerConfig.from_env()
-crawler = HogangnonoCrawler(config)
+# 팩토리를 통한 크롤러 생성
+factory = CrawlerFactory()
 
-# 단지 목록 크롤링
-complexes = crawler.fetch_complexes()
+# 프로덕션 환경 크롤러
+crawler = factory.get_crawler(
+    environment="production",
+    output_dir=Path("output"),
+    region_bounds=(37.413294, 126.734086, 37.715133, 127.183394)
+)
 
-# 매물 목록 조회
-listings = crawler.fetch_listings("강남구", property_type="apartment")
+# 크롤링 실행
+stats = crawler.crawl_and_save(
+    districts=["강남구", "서초구"],
+    full_period=False
+)
+
+# 결과 확인
+print(f"처리된 아파트: {stats['apartments_processed']}")
+print(f"발견된 오류: {stats['errors']}")
 ```
 
-### 실행 방법
+### 2. 의존성 주입 방식
+
+```python
+from crawler.crawlers.improved_hogangnono_crawler import ImprovedHogangnonoCrawler, CrawlerDependencies
+from crawler.config import HogangnonoConfig
+from crawler.factories import crawler_factory
+
+# 환경별 컨테이너 생성
+container = crawler_factory.create_container("development")
+
+# 의존성 주입된 크롤러
+crawler = container.crawler()
+
+# 크롤러 통계 확인
+stats = crawler.get_crawler_statistics()
+print(f"캐시 히트율: {stats['cache_stats']['apartment_cache_size']}")
+```
+
+### 3. 설정 파일 사용
+
+```python
+# config/development.yaml 설정 로드
+from crawler.factories import config_manager
+
+# 설정 로드
+dev_config = config_manager.load_config("development")
+if dev_config:
+    crawler = factory.get_crawler("development", **dev_config.model_dump())
+```
+
+## 📋 실행 방법
+
+### 기본 실행
 
 ```bash
-# 1. 전체 서울시 크롤링 (체크포인트 지원)
-uv run python scripts/main.py
+# 기본 크롤링 (개선된 버전)
+uv run python scripts/main_improved.py
 
-# 2. 특정 구만 크롤링
-uv run python scripts/main.py --district 강남구,서초구,송파구
+# 환경 지정
+uv run python scripts/main_improved.py --env development
 
-# 3. 이어서 크롤링 (중단된 경우)
-uv run python scripts/main.py --resume
+# 특정 구만 크롤링
+uv run python scripts/main_improved.py --district 강남구,서초구
 
-# 4. 출력 파일 지정
-uv run python scripts/main.py --output results/hogangnono_data_20251207.csv
+# 출력 디렉토리 지정
+uv run python scripts/main_improved.py --output results/20251212
 ```
 
-## 계층적 크롤링
-
-호갱노노는 구 → 동 → 단지 → 매물 순서의 계층적 구조를 가지고 있습니다. 계층적 크롤링은 이 구조를 따라 체계적으로 데이터를 수집합니다.
-
-### 데이터 흐름
-
-1. **구(District) 조회**: 서울시 25개 구 목록 조회
-2. **동(Dong) 조회**: 각 구에 속한 동 목록 조회 (예: 강남구 → 개포동, 역삼동, etc.)
-3. **단지(Complex) 조회**: 각 동에 속한 아파트 단지 목록 조회
-4. **매물(Transaction) 조회**: 각 단지의 실거래 내역 조회
-
-### 실행 예제
+### 고급 옵션
 
 ```bash
-# 단일 구 계층적 크롤링 (예: 강남구)
-uv run python scripts/main.py --district 강남구
+# 전체 기간 데이터 수집
+uv run python scripts/main_improved.py --full-period
 
-# 여러 구 동시 크롤링
-uv run python scripts/main.py --district 강남구,서초구,송파구
+# 로그 레벨 지정
+uv run python scripts/main_improved.py --log-level DEBUG
 
-# 중단된 크롤링 재개 (체크포인트 활용)
-uv run python scripts/main.py --resume
+# 체크포인트에서 재개
+uv run python scripts/main_improved.py --resume
+
+# 병렬 처리 worker 수 지정
+uv run python scripts/main_improved.py --workers 4
 ```
 
-### 예상 소요 시간
+## 🏗️ 아키텍처
 
-- **단일 구**: 약 30분 ~ 1시간 (동 수에 따라 차이)
-- **전체 서울시**: 약 8시간 ~ 12시간
+### 의존성 주입 구조
 
-*참고: API Rate Limiting (5초 간격)으로 인한 예상 시간입니다*
+```
+Container (DI)
+├── Config (환경별 설정)
+├── APIClient (API 통신)
+├── DataMapper (데이터 변환)
+├── Validator (데이터 검증)
+├── ErrorHandler (에러 처리)
+├── BBoxDivider (영역 분할)
+├── CheckpointManager (체크포인트)
+└── CSVWriter (CSV 저장)
+    ↓
+ImprovedHogangnonoCrawler
+```
 
-### 체크포인트 시스템
+### 에러 핸들링 흐름
 
-- 각 동 완료 시마다 진행 상황 저장 (`output/checkpoint.json`)
-- 중단 시 `--resume` 옵션으로 마지막 완료 지점부터 재개
-- 실패한 동은 별도로 기록하여 후속 재시도
+```
+API 요청
+    ↓
+유효성 검증 (ID 형식, 이전 에러 기록)
+    ↓
+API 호출 (with 재시도)
+    ↓
+에러 분류 (404, 429, 5xx 등)
+    ↓
+처리:
+- 404: 영속적 실패로 기록, 스킵
+- 429/5xx: 일시적 실패, 재시도
+- 기타: 로깅 후 계속
+```
 
-### 출력 파일
+## 🔧 설정
 
-계층적 크롤링 결과는 별도 CSV 파일에 저장됩니다:
+### 환경별 설정 파일
 
-- **`output/complexes.csv`**: 단지 정보
-  - 단지ID, 단지명, 주소, 건축년도, 세대수 등
-  - 통계 정보: 총 거래 수, 최신 거래가, 1년 평균 거래가 등
+- `config/development.yaml` - 개발 환경
+- `config/staging.yaml` - 스테이징 환경
+- `config/production.yaml` - 프로덕션 환경
 
-- **`output/transactions.csv`**: 거래내역
-  - 단지ID, 거래일, 가격, 면적, 층, 거래 유형 등
-  - 구/동 코드 포함 (지역별 분석 용이)
+### 주요 설정 항목
 
-### 출력 데이터
+```yaml
+# Rate Limiting
+rate_limit_delay: 2.0        # API 호출 간격
+retry_attempts: 3            # 재시도 횟수
+daily_request_limit: 50000   # 일일 최대 요청 수
 
-크롤링 결과는 CSV 파일로 저장되며 다음 필드를 포함합니다:
-- **거래내역**: `output/transactions.csv`
-  - 단지ID, 건물명, 전용면적, 층, 거래가, 계약일 등
-- **단지 정보**: `output/complexes.csv`
-  - 단지ID, 단지명, 주소, 건축년도, 세대수, 동 수 등
+# 성능 최적화
+batch_size: 50              # 배치 처리 크기
+cache_enabled: true         # 캐싱 활성화
+max_workers: 8              # 병렬 처리 worker 수
 
-### 주의사항
-- API 호출 간 5초 간격으로 Rate Limiting 준수
--长时间 크롤링 시 체크포인트 기능으로 안정성 확보
-- 출력 디렉토리: `output/` (gitignored)
+# 에러 핸들링
+error_handling:
+  max_retries: 3
+  circuit_breaker_threshold: 10
+  skip_404_errors: true
+```
 
-## 새 크롤러 추가
+## 📊 출력 데이터
 
-1. `src/crawler/crawlers/` 아래에 파일 생성
-2. `BaseCrawler` 상속
-3. `get_url()`, `parse()` 메서드 구현
+### 파일 구조
 
-## 개발
+```
+output/
+├── complexes.csv           # 단지 정보
+├── transactions.csv        # 거래 내역
+├── checkpoint.json         # 진행 상황
+├── error_stats.json        # 에러 통계
+└── logs/                   # 로그 파일
+```
 
-### 테스트 실행
+### 주요 필드
+
+#### Complexes (단지 정보)
+- `aptSeq`: 단지 고유 ID
+- `aptName`: 단지명
+- `address`: 주소
+- `buildYear`: 건축년도
+- `poi_category`: POI 유형 (아파트/대중교통/공공시설/기타)
+- `validation_result`: 검증 결과
+
+#### Transactions (거래 내역)
+- `complex_id`: 단지 ID
+- `complex_name`: 단지명
+- `trade_date`: 거래일 (YYYYMM)
+- `deal_price`: 거래가
+- `area`: 전용면적
+- `floor`: 층
+
+## 🧪 테스트
+
+### 단위 테스트
 
 ```bash
 # 전체 테스트
 uv run pytest -v
 
-# 단위 테스트만
+# 단위 테스트
 uv run pytest tests/unit/ -v
 
-# 통합 테스트만
-uv run pytest tests/integration/ -v
+# 특정 테스트
+uv run pytest tests/unit/test_enhanced_error_handler.py -v
 ```
 
-### 코드 품질 검사
+### 통합 테스트
 
 ```bash
-# Linting
-uv run ruff check .
+# 전체 통합 테스트
+uv run pytest tests/integration/ -v
 
-# Formatting
-uv run ruff format .
+# 에러 시나리오 테스트
+uv run pytest tests/integration/test_error_scenarios.py -v
 
-# Type checking
-uv run mypy src/
+# 성능 벤치마킹
+uv run python scripts/benchmark.py
 ```
 
-### 새 크롤러 추가 예시
+### 테스트용 Mock 크롤러
 
 ```python
-# src/crawler/crawlers/my_site.py
-from crawler.crawlers.base import BaseCrawler
-from bs4 import BeautifulSoup
-import requests
+from crawler.factories import CrawlerFactory
+from pathlib import Path
 
-class MySiteCrawler(BaseCrawler):
-    def get_url(self) -> str:
-        return "https://mysite.com"
+factory = CrawlerFactory()
 
-    def fetch(self, url: str) -> str:
-        response = requests.get(url, timeout=self.config.timeout)
-        response.raise_for_status()
-        return response.text
-
-    def parse(self, html: str) -> list[dict]:
-        soup = BeautifulSoup(html, "lxml")
-        # 파싱 로직 구현
-        return []
+# Mock API를 사용하는 테스트 크롤러
+test_crawler = factory.create_test_crawler(
+    output_dir=Path("test_output"),
+    mock_api=True
+)
 ```
+
+## 🔍 모니터링 및 디버깅
+
+### 에러 통계 확인
+
+```python
+# 크롤러 통계
+stats = crawler.get_crawler_statistics()
+
+print(f"총 요청: {stats['performance_stats']['total_requests']}")
+print(f"성공 요청: {stats['performance_stats']['successful_requests']}")
+print(f"실패 요청: {stats['performance_stats']['failed_requests']}")
+print(f"스킵된 아파트: {stats['performance_stats']['skipped_apartments']}")
+print(f"캐시된 요청: {stats['performance_stats']['cached_requests']}")
+
+# 에러 유형별 통계
+error_stats = stats['error_stats']
+print(f"404 에러: {error_stats['error_statistics']['error_counts']['not_found']}")
+print(f"Rate Limit 에러: {error_stats['error_statistics']['error_counts']['rate_limit']}")
+```
+
+### 체크포인트 상태
+
+```python
+from crawler.utils.checkpoint import CheckpointManager
+
+checkpoint = CheckpointManager("output/checkpoint.json")
+stats = checkpoint.get_stats()
+
+print(f"완료된 구/군: {len(stats['completed_districts'])}")
+print(f"남은 구/군: {len(stats['remaining_districts'])}")
+```
+
+## ⚡ 성능 팁
+
+1. **캐싱 활용**
+   - 아파트 데이터와 동 코드를 자동 캐싱
+   - 중복 API 호출 방지
+
+2. **배치 처리**
+   - 50개 단위로 배치 처리
+   - 메모리 사용량 최적화
+
+3. **병렬 처리**
+   - 멀티스레딩 지원
+   - worker 수 조절로 성능 최적화
+
+4. **bbox 분할**
+   - POI API 1000개 제한 우회
+   - 적응적 분할로 최적화
+
+## 🐛 문제 해결
+
+### 흔한 문제들
+
+1. **Rate Limit (429 에러)**
+   - 해결: `rate_limit_delay` 증가
+   - 설정: `rate_limit_delay: 3.0`
+
+2. **많은 404 에러**
+   - 해결: ID 필터링 강화
+   - 확인: `validation_result` 필드
+
+3. **메모리 부족**
+   - 해결: `batch_size` 감소
+   - 설정: `batch_size: 20`
+
+4. **느린 속도**
+   - 해결: `max_workers` 증가
+   - 주의: API 제한 확인
+
+### 로그 분석
+
+```bash
+# DEBUG 레벨 로그
+tail -f output/logs/crawler.log | grep DEBUG
+
+# 에러만 보기
+tail -f output/logs/crawler.log | grep ERROR
+
+# 404 에러 모니터링
+tail -f output/logs/crawler.log | grep "apartment_not_found"
+```
+
+## 🤝 기여
+
+1. Fork
+2. Feature 브랜치 생성
+3. 커밋 (`git commit -m 'Add some feature'`)
+4. Push (`git push origin feature`)
+5. Pull Request
+
+## 📝 라이선스
+
+MIT License
+
+## API 문서
+
+### 주요 API 클라이언트
+
+#### BaseAPIClient
+- 기본 API 통신 기능 제공
+- 재시도 로직 및 에러 핸들링
+
+#### HogangnonoAPIClient
+- 호갱노노 API 전용 클라이언트
+- 부동산 데이터 조회 기능
+
+### API 엔드포인트
+
+| 엔드포인트 | 설명 | 파라미터 |
+|-----------|------|----------|
+| `/aparts` | 아파트 목록 조회 | bbox, page, size |
+| `/aparts/{id}` | 아파트 상세 정보 | apartment_id |
+| `/aparts/{id}/transactions` | 거래 내역 | apartment_id, period |
+| `/poi` | POI 정보 | bbox, category, limit |
+
+자세한 API 문서는 [src/crawler/api/](src/crawler/api/) 디렉토리의 각 모듈 docstring을 참조하세요.
+
+## 기여 가이드
+
+### 코드 컨벤션
+
+1. **Python 스타일 가이드**
+   - PEP 8 준수
+   - Black formatter 사용
+   - isort for imports
+
+2. **커밋 메시지**
+   - feat: 새 기능
+   - fix: 버그 수정
+   - docs: 문서화
+   - test: 테스트
+   - refactor: 리팩토링
+
+3. **PR 프로세스**
+   - Fork 및 브랜치 생성
+   - 테스트 통과 확인
+   - 코드 리뷰 요청
+
+### 개발 환경 설정
+
+```bash
+# 개발 환경 설정
+git clone https://github.com/username/homesweethome.git
+cd homesweethome
+direnv allow
+uv sync
+uv run pre-commit install
+
+# 테스트 실행
+uv run pytest -v
+
+# 문서화 커버리지 확인
+python test_documentation_coverage.py
+```
+
+## 🔗 관련 문서
+
+- [아키텍처 가이드](docs/architecture.md)
+- [테스트 가이드](docs/testing.md)
+- [배포 가이드](docs/deployment.md)

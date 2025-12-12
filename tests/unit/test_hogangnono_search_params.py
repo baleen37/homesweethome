@@ -4,6 +4,8 @@ import pytest
 
 from crawler.api.hogangnono_client import SearchParams
 
+# Import test setup to configure path and mocks
+
 
 class TestSearchParams:
     """SearchParams 클래스 테스트"""

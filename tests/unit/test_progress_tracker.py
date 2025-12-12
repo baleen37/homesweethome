@@ -4,16 +4,19 @@ import json
 import tempfile
 import time
 from pathlib import Path
+from unittest import TestCase
 from unittest.mock import patch
 
+# Import test setup FIRST to configure path and mocks
 
+# Now import crawler modules
 from crawler.progress_tracker import ProgressTracker
 
 
-class TestProgressTracker:
+class TestProgressTracker(TestCase):
     """ProgressTracker 테스트 클래스"""
 
-    def setup_method(self):
+    def setUp(self):
         """테스트 메서드 실행 전 설정"""
         self.temp_dir = Path(tempfile.mkdtemp())
         self.tracker = ProgressTracker(
@@ -21,7 +24,7 @@ class TestProgressTracker:
             report_interval=1,  # 1초 간격으로 리포트
         )
 
-    def teardown_method(self):
+    def tearDown(self):
         """테스트 메서드 실행 후 정리"""
         # 임시 파일 정리
         import shutil

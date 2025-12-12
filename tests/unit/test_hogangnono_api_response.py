@@ -1,5 +1,7 @@
 """APIResponse 클래스 단위 테스트"""
 
+# Import test setup to configure path and mocks
+
 import json
 import pytest
 from unittest.mock import Mock

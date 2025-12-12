@@ -13,6 +13,8 @@ from crawler.utils.checkpoint import CheckpointManager
 @pytest.fixture
 def config():
     """테스트용 설정 객체"""
+    # Import test setup to configure path and mocks
+
     return CrawlerConfig(
         user_agent="test-agent",
         timeout=10.0,

@@ -9,6 +9,9 @@ import pytest
 from crawler.writers.base_csv_writer import BaseCSVWriter
 
 
+# Import test setup to configure path and mocks
+
+
 # Test concrete implementation of BaseCSVWriter
 class ConcreteTestCSVWriter(BaseCSVWriter):
     """Test implementation of BaseCSVWriter for testing purposes."""
@@ -17,7 +20,17 @@ class ConcreteTestCSVWriter(BaseCSVWriter):
 
     def _normalize_row_legacy(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Simple normalization for testing."""
-        return self._normalize_common_fields(row)
+        # Simple normalization: convert None to empty string
+        # Convert boolean to lowercase 'true'/'false' for CSV compatibility
+        normalized = {}
+        for key, value in row.items():
+            if value is None:
+                normalized[key] = ""
+            elif isinstance(value, bool):
+                normalized[key] = "true" if value else "false"
+            else:
+                normalized[key] = str(value)
+        return normalized
 
 
 class TestBaseCSVWriter:

@@ -1,15 +1,18 @@
 """체크포인트 동시성 테스트"""
 
+# Import test setup to configure path and mocks
+
 import json
 import os
 import threading
+import unittest
 
 import pytest
 
 from crawler.utils.checkpoint import CheckpointManager
 
 
-class TestCheckpointManager:
+class TestCheckpointManager(unittest.TestCase):
     """CheckpointManager 동시성 테스트"""
 
     def test_concurrent_checkpoint_access(self, tmp_path):

@@ -16,6 +16,66 @@ project_root = Path(__file__).parent.parent
 src_path = project_root / "src"
 sys.path.insert(0, str(src_path))
 
+# Mock pytest if not available
+try:
+    import pytest  # noqa: F401
+except ImportError:
+    mock_pytest = Mock()
+
+    # Mock pytest.mark decorator
+    class MockMark:
+        def __call__(self, *args, **kwargs):
+            return lambda func: func
+
+        def parametrize(self, param_names, param_values):
+            return lambda func: func
+
+        def skip(self, reason=""):
+            return lambda func: func
+
+        def skipif(self, condition, reason=""):
+            return lambda func: func
+
+        def xfail(self, reason="", **kwargs):
+            return lambda func: func
+
+        def fixture(self, *args, **kwargs):
+            """Mock fixture decorator that can handle both function and kwargs usage"""
+            if args and callable(args[0]):
+                # Direct decorator usage: @pytest.fixture
+                func = args[0]
+                return func
+            else:
+                # Decorator with params: @pytest.fixture()
+                return lambda func: func
+
+        def raises(self, expected_exception, **kwargs):
+            return MockContextManager()
+
+    # Mock context manager for pytest.raises
+    class MockContextManager:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    mock_pytest.mark = MockMark()
+
+    # Mock top-level fixture function
+    def mock_fixture(*args, **kwargs):
+        if args and callable(args[0]):
+            return args[0]
+        else:
+            return lambda func: func
+
+    mock_pytest.fixture = mock_fixture
+    mock_pytest.raises = lambda expected_exception, **kwargs: MockContextManager()
+    mock_pytest.skip = lambda reason="": None
+    mock_pytest.xfail = lambda reason="": None
+
+    sys.modules["pytest"] = mock_pytest
+
 # Mock structlog before importing any crawler modules
 try:
     import structlog  # noqa: F401
@@ -62,8 +122,29 @@ except ImportError:
 
     mock_pydantic.BaseModel = MockBaseModel
     mock_pydantic.Field = lambda default=None, **kwargs: default
-    mock_pydantic.field_validator = lambda field_name, **kwargs: lambda func: func
-    mock_pydantic.model_validator = lambda mode, **kwargs: lambda func: func
+
+    # Create proper field_validator decorator
+    def mock_field_validator(*field_names, **kwargs):
+        """Mock field_validator decorator that can handle multiple field names"""
+
+        def decorator(func):
+            return func
+
+        return decorator
+
+    mock_pydantic.field_validator = mock_field_validator
+
+    # Create proper model_validator decorator
+    def mock_model_validator(mode, **kwargs):
+        """Mock model_validator decorator that handles the mode parameter"""
+
+        def decorator(func):
+            return func
+
+        return decorator
+
+    mock_pydantic.model_validator = mock_model_validator
+
     mock_pydantic.ValidationError = ValueError
 
     sys.modules["pydantic"] = mock_pydantic
@@ -85,6 +166,113 @@ except ImportError:
     sys.modules["playwright"] = mock_playwright
     sys.modules["playwright.async_api"] = Mock()
     sys.modules["playwright.sync_api"] = Mock()
+
+# Mock requests module with better defaults if needed
+try:
+    import requests  # noqa: F401
+
+    # If requests is available, also try requests_mock
+    try:
+        import requests_mock  # noqa: F401
+    except ImportError:
+        # Create requests_mock mock
+        mock_requests_mock = Mock()
+
+        # Create a Mocker class
+        class MockRequestsMocker:
+            def __init__(self):
+                self.get = Mock()
+                self.post = Mock()
+                self.put = Mock()
+                self.delete = Mock()
+                self.patch = Mock()
+                self.request = Mock()
+                self.register_uri = Mock()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                pass
+
+        mock_requests_mock.Mocker = MockRequestsMocker
+        mock_requests_mock.Adapter = Mock()
+        mock_requests_mock.responses = Mock()
+        mock_requests_mock.exceptions = Mock()
+
+        sys.modules["requests_mock"] = mock_requests_mock
+except ImportError:
+    # Mock requests module
+    mock_requests = Mock()
+
+    # Create Mock Response class
+    class MockResponse:
+        def __init__(self, status_code=200, text="", json_data=None):
+            self.status_code = status_code
+            self.text = text
+            self._json_data = json_data or {}
+            self.headers = {}
+            self.ok = status_code < 400
+
+        def json(self):
+            return self._json_data
+
+        def raise_for_status(self):
+            if not self.ok:
+                raise requests.HTTPError(f"HTTP {self.status_code}")
+
+    # Create Mock Session class
+    class MockSession:
+        def __init__(self):
+            self.get = Mock(return_value=MockResponse())
+            self.post = Mock(return_value=MockResponse())
+            self.put = Mock(return_value=MockResponse())
+            self.delete = Mock(return_value=MockResponse())
+            self.patch = Mock(return_value=MockResponse())
+            self.request = Mock(return_value=MockResponse())
+            self.headers = {}
+
+        def close(self):
+            pass
+
+    mock_requests.Response = MockResponse
+    mock_requests.Session = MockSession
+    mock_requests.get = Mock(return_value=MockResponse())
+    mock_requests.post = Mock(return_value=MockResponse())
+    mock_requests.exceptions = Mock()
+    mock_requests.exceptions.HTTPError = Exception
+    mock_requests.exceptions.ConnectionError = Exception
+    mock_requests.exceptions.Timeout = Exception
+    mock_requests.exceptions.RequestException = Exception
+
+    sys.modules["requests"] = mock_requests
+
+    # Also create requests_mock mock
+    mock_requests_mock = Mock()
+
+    # Create a Mocker class
+    class MockRequestsMocker:
+        def __init__(self):
+            self.get = Mock()
+            self.post = Mock()
+            self.put = Mock()
+            self.delete = Mock()
+            self.patch = Mock()
+            self.request = Mock()
+            self.register_uri = Mock()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    mock_requests_mock.Mocker = MockRequestsMocker
+    mock_requests_mock.Adapter = Mock()
+    mock_requests_mock.responses = Mock()
+    mock_requests_mock.exceptions = Mock()
+
+    sys.modules["requests_mock"] = mock_requests_mock
 
 # Export commonly used modules for convenience
 __all__ = [

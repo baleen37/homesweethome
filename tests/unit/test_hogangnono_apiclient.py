@@ -12,6 +12,8 @@ from tests.fixtures.hogangnono_responses import (
     MOCK_COMPLEX_LIST_RESPONSE,
 )
 
+# Import test setup to configure path and mocks
+
 
 class TestHogangnonoAPIClient:
     """HogangnonoAPIClient 클래스 테스트"""

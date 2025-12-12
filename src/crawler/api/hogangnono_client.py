@@ -4,16 +4,26 @@
 """
 
 import json
+import time
+import hashlib
 import types
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict
+from pathlib import Path
 
 import requests
 from requests import Response, Session
 from structlog import get_logger
 
 from crawler.config import CrawlerConfig
-from ..utils.retry import retry_transient_errors
+from ..utils.retry import retry_transient_errors, Retryable, BackoffStrategy, RetryError
+from ..utils.enhanced_error_handler import EnhancedErrorHandler, CircuitBreaker
+from ..models.api_responses import (
+    POIInfo,
+    RankingInfo,
+    poi_info_from_bounding_response,
+    ranking_info_from_rolling_response,
+)
 
 # Mock 객체 확인을 위한 임포트 (테스트 환경에서만 사용)
 try:
@@ -210,7 +220,7 @@ class SearchParams:
 
 @dataclass
 class APIResponse:
-    """API 응답 래퍼
+    """API 응답 래퍼 (기존 호환성 유지)
 
     Attributes:
         success: API 호출 성공 여부
@@ -382,17 +392,166 @@ class APIResponse:
             )
 
 
+@dataclass
+class CacheEntry:
+    """API 응답 캐시 항목"""
+
+    data: Dict[str, Any]
+    cached_at: float
+    ttl: float = 3600.0  # 기본 1시간
+
+    def is_expired(self) -> bool:
+        """캐시 만료 여부 확인"""
+        return time.time() > (self.cached_at + self.ttl)
+
+    def to_response(self, status_code: int = 200) -> "APIResponse":
+        """캐시된 데이터를 APIResponse로 변환"""
+        return APIResponse(
+            success=True,
+            data=self.data,
+            status_code=status_code,
+        )
+
+
+class APIResponseCache:
+    """API 응답 캐시 관리자"""
+
+    def __init__(self, cache_dir: Optional[Path] = None):
+        """캐시 초기화
+
+        Args:
+            cache_dir: 캐시 디렉토리 (None이면 메모리 캐시만 사용)
+        """
+        self.cache_dir = cache_dir
+        self.memory_cache: Dict[str, CacheEntry] = {}
+        self.logger = get_logger().bind(component="APIResponseCache")
+
+        # 캐시 디렉토리 생성
+        if self.cache_dir:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _generate_cache_key(
+        self, method: str, url: str, params: Optional[Dict] = None, data: Optional[Dict] = None
+    ) -> str:
+        """요청에 대한 캐시 키 생성"""
+        key_data = {
+            "method": method,
+            "url": url,
+            "params": params or {},
+            "data": data or {},
+        }
+        key_str = json.dumps(key_data, sort_keys=True)
+        return hashlib.md5(key_str.encode()).hexdigest()
+
+    def get(
+        self, method: str, url: str, params: Optional[Dict] = None, data: Optional[Dict] = None
+    ) -> Optional[APIResponse]:
+        """캐시된 응답 가져오기"""
+        cache_key = self._generate_cache_key(method, url, params, data)
+
+        # 메모리 캐시 확인
+        if cache_key in self.memory_cache:
+            entry = self.memory_cache[cache_key]
+            if not entry.is_expired():
+                self.logger.debug("cache_hit_memory", cache_key=cache_key[:8])
+                return entry.to_response()
+            else:
+                del self.memory_cache[cache_key]
+
+        # 파일 캐시 확인
+        if self.cache_dir:
+            cache_file = self.cache_dir / f"{cache_key}.json"
+            if cache_file.exists():
+                try:
+                    with open(cache_file, "r", encoding="utf-8") as f:
+                        cache_data = json.load(f)
+                    entry = CacheEntry(**cache_data)
+                    if not entry.is_expired():
+                        # 메모리에도 로드
+                        self.memory_cache[cache_key] = entry
+                        self.logger.debug("cache_hit_file", cache_key=cache_key[:8])
+                        return entry.to_response()
+                    else:
+                        cache_file.unlink()  # 만료된 파일 삭제
+                except Exception as e:
+                    self.logger.warning(
+                        "cache_file_read_failed", cache_key=cache_key[:8], error=str(e)
+                    )
+                    try:
+                        cache_file.unlink()  # 손상된 파일 삭제
+                    except (OSError, PermissionError):
+                        pass
+
+        return None
+
+    def set(
+        self,
+        method: str,
+        url: str,
+        response: APIResponse,
+        params: Optional[Dict] = None,
+        data: Optional[Dict] = None,
+        ttl: Optional[float] = None,
+    ) -> None:
+        """응답 캐시에 저장"""
+        if not response.success or not response.data:
+            return  # 실패한 응답은 캐싱하지 않음
+
+        cache_key = self._generate_cache_key(method, url, params, data)
+        entry = CacheEntry(data=response.data, cached_at=time.time(), ttl=ttl or 3600.0)
+
+        # 메모리에 저장
+        self.memory_cache[cache_key] = entry
+
+        # 파일에 저장
+        if self.cache_dir:
+            cache_file = self.cache_dir / f"{cache_key}.json"
+            try:
+                with open(cache_file, "w", encoding="utf-8") as f:
+                    json.dump(entry.__dict__, f, ensure_ascii=False, indent=2)
+                self.logger.debug("cache_saved", cache_key=cache_key[:8])
+            except Exception as e:
+                self.logger.warning(
+                    "cache_file_write_failed", cache_key=cache_key[:8], error=str(e)
+                )
+
+    def clear(self) -> None:
+        """캐시 비우기"""
+        self.memory_cache.clear()
+        if self.cache_dir and self.cache_dir.exists():
+            for cache_file in self.cache_dir.glob("*.json"):
+                try:
+                    cache_file.unlink()
+                except (OSError, PermissionError):
+                    pass
+        self.logger.info("cache_cleared")
+
+    def get_stats(self) -> Dict[str, Any]:
+        """캐시 통계 정보"""
+        memory_count = len(self.memory_cache)
+        file_count = 0
+        if self.cache_dir and self.cache_dir.exists():
+            file_count = len(list(self.cache_dir.glob("*.json")))
+
+        return {
+            "memory_entries": memory_count,
+            "file_entries": file_count,
+            "cache_dir": str(self.cache_dir) if self.cache_dir else None,
+        }
+
+
 class HogangnonoAPIClient:
     """호갱노노 API 클라이언트
 
     호갱노노 API와의 통신을 처리합니다.
     """
 
-    def __init__(self, config: CrawlerConfig):
+    def __init__(self, config: CrawlerConfig, cache_dir: Optional[Path] = None):
         """클라이언트 초기화
 
         Args:
             config: 크롤러 설정 객체
+            cache_dir: API 응답 캐시 디렉토리
         """
         self.config = config
         self.base_url = "https://hogangnono.com"
@@ -410,6 +569,46 @@ class HogangnonoAPIClient:
             initial_delay=2.0,  # API 가이드에 따라 5.0에서 2.0으로 변경
             min_delay=1.0,  # API 가이드에 따라 1.5에서 1.0으로 변경
             max_delay=10.0,
+        )
+
+        # API 응답 캐시
+        self.cache = APIResponseCache(cache_dir)
+
+        # API 응답 통계
+        self.response_stats = {
+            "total_requests": 0,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "success_count": 0,
+            "error_count": 0,
+            "error_types": {},
+            "average_response_time": 0.0,
+            "response_times": [],
+        }
+
+        # 네트워크 설정
+        self.timeout = config.timeout if hasattr(config, "timeout") else 30
+        self.max_retries = config.max_retries if hasattr(config, "max_retries") else 3
+
+        # API 에러 타입 정의
+        self.ERROR_TYPES = {
+            "NETWORK_ERROR": "네트워크 오류",
+            "TIMEOUT": "요청 시간 초과",
+            "HTTP_ERROR": "HTTP 에러",
+            "API_ERROR": "API 비즈니스 로직 에러",
+            "INVALID_RESPONSE": "유효하지 않은 응답",
+            "PARSE_ERROR": "응답 파싱 에러",
+            "RATE_LIMIT": "요청 제한 초과",
+            "AUTH_ERROR": "인증 에러",
+        }
+
+        # 개선된 에러 핸들러 초기화
+        self.error_handler = EnhancedErrorHandler(max_retries=self.max_retries, retry_delay=1.0)
+
+        # 서킷 브레이커 초기화
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=10,  # 10번 실패 후 열림
+            timeout=60,  # 60초 후 재시도
         )
 
     def _build_url(self, endpoint: str) -> str:
@@ -527,114 +726,518 @@ class HogangnonoAPIClient:
         params: Optional[dict[str, Any]] = None,
         data: Optional[dict[str, Any]] = None,
         headers: Optional[dict[str, str]] = None,
+        use_cache: bool = True,
+        cache_ttl: Optional[float] = None,
     ) -> APIResponse:
-        """HTTP 요청 실행"""
+        """HTTP 요청 실행 (캐싱, 재시도, 서킷 브레이커 포함)
+
+        Args:
+            method: HTTP 메서드
+            endpoint: API 엔드포인트
+            params: 쿼리 파라미터
+            data: 요청 데이터
+            headers: 추가 헤더
+            use_cache: 캐시 사용 여부
+            cache_ttl: 캐시 유효시간 (초)
+
+        Returns:
+            API 응답 객체
+        """
+        # 통계 기록
+        self.response_stats["total_requests"] += 1
+        start_time = time.time()
+
+        # 캐시 확인 (GET 요청만)
+        if use_cache and method.upper() == "GET":
+            cached_response = self.cache.get(method, endpoint, params, data)
+            if cached_response:
+                self.response_stats["cache_hits"] += 1
+                self.logger.debug("api_response_cache_hit", endpoint=endpoint)
+                return cached_response
+            self.response_stats["cache_misses"] += 1
+
         # Rate limiting 적용
         self.rate_limiter.wait()
 
         # 세션이 초기화되지 않았다면 초기화
         if not self._session_initialized:
             if not self._initialize_session():
-                return APIResponse(
-                    success=False,
-                    error="Failed to initialize session",
-                    status_code=None,
+                return self._create_error_response(
+                    "Failed to initialize session", "INIT_ERROR", None
                 )
 
-        url = self._build_url(endpoint)
-        request_headers = self._add_auth_headers(headers)
-
-        self.logger.info(
-            "API request",
-            method=method,
-            url=url,
-            params=params,
-        )
-
-        # 쿠키 정보 로깅
-        if self.session.cookies:
-            # Mock 객체 처리
-            if Mock is not None and isinstance(self.session.cookies, Mock):
-                self.logger.debug(
-                    "Request cookies (Mock)",
-                    is_mock=True,
+        # 서킷 브레이커 확인
+        if self.circuit_breaker.state == "OPEN":
+            if self.circuit_breaker._should_attempt_reset():
+                self.circuit_breaker.state = "HALF_OPEN"
+                self.logger.info(
+                    "circuit_breaker_half_open",
+                    endpoint=endpoint,
+                    timeout=self.circuit_breaker.timeout,
                 )
             else:
-                try:
-                    cookie_info = {c.name: c.value for c in self.session.cookies}
-                    self.logger.debug(
-                        "Request cookies",
-                        cookies=cookie_info,
-                    )
-                except (TypeError, AttributeError):
-                    # 쿠키 객체가 다른 형태일 경우
-                    self.logger.debug(
-                        "Request cookies (unknown format)",
-                        cookies=str(self.session.cookies)[:100],
-                    )
+                self.logger.warning(
+                    "circuit_breaker_open",
+                    endpoint=endpoint,
+                    last_failure_time=self.circuit_breaker.last_failure_time,
+                )
+                return self._create_error_response(
+                    "Circuit breaker is OPEN - too many failures", "CIRCUIT_BREAKER_OPEN", 503
+                )
 
-        response = self.session.request(
-            method=method,
-            url=url,
-            params=params,
-            json=data,
-            headers=request_headers,
-            timeout=self.config.timeout,
+        # 개선된 재시도 로직 적용
+        retryable = Retryable(
+            max_attempts=self.max_retries + 1,
+            base_delay=1.0,
+            max_delay=30.0,
+            strategy=BackoffStrategy.EXPONENTIAL,
+            jitter=True,
+            exponential_base=2.0,
+            retry_on=(
+                requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.HTTPError,
+                Exception,
+            ),
+            retry_on_predicate=self._is_retryable_error,
+            stop_on=(requests.exceptions.HTTPError,),
         )
 
-        api_response = APIResponse.from_response(response)
+        try:
+            # 재시도 가능한 함수 정의
+            def make_http_request():
+                url = self._build_url(endpoint)
+                request_headers = self._add_auth_headers(headers)
 
-        # Auto-recover from auth errors (401/403)
-        if response.status_code in [401, 403]:
-            self.logger.warning(
-                "Auth error detected, reinitializing session",
-                status_code=response.status_code,
-                error=api_response.error,
-            )
-            # Reset session and retry once
-            self._session_initialized = False
-            if self._initialize_session():
-                self.logger.info("Session reinitialized, retrying request")
+                # 요청 전 로깅
+                self.logger.debug(
+                    "api_request",
+                    method=method,
+                    endpoint=endpoint,
+                    url=url,
+                )
+
+                # HTTP 요청 실행
                 response = self.session.request(
                     method=method,
                     url=url,
                     params=params,
                     json=data,
                     headers=request_headers,
-                    timeout=self.config.timeout,
-                )
-                api_response = APIResponse.from_response(response)
-            else:
-                self.logger.error("Failed to reinitialize session")
-                return APIResponse(
-                    success=False,
-                    error="Failed to reinitialize session after auth error",
-                    status_code=response.status_code,
+                    timeout=self.timeout,
                 )
 
-        # Rate limiter 피드백
-        if api_response.success:
-            self.rate_limiter.on_success()
+                # 응답 처리
+                api_response = APIResponse.from_response(response)
+
+                # 404 에러는 예외 처리로 변환하여 재시도 로직에서 처리되지 않도록 함
+                if api_response.status_code == 404:
+                    raise requests.exceptions.HTTPError("404 Not Found", response=response)
+
+                # 응답 데이터 검증
+                if api_response.success and api_response.data:
+                    api_response = self._validate_response_data(api_response)
+
+                return api_response
+
+            # 재시도 가능한 HTTP 요청 실행
+            api_response = retryable.execute(make_http_request)
+
+            # 성공 시 캐시 저장
+            if api_response.success and api_response.data and method.upper() == "GET":
+                self.cache.set(method, endpoint, api_response, params, data, cache_ttl)
+
+            # 통계 업데이트
+            response_time = time.time() - start_time
+            self._update_response_stats(api_response, response_time)
+
+            # 서킷 브레이커 성공 처리
+            self.circuit_breaker._on_success()
+
+            # 에러 핸들러에 성공 기록
+            apartment_id = self._extract_apartment_id(endpoint, params)
+            if apartment_id:
+                self.error_handler.id_filter.mark_validated(apartment_id)
+
+            return api_response
+
+        except requests.exceptions.HTTPError as e:
+            response = getattr(e, "response", None)
+            status_code = response.status_code if response else None
+
+            # 404는 즉시 반환 (재시도 안 함)
+            if status_code == 404:
+                api_response = APIResponse(success=False, error="404 Not Found", status_code=404)
+                self._update_response_stats(api_response, time.time() - start_time)
+
+                # 에러 핸들러에 404 기록
+                apartment_id = self._extract_apartment_id(endpoint, params)
+                if apartment_id:
+                    self.error_handler.handle_error(
+                        success=api_response.success,
+                        status_code=api_response.status_code,
+                        error_message=api_response.error,
+                        apartment_id=apartment_id,
+                    )
+
+                return api_response
+
+            # 429 에러 처리
+            elif status_code == 429:
+                self.logger.warning(
+                    "rate_limit_hit",
+                    endpoint=endpoint,
+                    retry_after=response.headers.get("Retry-After") if response else None,
+                )
+                self._handle_rate_limit(
+                    APIResponse(
+                        success=False,
+                        error="Rate limit exceeded",
+                        status_code=429,
+                        data=response.json() if response and hasattr(response, "json") else None,
+                    )
+                )
+                # 재시도는 retryable이 처리
+                raise
+
+            # 기타 HTTP 에러
+            else:
+                self.circuit_breaker._on_failure()
+                raise
+
+        except Exception as e:
+            # 서킷 브레이커 실패 처리
+            self.circuit_breaker._on_failure()
+
+            # 에러 응답 생성
+            error_msg = str(e)
+            error_type = "UNKNOWN_ERROR"
+
+            if isinstance(e, requests.exceptions.Timeout):
+                error_type = "TIMEOUT"
+            elif isinstance(e, requests.exceptions.ConnectionError):
+                error_type = "NETWORK_ERROR"
+            elif isinstance(e, RetryError):
+                error_type = "MAX_RETRIES_EXCEEDED"
+                error_msg = f"Max retries exceeded: {str(e)}"
+
+            error_response = self._create_error_response(error_msg, error_type, None)
+
+            # 통계 업데이트
+            response_time = time.time() - start_time
+            self._update_response_stats(error_response, response_time)
+
+            # 에러 핸들러에 기록
+            apartment_id = self._extract_apartment_id(endpoint, params)
+            if apartment_id:
+                self.error_handler.handle_error(
+                    success=error_response.success,
+                    status_code=error_response.status_code,
+                    error_message=error_response.error,
+                    apartment_id=apartment_id,
+                )
+
+            return error_response
+
+    def _validate_response_data(self, api_response: APIResponse) -> APIResponse:
+        """API 응답 데이터 검증
+
+        데이터 구조 분석 및 유효성 검사
+        """
+        if not api_response.data:
+            return api_response
+
+        data = api_response.data
+
+        try:
+            # 데이터 정제 적용
+            from ..validators import sanitize_api_data, validate_api_response
+
+            # 데이터 정제
+            sanitized_data = sanitize_api_data(data, "unknown")
+            if sanitized_data != data:
+                self.logger.warning("data_sanitized", changes="malformed data fixed")
+                data = sanitized_data
+                api_response.data = sanitized_data
+
+            # 응답 데이터 구조 분석
+            structure_info = {
+                "data_type": type(data).__name__,
+                "has_list": isinstance(data, list),
+                "has_dict": isinstance(data, dict),
+                "list_length": len(data) if isinstance(data, list) else None,
+                "dict_keys": list(data.keys())[:10] if isinstance(data, dict) else None,
+                "sample_items": None,
+            }
+
+            # 샘플 데이터 추출
+            if isinstance(data, list) and data:
+                structure_info["sample_items"] = data[:3]
+            elif isinstance(data, dict):
+                if "data" in data and isinstance(data["data"], list):
+                    structure_info["sample_items"] = data["data"][:3]
+                elif "items" in data and isinstance(data["items"], list):
+                    structure_info["sample_items"] = data["items"][:3]
+
+            # 로깅
             self.logger.info(
-                "API request successful",
-                status=response.status_code,
+                "api_response_structure",
+                endpoint=api_response.status_code,
+                structure=structure_info,
             )
-        elif api_response.status_code == 429:
-            self.rate_limiter.on_rate_limit_error()
+
+            # 스키마 기반 검증
+            response_type = self._detect_response_type(data)
+            validation_report = validate_api_response(data, response_type)
+
+            # 에러 처리 - 심각한 에러가 있는 경우 처리를 중단
+            if validation_report.has_errors():
+                errors = validation_report.get_errors()
+                critical_errors = [e for e in errors if e.severity.value == "critical"]
+
+                if critical_errors:
+                    # Critical 에러가 있으면 응답을 실패로 처리
+                    error_messages = [e.message for e in critical_errors]
+                    self.logger.error(
+                        "api_response_critical_validation_errors",
+                        error_count=len(critical_errors),
+                        errors=error_messages,
+                    )
+                    return APIResponse(
+                        success=False,
+                        error=f"Critical validation errors: {'; '.join(error_messages)}",
+                        status_code=api_response.status_code,
+                        data=None,
+                    )
+
+                # 일반 에러가 있으면 경고 로그와 함께 계속 진행
+                non_critical_errors = [e for e in errors if e.severity.value != "critical"]
+                if non_critical_errors:
+                    self.logger.warning(
+                        "api_response_validation_errors",
+                        error_count=len(non_critical_errors),
+                        errors=[e.message for e in non_critical_errors[:5]],  # 처음 5개 에러만
+                    )
+
+            # 경고 로깅
+            warnings = validation_report.get_warnings()
+            if warnings:
+                self.logger.info(
+                    "api_response_validation_warnings",
+                    warning_count=len(warnings),
+                    warnings=[w.message for w in warnings[:3]],  # 처음 3개 경고만
+                )
+
+            # POI 데이터 분석
+            if isinstance(data, list):
+                poi_analysis = self._analyze_poi_data(data)
+                if poi_analysis:
+                    self.logger.info("poi_data_analysis", **poi_analysis)
+            elif isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+                poi_analysis = self._analyze_poi_data(data["data"])
+                if poi_analysis:
+                    self.logger.info("poi_data_analysis", **poi_analysis)
+
+        except Exception as e:
+            # 검증 중 에러가 발생하면 응답을 실패로 처리
             self.logger.error(
-                "API request rate limited",
-                status=response.status_code,
-                error=api_response.error,
+                "response_validation_failed", error=str(e), error_type=type(e).__name__
             )
-        else:
-            self.rate_limiter.on_error()
-            self.logger.error(
-                "API request failed",
-                status=response.status_code,
-                error=api_response.error,
+            return APIResponse(
+                success=False,
+                error=f"Response validation failed: {str(e)}",
+                status_code=api_response.status_code,
+                data=None,
             )
 
         return api_response
+
+    def _detect_response_type(self, data: Any) -> str:
+        """응답 타입 감지"""
+        if not data:
+            return "unknown"
+
+        # 리스트 형태이면 POI
+        if isinstance(data, list):
+            # 첫 항목으로 POI인지 확인
+            if data and isinstance(data[0], dict):
+                first_item = data[0]
+                if all(k in first_item for k in ["id", "lat", "lng"]):
+                    return "poi"
+            return "list"
+
+        # 딕셔너리 형태
+        if isinstance(data, dict):
+            # 키로 응답 타입 추정
+            if "data" in data:
+                if isinstance(data["data"], list):
+                    return "poi"
+                elif isinstance(data["data"], dict):
+                    # 단지 정보 특징
+                    inner = data["data"]
+                    if any(k in inner for k in ["complexNo", "complexName", "buildYear"]):
+                        return "complex"
+                    # 거래 정보 특징
+                    elif any(k in inner for k in ["shortTermReport", "monthlyReport", "tradeType"]):
+                        return "transaction"
+
+            # 최상위 키로 판단
+            if any(k in data for k in ["complexNo", "complexName", "name", "buildYear"]):
+                return "complex"
+            elif any(k in data for k in ["shortTermReport", "reports", "transactions"]):
+                return "transaction"
+
+        return "unknown"
+
+    def _analyze_poi_data(self, data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """POI 데이터 분석"""
+        if not data_list:
+            return {}
+
+        analysis = {
+            "total_items": len(data_list),
+            "poi_types": {},
+            "has_apartments": False,
+            "has_transit": False,
+            "has_facilities": False,
+            "id_patterns": {},
+        }
+
+        # 첫 100개 항목만 분석 (성능 고려)
+        sample_size = min(100, len(data_list))
+        for item in data_list[:sample_size]:
+            # ID 패턴 분석
+            item_id = str(item.get("id", ""))
+            if item_id:
+                if item_id.isdigit():
+                    analysis["id_patterns"]["numeric"] = (
+                        analysis["id_patterns"].get("numeric", 0) + 1
+                    )
+                elif item_id.startswith("APT_"):
+                    analysis["id_patterns"]["apt_prefixed"] = (
+                        analysis["id_patterns"].get("apt_prefixed", 0) + 1
+                    )
+                else:
+                    analysis["id_patterns"]["other"] = analysis["id_patterns"].get("other", 0) + 1
+
+            # POI 타입 분석
+            name = item.get("name", "").lower()
+            category = item.get("category", "")
+
+            if "역" in name or "station" in name or category == 2:
+                analysis["has_transit"] = True
+                analysis["poi_types"]["transit"] = analysis["poi_types"].get("transit", 0) + 1
+            elif any(keyword in name for keyword in ["아파트", "apt"]) or category == 1:
+                analysis["has_apartments"] = True
+                analysis["poi_types"]["apartment"] = analysis["poi_types"].get("apartment", 0) + 1
+            elif any(keyword in name for keyword in ["병원", "hospital", "마트", "mart"]):
+                analysis["has_facilities"] = True
+                analysis["poi_types"]["facility"] = analysis["poi_types"].get("facility", 0) + 1
+
+        return analysis
+
+    def _create_error_response(
+        self, error_msg: str, error_type: str, status_code: Optional[int]
+    ) -> APIResponse:
+        """에러 응답 생성"""
+        # 에러 타입 통계 업데이트
+        self.response_stats["error_count"] += 1
+        if error_type not in self.response_stats["error_types"]:
+            self.response_stats["error_types"][error_type] = 0
+        self.response_stats["error_types"][error_type] += 1
+
+        self.logger.error(
+            "api_request_failed",
+            error_type=error_type,
+            error_message=error_msg,
+            status_code=status_code,
+        )
+
+        return APIResponse(
+            success=False,
+            error=error_msg,
+            status_code=status_code,
+        )
+
+    def _update_response_stats(self, api_response: APIResponse, response_time: float):
+        """응답 통계 업데이트"""
+        if api_response.success:
+            self.response_stats["success_count"] += 1
+
+        # 응답 시간 기록
+        self.response_stats["response_times"].append(response_time)
+        # 최근 100개 응답 시간만 유지
+        if len(self.response_stats["response_times"]) > 100:
+            self.response_stats["response_times"] = self.response_stats["response_times"][-100:]
+
+        # 평균 응답 시간 계산
+        if self.response_stats["response_times"]:
+            self.response_stats["average_response_time"] = sum(
+                self.response_stats["response_times"]
+            ) / len(self.response_stats["response_times"])
+
+    def _handle_rate_limit(self, api_response: APIResponse):
+        """Rate limit 에러 처리"""
+        retry_after = api_response.status_code
+        if api_response.data and isinstance(api_response.data, dict):
+            retry_after = api_response.data.get("retryAfter", retry_after)
+
+        # Rate limiter에 지연 시간 증가
+        current_delay = self.rate_limiter.current_delay
+        new_delay = min(current_delay * 2, 30.0)  # 최대 30초
+        self.rate_limiter.update_delay(new_delay)
+
+        self.logger.warning(
+            "api_rate_limit_hit",
+            retry_after=retry_after,
+            new_delay=new_delay,
+        )
+
+        # 대기
+        time.sleep(new_delay)
+
+    def get_api_stats(self) -> Dict[str, Any]:
+        """API 통계 정보 반환"""
+        stats = self.response_stats.copy()
+
+        # 캐시 통계 추가
+        stats.update(self.cache.get_stats())
+
+        # 성공률 계산
+        if stats["total_requests"] > 0:
+            stats["success_rate"] = stats["success_count"] / stats["total_requests"]
+            stats["cache_hit_rate"] = stats["cache_hits"] / stats["total_requests"]
+        else:
+            stats["success_rate"] = 0.0
+            stats["cache_hit_rate"] = 0.0
+
+        # Rate limiter 정보
+        stats["rate_limiter"] = {
+            "current_delay": self.rate_limiter.current_delay,
+            "min_delay": self.rate_limiter.min_delay,
+            "max_delay": self.rate_limiter.max_delay,
+        }
+
+        return stats
+
+    def clear_cache(self):
+        """API 응답 캐시 비우기"""
+        self.cache.clear()
+        self.logger.info("api_cache_cleared")
+
+    def reset_stats(self):
+        """API 통계 초기화"""
+        self.response_stats = {
+            "total_requests": 0,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "success_count": 0,
+            "error_count": 0,
+            "error_types": {},
+            "average_response_time": 0.0,
+            "response_times": [],
+        }
+        self.logger.info("api_stats_reset")
 
     @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_complex_list(
@@ -702,8 +1305,9 @@ class HogangnonoAPIClient:
         """
         params = search_params.to_dict()
 
-        # 호갱노노 API 엔드포인트 (아파트 데이터용)
-        # Use the original endpoint for backward compatibility
+        # 호갱노노 API 엔드포인트 (POI 기반)
+        # apt/bounding and search/apartments endpoints don't work
+        # We need to use pois-bounding with better filtering
         return self._make_request(
             method="GET",
             endpoint="/api/v2/pois-bounding",
@@ -838,42 +1442,31 @@ class HogangnonoAPIClient:
             params=params,
         )
 
-    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_apartment_detail(self, apt_id: str) -> APIResponse:
         """아파트 상세 정보 조회
+
+        DEPRECATED: 상세 정보 엔드포인트는 존재하지 않음.
+        대신 get_apartment_transactions를 사용하세요.
 
         Args:
             apt_id: 아파트 ID (aptHash)
 
         Returns:
-            APIResponse 객체
-
-        Example Response:
-            {
-                "data": {
-                    "aptHash": "1Hq6f",
-                    "aptName": "래미안",
-                    "buildYear": 2005,
-                    "household": 1012,
-                    "parkingCount": 850,
-                    "floorAreaRatio": 250.5,
-                    "buildingCoverageRatio": 15.3
-                },
-                "status": "success"
-            }
+            APIResponse 객체 (get_apartment_transactions 호출 결과)
         """
-        return self._make_request(method="GET", endpoint=f"/api/v2/apts/{apt_id}", params={})
+        # This endpoint has been replaced - redirect to monthly-reports
+        return self.get_apartment_transactions(apt_id=apt_id, trade_type=0, area_no=0)
 
     @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def get_apartment_transactions(
-        self, apt_id: str, trade_type: int = 0, area_no: int = 0, full_period: bool = False
+        self, apt_id: str, trade_type: int = 1, area_no: int = 201, full_period: bool = False
     ) -> APIResponse:
         """실거래 내역 조회
 
         Args:
             apt_id: 단지 ID (aptHash)
-            trade_type: 0=매매, 1=전세, 2=월세
-            area_no: 면적 필터 (0=전체)
+            trade_type: 1=매매, 0=전세, 2=월세 (기본값: 매매)
+            area_no: 면적 필터 (201=33㎡, 기본값: 201)
             full_period: True면 전체 기간, False면 최근 3년
 
         Returns:
@@ -924,6 +1517,87 @@ class HogangnonoAPIClient:
             endpoint="/api/apt/by-district",
             params=params,
         )
+
+    def _is_retryable_error(self, error: Exception) -> bool:
+        """Check if an error is retryable
+
+        Args:
+            error: Exception to check
+
+        Returns:
+            True if error is retryable
+        """
+        error_msg = str(error).lower()
+
+        # Check for retryable error patterns
+        retryable_patterns = [
+            "timeout",
+            "connection",
+            "network",
+            "temporary",
+            "502",  # Bad gateway
+            "503",  # Service unavailable
+            "504",  # Gateway timeout
+        ]
+
+        return any(pattern in error_msg for pattern in retryable_patterns)
+
+    def _extract_apartment_id(self, endpoint: str, params: Optional[dict] = None) -> Optional[str]:
+        """Extract apartment ID from endpoint and parameters
+
+        Args:
+            endpoint: API endpoint
+            params: Request parameters
+
+        Returns:
+            Apartment ID if found
+        """
+        # Check endpoint pattern for apartment ID
+        if "/apts/" in endpoint:
+            parts = endpoint.split("/apts/")
+            if len(parts) > 1:
+                apt_id = parts[1].split("/")[0]
+                return apt_id
+
+        # Check parameters for apartment ID
+        if params:
+            for key in ["complexNo", "apt_id", "apartmentId"]:
+                if key in params:
+                    return str(params[key])
+
+        return None
+
+    def get_error_summary(self) -> dict[str, Any]:
+        """Get comprehensive error summary
+
+        Returns:
+            Error summary including statistics and recommendations
+        """
+        return self.error_handler.get_error_summary()
+
+    def get_circuit_breaker_status(self) -> dict[str, Any]:
+        """Get current circuit breaker status
+
+        Returns:
+            Circuit breaker state and statistics
+        """
+        return {
+            "state": self.circuit_breaker.state,
+            "failure_count": self.circuit_breaker.failure_count,
+            "failure_threshold": self.circuit_breaker.failure_threshold,
+            "timeout": self.circuit_breaker.timeout,
+            "last_failure_time": self.circuit_breaker.last_failure_time,
+            "is_open": self.circuit_breaker.state == "OPEN",
+            "is_half_open": self.circuit_breaker.state == "HALF_OPEN",
+            "is_closed": self.circuit_breaker.state == "CLOSED",
+        }
+
+    def reset_circuit_breaker(self):
+        """Manually reset circuit breaker to CLOSED state"""
+        self.circuit_breaker.failure_count = 0
+        self.circuit_breaker.state = "CLOSED"
+        self.circuit_breaker.last_failure_time = None
+        self.logger.info("circuit_breaker_manually_reset")
 
     def close(self) -> None:
         """세션 종료"""
@@ -1001,7 +1675,7 @@ class HogangnonoAPIClient:
 
         return response.data
 
-    def parse_complexes_from_ranks(self, ranks_data: dict[str, Any]) -> list[dict[str, Any]]:
+    def parse_complexes_from_ranks(self, ranks_data: dict[str, Any]) -> List[RankingInfo]:
         """ranks/rolling 응답에서 단지 정보 파싱
 
         Args:
@@ -1021,24 +1695,12 @@ class HogangnonoAPIClient:
             return complexes
 
         for item in ranks_data["data"]["rolling"]:
-            complex_info = {
-                "id": item.get("hash"),  # hash를 ID로 사용
-                "aptName": item.get("name"),
-                "region1": item.get("sidoName"),
-                "region2": item.get("sigunguName"),
-                "region3": item.get("dongName"),
-                "address": item.get("regionName"),
-                "ranking": item.get("rank"),
-                "prevRank": item.get("prevRank"),
-                "visitor": item.get("visitor"),
-                "rankType": item.get("rankType"),
-                "statusTag": item.get("statusTag"),
-            }
-            complexes.append(complex_info)
+            ranking_info = ranking_info_from_rolling_response(item)
+            complexes.append(ranking_info)
 
         return complexes
 
-    def parse_pois_from_bounding(self, pois_data: dict[str, Any]) -> list[dict[str, Any]]:
+    def parse_pois_from_bounding(self, pois_data: dict[str, Any]) -> List[POIInfo]:
         """pois-bounding 응답에서 POI 정보 파싱
 
         Args:
@@ -1052,31 +1714,41 @@ class HogangnonoAPIClient:
         if not pois_data or "data" not in pois_data:
             return pois
 
+        # Count different types for logging
+        type_counts = {"total": 0, "apartments": 0, "transit": 0, "facilities": 0, "others": 0}
+
         for item in pois_data["data"]:
-            poi_info = {
-                "id": item.get("id"),
-                "name": item.get("name"),
-                "lat": item.get("lat"),
-                "lng": item.get("lng"),
-                "type": item.get("type"),
-                "region1": item.get("region1"),
-                "region2": item.get("region2"),
-                "region3": item.get("region3"),
-                "address": item.get("address"),
-                "buildDate": item.get("buildDate"),
-                "households": item.get("households"),
-                "floors": item.get("floors"),
-                "elevatorCount": item.get("elevatorCount"),
-                "parkingCount": item.get("parkingCount"),
-                "heatingType": item.get("heatingType"),
-                "totalFloorArea": item.get("totalFloorArea"),
-                "totalSiteArea": item.get("totalSiteArea"),
-            }
-            pois.append(poi_info)
+            poi_info = poi_info_from_bounding_response(item)
+            type_counts["total"] += 1
+
+            # Count types for analysis
+            if poi_info.is_transit():
+                type_counts["transit"] += 1
+            elif poi_info.is_facility():
+                type_counts["facilities"] += 1
+            elif poi_info.is_apartment():
+                type_counts["apartments"] += 1
+            else:
+                type_counts["others"] += 1
+
+            # Only include valid apartments
+            if poi_info.validate_for_apartment_crawling():
+                pois.append(poi_info)
+
+        # Log filtering results
+        self.logger.info(
+            "poi_filtering_results",
+            total_items=type_counts["total"],
+            apartments_found=type_counts["apartments"],
+            transit_count=type_counts["transit"],
+            facilities_count=type_counts["facilities"],
+            valid_apartments=len(pois),
+            filtering_ratio=len(pois) / type_counts["total"] if type_counts["total"] > 0 else 0,
+        )
 
         return pois
 
-    def to_csv_rows_complexes(self, complexes_data: dict[str, Any]) -> list[dict[str, Any]]:
+    def to_csv_rows_complexes(self, complexes_data: dict[str, Any]) -> List[dict[str, Any]]:
         """단지 데이터를 CSV 행으로 변환
 
         Args:
@@ -1085,28 +1757,18 @@ class HogangnonoAPIClient:
         Returns:
             CSV 행 리스트
         """
+        from ..models.csv_models import RankingCSVRow
+
         rows = []
         complexes = self.parse_complexes_from_ranks(complexes_data)
 
         for complex_item in complexes:
-            row = {
-                "단지ID": complex_item["id"],
-                "단지명": complex_item["aptName"],
-                "시도": complex_item["region1"],
-                "시군구": complex_item["region2"],
-                "동": complex_item["region3"],
-                "지역명": complex_item["address"],
-                "순위": complex_item["ranking"],
-                "이전순위": complex_item["prevRank"],
-                "방문자수": complex_item["visitor"],
-                "랭킹타입": complex_item["rankType"],
-                "상태태그": complex_item["statusTag"],
-            }
-            rows.append(row)
+            csv_row = RankingCSVRow.from_ranking_info(complex_item)
+            rows.append(csv_row.to_dict())
 
         return rows
 
-    def to_csv_rows_pois(self, pois_data: dict[str, Any]) -> list[dict[str, Any]]:
+    def to_csv_rows_pois(self, pois_data: dict[str, Any]) -> List[dict[str, Any]]:
         """POI 데이터를 CSV 행으로 변환
 
         Args:
@@ -1115,60 +1777,55 @@ class HogangnonoAPIClient:
         Returns:
             CSV 행 리스트
         """
+        from ..models.csv_models import POICSVRow
+
         rows = []
         pois = self.parse_pois_from_bounding(pois_data)
 
         for poi in pois:
-            row = {
-                "POI_ID": poi["id"],
-                "명칭": poi["name"],
-                "위도": poi["lat"],
-                "경도": poi["lng"],
-                "유형": poi["type"],
-                "시도코드": poi["region1"],
-                "시군구코드": poi["region2"],
-                "법정동코드": poi["region3"],
-                "주소": poi["address"],
-                "건축년도": poi["buildDate"],
-                "세대수": poi["households"],
-                "층수": poi["floors"],
-                "승강기수": poi["elevatorCount"],
-                "주차대수": poi["parkingCount"],
-                "난방방식": poi["heatingType"],
-                "연면적": poi["totalFloorArea"],
-                "대지면적": poi["totalSiteArea"],
-            }
-            rows.append(row)
+            csv_row = POICSVRow.from_poi_info(poi)
+            rows.append(csv_row.to_dict())
 
         return rows
 
     def fetch_apartments_by_pois(self, pois_response: dict[str, Any]) -> list[dict[str, Any]]:
-        """POI 데이터를 기반으로 아파트 매물 정보 조회
+        """API 응답에서 아파트 데이터 추출
 
         Args:
-            pois_response: API 응답 데이터 (fetch_pois_bounding 결과)
+            pois_response: API 응답 데이터 (get_apartments_bounding 결과)
 
         Returns:
             아파트 매물 정보 리스트
         """
         apartments = []
 
-        # POI 데이터 추출
-        pois_data = pois_response.get("data", [])
+        # Parse POIs and filter for apartments only
+        pois = self.parse_pois_from_bounding(pois_response)
 
-        # POI 데이터에서 아파트 식별
-        for poi in pois_data:
-            # 카테고리 1인 항목만 필터링
-            if isinstance(poi, dict) and poi.get("category") == 1:
-                apartment_info = {
-                    "id": poi.get("id"),
-                    "name": poi.get("name"),
-                    "lat": poi.get("lat"),
-                    "lng": poi.get("lng"),
-                    "description": poi.get("description"),
-                    "poi_data": poi,
-                }
-                apartments.append(apartment_info)
+        # Convert POIInfos to apartment dict format
+        for poi in pois:
+            # Only process valid apartments
+            if not poi.validate_for_apartment_crawling():
+                continue
+
+            apartment_info = {
+                "id": poi.id,
+                "name": poi.name,
+                "lat": poi.lat,
+                "lng": poi.lng,
+                "address": poi.address,
+                "build_year": poi.build_date,  # POI uses build_date
+                "households": poi.households,
+                "floors": poi.floors,
+                "raw_data": poi.__dict__,  # Store the POI object data
+            }
+            apartments.append(apartment_info)
+
+        self.logger.info(
+            "apartments_extracted_from_pois",
+            total_pois=len(pois_response.get("data", [])),
+            valid_apartments=len(apartments),
+        )
 
         return apartments
 

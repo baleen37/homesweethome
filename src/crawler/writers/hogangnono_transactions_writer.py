@@ -1,40 +1,25 @@
 """CSV writer for Hogangnono transactions data.
 
-This module provides HogangnonoTransactionsCSVWriter class that inherits from BaseCSVWriter
-to handle transactions.csv file for Hogangnono data.
+This module provides HogangnonoTransactionsCSVWriter class that handles transactions.csv
+file for Hogangnono data using the refactored base class.
 """
 
 from pathlib import Path
-from typing import Any, Dict
 
-from crawler.writers.base_csv_writer import BaseCSVWriter
+from crawler.writers.base_hogangnono_writer import BaseHogangnonoCSVWriter
 from crawler.writers.hogangnono_strategy import HogangnonoTransactionStrategy
+from crawler.writers.csv_header_standard import CSVType
+from crawler.writers.data_transformation_strategy import DataTransformationStrategy
 
 
-class HogangnonoTransactionsCSVWriter(BaseCSVWriter):
+class HogangnonoTransactionsCSVWriter(BaseHogangnonoCSVWriter):
     """호갱노노 거래내역 데이터를 CSV로 저장하는 전용 클래스
 
     이 클래스는 Strategy 패턴을 사용하여 호갱노노 데이터를 네이버 형식으로 변환합니다.
     """
 
-    # 네이버 CSV 형식 필드명 (향후 호환성을 위해 유지)
-    FIELDNAMES = [
-        "complex_id",
-        "complex_name",
-        "pyeong_type_number",
-        "pyeong_name",
-        "trade_type",
-        "trade_type_name",
-        "trade_date",
-        "trade_year",
-        "floor",
-        "deal_price",
-        "deposit",
-        "monthly_rent",
-        "trade_category",
-        "is_delete",
-        "is_renew",
-    ]
+    # Fieldnames for backward compatibility
+    FIELDNAMES = HogangnonoTransactionStrategy().get_fieldnames()
 
     def __init__(self, output_path: Path) -> None:
         """Initialize HogangnonoTransactionsCSVWriter with Hogangnono strategy.
@@ -42,16 +27,19 @@ class HogangnonoTransactionsCSVWriter(BaseCSVWriter):
         Args:
             output_path: Path to the CSV file
         """
-        # Create and set the Hogangnono transaction transformation strategy
-        strategy = HogangnonoTransactionStrategy()
-        super().__init__(output_path, strategy=strategy)
+        super().__init__(output_path, CSVType.TRANSACTIONS)
 
-    def _normalize_row_legacy(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        """Legacy normalization method - not used when strategy is set.
+    def _create_strategy(self, csv_type: CSVType) -> DataTransformationStrategy:
+        """Create the transactions strategy.
 
-        This method is kept for backward compatibility but should not be called
-        when a strategy is provided.
+        Args:
+            csv_type: Type of CSV (should be TRANSACTIONS)
+
+        Returns:
+            HogangnonoTransactionStrategy instance
         """
-        # This should not be reached when strategy is set
-        # Base class will use the strategy instead
-        return row
+        if csv_type != CSVType.TRANSACTIONS:
+            raise ValueError(
+                f"HogangnonoTransactionsCSVWriter expects TRANSACTIONS type, got {csv_type}"
+            )
+        return HogangnonoTransactionStrategy()

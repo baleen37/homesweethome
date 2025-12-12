@@ -1,4 +1,5 @@
-from pytest import MonkeyPatch
+# Import test setup to configure path and mocks
+
 
 # Import test setup to configure path and mocks
 
@@ -17,7 +18,7 @@ def test_config_default_values() -> None:
     assert config.max_workers == 4
 
 
-def test_config_from_env(monkeypatch: MonkeyPatch) -> None:
+def test_config_from_env(monkeypatch) -> None:
     import tempfile
     import os
 
@@ -33,7 +34,7 @@ def test_config_from_env(monkeypatch: MonkeyPatch) -> None:
         assert config.output_file == output_path
 
 
-def test_config_from_env_with_overrides(monkeypatch: MonkeyPatch) -> None:
+def test_config_from_env_with_overrides(monkeypatch) -> None:
     monkeypatch.setenv("CRAWLER_TIMEOUT", "60")
 
     config = CrawlerConfig.from_env(timeout=90)

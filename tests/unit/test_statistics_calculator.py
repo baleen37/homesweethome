@@ -4,6 +4,8 @@ from unittest.mock import patch
 
 from crawler.statistics_calculator import StatisticsCalculator
 
+# Import test setup to configure path and mocks
+
 
 class TestStatisticsCalculator:
     """StatisticsCalculator 테스트 클래스"""

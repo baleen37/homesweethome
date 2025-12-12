@@ -4,6 +4,8 @@
 작동하는 API 엔드포인트를 찾아내는 것을 목표로 합니다.
 """
 
+# Import test setup to configure path and mocks
+
 import json
 import pytest
 

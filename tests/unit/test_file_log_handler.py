@@ -3,20 +3,24 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest import TestCase
 from unittest.mock import ANY, patch
 
+# Import test setup FIRST to configure path and mocks
+
+# Now import crawler modules
 from crawler.file_log_handler import FileLogHandler
 
 
-class TestFileLogHandler:
+class TestFileLogHandler(TestCase):
     """FileLogHandler 테스트 클래스"""
 
-    def setup_method(self):
+    def setUp(self):
         """테스트 메서드 실행 전 설정"""
         self.temp_dir = Path(tempfile.mkdtemp())
         self.handler = FileLogHandler(output_dir=self.temp_dir)
 
-    def teardown_method(self):
+    def tearDown(self):
         """테스트 메서드 실행 후 정리"""
         # 임시 파일 정리
         import shutil

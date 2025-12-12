@@ -7,6 +7,8 @@ from pathlib import Path
 from crawler.writers.complexes_csv_writer import ComplexesCSVWriter
 from crawler.utils.statistics import calculate_statistics_from_transactions
 
+# Import test setup to configure path and mocks
+
 
 def test_statistics_and_csv_integration() -> None:
     """Test that statistics calculation integrates correctly with CSV writing."""

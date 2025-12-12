@@ -1,1 +1,1 @@
-# Tests package
+"""Tests package for the crawler application."""

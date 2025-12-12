@@ -46,14 +46,32 @@ class ComplexesCSVWriter(BaseCSVWriter):
             complex_data: 기본 단지 정보
             transactions: 해당 단지의 거래내역 리스트
         """
+        import csv
         from crawler.utils.statistics import calculate_statistics_from_transactions
 
         # 통계 계산
         complex_with_stats = calculate_statistics_from_transactions(complex_data, transactions)
 
-        # Strategy를 통해 정규화 후 추가
+        # Strategy를 통해 정규화
         normalized = self._normalize_row(complex_with_stats)
-        self.append([normalized])
+
+        # 직접 CSV에 추가 (이미 정규화된 데이터이므로 다시 정규화하지 않음)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 파일이 없으면 헤더 작성
+        file_exists = self.output_path.exists()
+
+        with open(
+            self.output_path, mode="a" if file_exists else "w", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.DictWriter(f, fieldnames=self.get_fieldnames())
+
+            if not file_exists:
+                writer.writeheader()
+
+            writer.writerow(normalized)
+
+        self._file_exists = True
 
     def _normalize_row_legacy(self, complex_data: dict[str, Any]) -> dict[str, Any]:
         """Legacy normalization method - not used when strategy is set.

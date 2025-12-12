@@ -16,7 +16,12 @@ from ..writers.transaction_csv_writer import TransactionCSVWriter
 from ..writers.complexes_csv_writer import ComplexesCSVWriter
 from ..writers.hogangnono_csv_writer import HogangnonoCSVWriter
 from ..utils.checkpoint import CheckpointManager
+from ..utils.bbox_division import BBoxDivision
+from ..utils.enhanced_error_handler import EnhancedErrorHandler
 from ..data_mappers import HogangnonoDataMapper
+from ..validators.data_validator import ApartmentValidator
+from ..validators.apartment_id_validator import ApartmentIdValidator
+from unittest.mock import Mock
 
 
 class HogangnonoCrawler(APICrawler):
@@ -40,7 +45,7 @@ class HogangnonoCrawler(APICrawler):
         Args:
             config: 크롤러 설정
             output_dir: 출력 디렉토리
-            region_bounds: 크롤링할 지역 좌표 (lat_min, lng_min, lat_max, lng_max)
+            region_bounds: 크롤링할 지역 좌표 (lat_min, lng_min, lng_max, lat_max)
         """
         # 기본 설정
         base_url = "https://hogangnono.com"
@@ -97,6 +102,17 @@ class HogangnonoCrawler(APICrawler):
         # 데이터 매핑을 위한 HogangnonoDataMapper 초기화
         self.data_mapper = HogangnonoDataMapper(
             dong_code_mapping_file=self.output_dir / "dong_code_mapping.json"
+        )
+
+        # 데이터 검증기 초기화
+        self.apartment_validator = ApartmentValidator()
+
+        # bbox 분할 유틸리티 초기화
+        self.bbox_divider = BBoxDivision(max_pois_per_bbox=900)
+
+        # 향상된 에러 핸들러 초기화
+        self.error_handler = EnhancedErrorHandler(
+            max_retries=config.max_retries if hasattr(config, "max_retries") else 3, retry_delay=1.0
         )
 
         self.logger.info(
@@ -168,7 +184,20 @@ class HogangnonoCrawler(APICrawler):
         else:
             items = response_data if isinstance(response_data, list) else []
 
-        for item in items:
+        # Defense-in-Depth: 먼저 아파트 데이터만 필터링
+        from ..validators.data_validator import filter_apartments
+
+        valid_items, filter_stats = filter_apartments(items)
+
+        self.logger.info(
+            "data_filtering_applied",
+            total_items=len(items),
+            valid_items=len(valid_items),
+            invalid_items=filter_stats["invalid"],
+            invalid_reasons=filter_stats.get("reasons", {}),
+        )
+
+        for item in valid_items:
             try:
                 # 호갱노노 → 네이버 형식으로 매핑
                 mapped_data = self.data_mapper.map_to_naver_format(
@@ -187,6 +216,7 @@ class HogangnonoCrawler(APICrawler):
         self.logger.info(
             "parsed_response",
             total_items=len(items),
+            valid_items=len(valid_items),
             mapped_items=len(apartments),
         )
 
@@ -201,7 +231,7 @@ class HogangnonoCrawler(APICrawler):
         """지역별 매물 수집
 
         Args:
-            region_bounds: 크롤링할 지역 좌표 (lat_min, lng_min, lat_max, lng_max)
+            region_bounds: 크롤링할 지역 좌표 (lat_min, lng_min, lng_max, lat_max)
             apt_type: 매물 타입 (apart/officetel/house)
             trade_type: 거래 타입 (sale/jeonse/monthly)
 
@@ -467,7 +497,8 @@ class HogangnonoCrawler(APICrawler):
             for region in all_regions:
                 if isinstance(region, dict) and "children" in region:
                     for child in region["children"]:
-                        if child["regionCode"] in districts:
+                        # 구 이름 또는 구 코드로 매칭
+                        if child["name"] in districts or child["regionCode"] in districts:
                             result.append(child)
             return result
 
@@ -489,13 +520,19 @@ class HogangnonoCrawler(APICrawler):
                     result.extend(region["children"])
         return result
 
-    def _crawl_district(self, district: Dict[str, Any], full_period: bool) -> None:
+    def _crawl_district(self, district: Dict[str, Any], full_period: bool) -> Dict[str, Any]:
         """단일 구/군 크롤링
 
         Args:
             district: 구/군 정보 딕셔너리
             full_period: 전체 기간 수집 여부
+
+        Returns:
+            크롤링 통계 정보
         """
+        from ..validators.data_validator import filter_apartments
+        from ..models.api_responses import POIInfo
+
         district_code = district["regionCode"]
         district_name = district["name"]
 
@@ -503,55 +540,142 @@ class HogangnonoCrawler(APICrawler):
             "crawling_district", district_code=district_code, district_name=district_name
         )
 
-        # 2-1. 단지 목록 수집
-        apartments = self._fetch_apartments_in_district(district)
-        self.logger.info("apartments_fetched", district=district_name, count=len(apartments))
+        # 2-1. POI 데이터 수집 (아파트뿐만 아니라 모든 POI)
+        all_pois = self._fetch_apartments_in_district(district)
 
-        # 2-2. 각 단지 상세 정보 및 실거래 내역 수집
-        for apt in apartments:
-            apt_id = apt.get("aptHash")
-            if not apt_id:
-                self.logger.warning("missing_apt_id", apartment=apt)
-                continue
+        # POI 분류 및 통계
+        poi_stats = {
+            "total": len(all_pois),
+            "apartments": 0,
+            "transit": 0,
+            "facilities": 0,
+            "others": 0,
+        }
 
+        # POI 타입별 분류
+        pois_by_type = {"apartments": [], "transit": [], "facilities": [], "others": []}
+
+        for poi_data in all_pois:
             try:
-                # 단지 상세 정보
-                apt_detail_response = self.hogangnono_client.get_apartment_detail(apt_id)
-                if not apt_detail_response.success:
-                    self.logger.error(
-                        "failed_to_get_detail", apt_id=apt_id, error=apt_detail_response.error
-                    )
-                    # 404는 건너뛰기, 나머지는 예외 발생
-                    if apt_detail_response.status_code != 404:
-                        raise Exception(
-                            f"Failed to get detail for {apt_id}: {apt_detail_response.error}"
-                        )
-                    continue
+                poi = POIInfo.from_bounding_response(poi_data)
 
-                # 실거래 내역
-                transactions_response = self.hogangnono_client.get_apartment_transactions(
-                    apt_id,
-                    trade_type=0,  # 매매
-                    full_period=full_period,
-                )
-                if not transactions_response.success:
-                    self.logger.error(
-                        "failed_to_get_transactions",
-                        apt_id=apt_id,
-                        error=transactions_response.error,
-                    )
-                    raise Exception(
-                        f"Failed to get transactions for {apt_id}: {transactions_response.error}"
-                    )
-
-                # 데이터 병합 및 저장
-                self._save_apartment_data(apt, apt_detail_response.data, transactions_response.data)
-
+                if poi.is_apartment():
+                    poi_stats["apartments"] += 1
+                    pois_by_type["apartments"].append(poi_data)
+                elif poi.is_transit():
+                    poi_stats["transit"] += 1
+                    pois_by_type["transit"].append(poi_data)
+                elif poi.is_facility():
+                    poi_stats["facilities"] += 1
+                    pois_by_type["facilities"].append(poi_data)
+                else:
+                    poi_stats["others"] += 1
+                    pois_by_type["others"].append(poi_data)
             except Exception as e:
-                self.logger.error("apartment_processing_failed", apt_id=apt_id, error=str(e))
-                raise  # 실패 시 즉시 중단
+                self.logger.warning(
+                    "poi_classification_failed", poi_id=poi_data.get("id", "unknown"), error=str(e)
+                )
+                poi_stats["others"] += 1
+                pois_by_type["others"].append(poi_data)
 
-        self.logger.info("district_crawling_completed", district=district_name)
+        # 상세 로깅
+        self.logger.info(
+            "poi_classification_complete",
+            district=district_name,
+            total_pois=poi_stats["total"],
+            apartments=poi_stats["apartments"],
+            transit=poi_stats["transit"],
+            facilities=poi_stats["facilities"],
+            others=poi_stats["others"],
+            sample_transit=[p.get("name") for p in pois_by_type["transit"][:3]],
+            sample_facilities=[p.get("name") for p in pois_by_type["facilities"][:3]],
+        )
+
+        # 2-2. 아파트만 필터링 (Defense-in-Depth)
+        valid_apartments, filter_stats = filter_apartments(pois_by_type["apartments"])
+
+        self.logger.info(
+            "apartment_filtering_complete",
+            district=district_name,
+            input_count=len(pois_by_type["apartments"]),
+            valid_count=len(valid_apartments),
+            invalid_count=len(pois_by_type["apartments"]) - len(valid_apartments),
+            filter_stats=filter_stats,
+        )
+
+        # 2-3. 유효한 아파트만 저장
+        if valid_apartments:
+            self.logger.info(
+                "saving_apartment_list",
+                district=district_name,
+                count=len(valid_apartments),
+                note="Saving only valid apartments after filtering",
+            )
+
+            # 배치 처리로 저장
+            batch_size = 50
+            for i in range(0, len(valid_apartments), batch_size):
+                batch = valid_apartments[i : i + batch_size]
+                try:
+                    for apt in batch:
+                        self._save_apartment_basic_info(apt, district_name, is_valid=True)
+                        # 유효한 아파트라면 실거래 내역도 가져오기
+                        if apt.get("id"):
+                            self._fetch_and_save_transactions(apt, district_name)
+                except Exception as e:
+                    self.logger.error(
+                        "apartment_batch_save_failed",
+                        batch_start=i,
+                        batch_size=len(batch),
+                        error=str(e),
+                    )
+        else:
+            self.logger.warning(
+                "no_valid_apartments_found",
+                district=district_name,
+                message="All POIs were filtered out - check API response",
+                poi_stats=poi_stats,
+            )
+
+        # 2-4. 비아파트 POI도 별도 CSV에 저장 (분석용)
+        non_apartment_pois = (
+            pois_by_type["transit"] + pois_by_type["facilities"] + pois_by_type["others"]
+        )
+
+        if non_apartment_pois:
+            self.logger.info(
+                "saving_non_apartment_pois",
+                district=district_name,
+                count=len(non_apartment_pois),
+                note="Saving non-apartment POIs for analysis",
+            )
+
+            for poi in non_apartment_pois:
+                try:
+                    self._save_apartment_basic_info(poi, district_name, is_valid=False)
+                except Exception as e:
+                    self.logger.warning(
+                        "non_apartment_poi_save_failed",
+                        poi_id=poi.get("id", "unknown"),
+                        error=str(e),
+                    )
+
+        # 최종 통계
+        total_processed = len(all_pois)
+        valid_apartments_count = len(valid_apartments)
+        skipped_count = total_processed - valid_apartments_count
+
+        crawl_stats = {
+            "total_pois": total_processed,
+            "valid_apartments": valid_apartments_count,
+            "non_apartments": skipped_count,
+            "poi_breakdown": poi_stats,
+            "success_rate": valid_apartments_count / total_processed if total_processed > 0 else 0,
+        }
+
+        self.logger.info("district_crawling_completed", district=district_name, **crawl_stats)
+
+        return crawl_stats
 
     def _divide_bounding_box(
         self, lat_min: float, lng_min: float, lat_max: float, lng_max: float
@@ -576,16 +700,16 @@ class HogangnonoCrawler(APICrawler):
             (lat_min, lng_min, lat_mid, lng_mid),  # 남서
             (lat_min, lng_mid, lat_mid, lng_max),  # 남동
             (lat_mid, lng_min, lat_max, lng_mid),  # 북서
-            (lat_mid, lng_mid, lat_max, lng_max),  # 북동
+            (lat_mid, lng_mid, lng_max, lat_max),  # 북동
         ]
 
         return boxes
 
     def _fetch_apartments_in_district(self, district: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """구/군 내 모든 단지 수집
+        """구/군 내 모든 단지 수집 (bbox 분할 기반 개선)
 
-        좌표 기반 bounding API 사용
-        600개 POI 감지 시 bbox를 분할하여 재시도
+        bbox 분할 유틸리티를 사용하여 POI API의 1000개 제한을 우회하며
+        효율적으로 데이터를 수집합니다.
 
         Args:
             district: 구/군 정보
@@ -593,87 +717,292 @@ class HogangnonoCrawler(APICrawler):
         Returns:
             단지 목록
         """
-        # 구/군 코드로 좌표 범위 계산 (간단한 예시)
-        # 실제로는 구/군별 좌표 매핑 테이블 필요
-        # TODO: 구/군별 정확한 좌표 매핑
-        bbox = (126.7, 37.4, 127.2, 37.7)
-        lng_min, lat_min, lng_max, lat_max = bbox
-        # bbox 형식 변환: (lng_min, lat_min, lng_max, lat_max) -> (lat_min, lng_min, lat_max, lng_max)
-        bbox_formatted = (lat_min, lng_min, lat_max, lng_max)
+        district_code = district.get("regionCode", "")
+        district_name = district.get("name", "")
+        self.logger.info(
+            "fetching_apartments_in_district",
+            district_code=district_code,
+            district_name=district_name,
+            method="bbox_division",
+        )
 
-        # 재귀적으로 bbox를 처리하는 함수
-        def fetch_with_bbox(
-            lat_min: float, lng_min: float, lat_max: float, lng_max: float
-        ) -> List[Dict[str, Any]]:
+        # bbox 분할을 위한 POI 수 확인 함수
+        def get_poi_count_for_bbox(bbox: Tuple[float, float, float, float]) -> int:
+            """bbox의 POI 수를 확인하는 함수"""
+            lat_min, lng_min, lat_max, lng_max = bbox
             search_params = SearchParams(
-                bbox=(
-                    lng_min,
-                    lat_min,
-                    lng_max,
-                    lat_max,
-                ),  # API는 (lng_min, lat_min, lng_max, lat_max) 형식
+                bbox=(lng_min, lat_min, lng_max, lat_max),
                 level=14,
-                tradeType=0,  # 매매
-                aptType=1,  # 아파트만
+                tradeType=0,
+                aptType=1,
             )
 
-            # Try bounding API first
             try:
                 response = self.hogangnono_client.get_apartments_bounding(search_params)
                 if response.success:
-                    apartments = (
+                    raw_data = (
                         response.data.get("data", [])
                         if isinstance(response.data, dict)
                         else response.data or []
                     )
 
-                    # 정확히 600개 결과가 반환되면 POI 제한에 도달한 것으로 판단
-                    if len(apartments) == 600:
-                        self.logger.info(
-                            "poi_limit_detected",
-                            count=len(apartments),
-                            bbox=(lat_min, lng_min, lat_max, lng_max),
-                            message="Splitting bbox for detailed collection",
-                        )
+                    # 아파트만 필터링
+                    apartments = []
+                    for poi in raw_data:
+                        if isinstance(poi, dict):
+                            name = poi.get("name", "")
+                            if poi.get("category") != 1 and (
+                                "아파트" in name
+                                or "APT" in name
+                                or "자이" in name
+                                or "힐스테이트" in name
+                                or "래미안" in name
+                                or "푸르지오" in name
+                                or "롯데캐슬" in name
+                                or "e편한" in name
+                            ):
+                                apartments.append(poi)
 
-                        # bbox를 2x2 그리드로 분할
-                        sub_boxes = self._divide_bounding_box(lat_min, lng_min, lat_max, lng_max)
-                        all_apartments = []
-
-                        # 분할된 각 bbox에 대해 재귀적으로 수집
-                        for sub_lat_min, sub_lng_min, sub_lat_max, sub_lng_max in sub_boxes:
-                            sub_apartments = fetch_with_bbox(
-                                sub_lat_min, sub_lng_min, sub_lat_max, sub_lng_max
-                            )
-                            all_apartments.extend(sub_apartments)
-
-                        return all_apartments
-                    elif apartments:
-                        return apartments
+                    return len(apartments)
             except Exception as e:
-                self.logger.warning("bounding_api_failed_fallback", error=str(e))
+                self.logger.warning(f"Failed to get POI count for bbox {bbox}: {e}")
 
-            # Fallback: Try to get complexes using get_complex_list with district code
-            self.logger.info("trying_get_complex_list_fallback")
+            return 0
 
-            district_code = district["regionCode"]
+        # 단일 bbox에서 아파트 수집
+        def fetch_apartments_from_bbox(
+            bbox: Tuple[float, float, float, float],
+        ) -> List[Dict[str, Any]]:
+            lat_min, lng_min, lat_max, lng_max = bbox
+
+            search_params = SearchParams(
+                bbox=(lng_min, lat_min, lng_max, lat_max),
+                level=14,
+                tradeType=0,
+                aptType=1,
+            )
+
             try:
-                # Try to get complexes by district code using get_complex_list
-                # Convert district code to dong code format (simplified approach)
-                dong_code = district_code + "000"  # Convert to dong level
-                complexes_response = self.hogangnono_client.get_complex_list(
-                    dong_code, bounds=f"{lng_min},{lat_min},{lng_max},{lat_max}"
+                self.logger.debug(
+                    "fetching_from_bbox", bbox=bbox, search_params=search_params.to_dict()
                 )
-                if complexes_response.success:
-                    return complexes_response.data or []
-            except Exception as e:
-                self.logger.warning("get_complex_list_failed", error=str(e))
 
-            # If all methods fail, return empty list
+                response = self.hogangnono_client.get_apartments_bounding(search_params)
+
+                if response.success:
+                    raw_data = (
+                        response.data.get("data", [])
+                        if isinstance(response.data, dict)
+                        else response.data or []
+                    )
+
+                    # 아파트 필터링
+                    apartments = []
+                    for poi in raw_data:
+                        if isinstance(poi, dict):
+                            name = poi.get("name", "")
+                            description = poi.get("description", "")
+
+                            if poi.get("category") != 1 and (
+                                "아파트" in name
+                                or "APT" in name
+                                or "자이" in name
+                                or "힐스테이트" in name
+                                or "래미안" in name
+                                or "푸르지오" in name
+                                or "롯데캐슬" in name
+                                or "e편한" in name
+                                or "단지" in description
+                            ):
+                                apartments.append(poi)
+
+                    self.logger.debug(
+                        "bbox_fetch_result",
+                        bbox=bbox,
+                        total_pois=len(raw_data),
+                        filtered_apartments=len(apartments),
+                    )
+
+                    return apartments
+
+            except Exception as e:
+                self.logger.error("bbox_fetch_error", bbox=bbox, error=str(e))
+
             return []
 
-        # 최상위 bbox로 시작
-        return fetch_with_bbox(*bbox_formatted)
+        # 구/군의 bbox 좌표 가져오기
+        # district 정보에서 직접 좌표가 없다면 region_bounds 사용
+        if "bounds" in district:
+            bounds = district["bounds"]
+            lat_min = bounds.get("lat_min", self.region_bounds[0])
+            lng_min = bounds.get("lng_min", self.region_bounds[1])
+            lat_max = bounds.get("lat_max", self.region_bounds[2])
+            lng_max = bounds.get("lng_max", self.region_bounds[3])
+        else:
+            lat_min, lng_min, lat_max, lng_max = self.region_bounds
+
+        # 1. 적응적 분할 시도
+        self.logger.info(
+            "attempting_adaptive_division",
+            district=district_name,
+            initial_bbox=(lat_min, lng_min, lat_max, lng_max),
+        )
+
+        try:
+            bboxes = self.bbox_divider.adaptive_divide(
+                lat_min,
+                lng_min,
+                lat_max,
+                lng_max,
+                poi_count_func=get_poi_count_for_bbox,
+                max_depth=3,
+            )
+        except Exception as e:
+            self.logger.warning(
+                "adaptive_division_failed", error=str(e), fallback="using_standard_division"
+            )
+            # 실패 시 표준 분할 사용
+            bboxes = self.bbox_divider.divide_bbox(
+                lat_min, lng_min, lat_max, lng_max, max_grid_size=4
+            )
+
+        self.logger.info("bbox_division_complete", district=district_name, total_bboxes=len(bboxes))
+
+        # 2. 각 bbox에서 아파트 수집
+        all_apartments = []
+        seen_apartment_ids = set()  # 중복 제거용
+
+        for i, bbox in enumerate(bboxes):
+            self.logger.debug(
+                f"processing_bbox_{i + 1}/{len(bboxes)}", district=district_name, bbox=bbox
+            )
+
+            apartments = fetch_apartments_from_bbox(bbox)
+
+            # 중복 제거
+            for apt in apartments:
+                apt_id = apt.get("id")
+                if apt_id and apt_id not in seen_apartment_ids:
+                    all_apartments.append(apt)
+                    seen_apartment_ids.add(apt_id)
+                elif not apt_id:  # ID가 없는 경우 이름으로 중복 체크
+                    apt_name = apt.get("name", "")
+                    if apt_name and apt_name not in seen_apartment_ids:
+                        all_apartments.append(apt)
+                        seen_apartment_ids.add(apt_name)
+
+            # API 레이트 리밋 고려
+            if i < len(bboxes) - 1:  # 마지막이 아니면 잠시 대기
+                import time
+
+                time.sleep(0.5)
+
+        self.logger.info(
+            "apartment_collection_complete",
+            district=district_name,
+            total_bboxes_processed=len(bboxes),
+            total_apartments_collected=len(all_apartments),
+            unique_apartments=len(seen_apartment_ids),
+        )
+
+        return all_apartments
+
+    def _save_apartment_basic_info(
+        self,
+        apt: Dict[str, Any],
+        district_name: str,
+        is_valid: bool = True,
+    ) -> None:
+        """단지 기본 정보만 CSV 저장
+
+        Args:
+            apt: 단지 기본 정보 (bounding API)
+            district_name: 구/군 이름
+            is_valid: 아파트 여부 검증 결과
+        """
+        from ..models.api_responses import POIInfo
+
+        # POI 정보 생성 및 검증
+        try:
+            poi = POIInfo.from_bounding_response(apt)
+
+            # 검증 결과 확인
+            validation_result = (
+                "VALID" if is_valid and poi.validate_for_apartment_crawling() else "INVALID"
+            )
+            validation_reason = ""
+
+            if validation_result == "INVALID":
+                if poi.is_transit():
+                    validation_reason = "POI는 지하철역입니다"
+                elif poi.is_facility():
+                    validation_reason = "POI는 공공시설입니다"
+                elif not poi.is_valid_apartment_id():
+                    validation_reason = "유효하지 않은 아파트 ID 형식"
+                else:
+                    validation_reason = "아파트 데이터가 아님"
+            else:
+                validation_reason = "유효한 아파트 데이터"
+
+            # POI 타입 정보
+            poi_type = poi.category.value if poi.category else "UNKNOWN"
+            if poi.is_apartment():
+                poi_category = "아파트"
+            elif poi.is_transit():
+                poi_category = "대중교통"
+            elif poi.is_facility():
+                poi_category = "공공시설"
+            else:
+                poi_category = "기타"
+
+        except Exception as e:
+            self.logger.warning(
+                "poi_creation_failed", apt_id=apt.get("id", "unknown"), error=str(e)
+            )
+            validation_result = "ERROR"
+            validation_reason = f"POI 정보 생성 실패: {str(e)}"
+            poi_type = "ERROR"
+            poi_category = "오류"
+
+        # 단지 정보 형식 변환
+        complex_data = {
+            "aptSeq": f"APT_{apt.get('id', '')}",
+            "aptName": apt.get("name", ""),
+            "address": f"{apt.get('address', '')}",
+            "buildYear": "",  # API에서 제공하지 않음
+            "dealCnt": 0,  # API에서 제공하지 않음
+            "realPrice": "",  # API에서 제공하지 않음
+            "realPriceYear": "",
+            "realPriceQuarter": "",
+            "recentDealPrice": "",
+            "recentDealDate": "",
+            "lng": str(apt.get("lng", "")),
+            "lat": str(apt.get("lat", "")),
+            "householdCnt": "",  # API에서 제공하지 않음
+            "parkingCnt": "",  # API에서 제공하지 않음
+            "districtName": district_name,
+            "category": apt.get("category", ""),
+            "description": apt.get("description", ""),
+            "dong": apt.get("dong", ""),
+            # New POI validation fields
+            "poi_type": poi_type,
+            "poi_category": poi_category,
+            "validation_result": validation_result,
+            "validation_reason": validation_reason,
+            "data_source": "HOGANGNONO",
+        }
+
+        # 단지 정보 저장
+        try:
+            self.hogangnono_writer.save_complexes([complex_data])
+        except Exception as e:
+            self.logger.error(
+                "csv_save_failed",
+                apt_id=apt.get("id", "unknown"),
+                apt_name=apt.get("name", "unknown"),
+                error=str(e),
+            )
+            raise
 
     def _save_apartment_data(
         self,
@@ -701,7 +1030,11 @@ class HogangnonoCrawler(APICrawler):
             transaction_list = []
             for report in transactions["shortTermReport"]:
                 for trade in report.get("trades", []):
-                    trade_data = {"aptHash": apt["aptHash"], "date": report["date"], **trade}
+                    trade_data = {
+                        "aptHash": apt["id"],
+                        "date": report["date"],
+                        **trade,
+                    }  # apt.id 사용
                     transaction_list.append(trade_data)
 
             if transaction_list:
@@ -737,12 +1070,8 @@ class HogangnonoCrawler(APICrawler):
 
         # 2. Checkpoint 로드
         checkpoint_path = self.output_dir / "checkpoint.json"
-        completed_districts = []
-        if checkpoint_path.exists():
-            with open(checkpoint_path, "r", encoding="utf-8") as f:
-                checkpoint = json.load(f)
-                completed_districts = checkpoint.get("completed_districts", [])
-            self.logger.info("checkpoint_loaded", completed_count=len(completed_districts))
+        completed_districts = self._load_checkpoint(checkpoint_path)
+        self.logger.info("checkpoint_loaded", completed_count=len(completed_districts))
 
         # 3. 구/군별 크롤링
         processed_count = 0
@@ -755,8 +1084,11 @@ class HogangnonoCrawler(APICrawler):
                 )
                 continue
 
-            self._crawl_district(district, full_period)
-            self._save_checkpoint(district, checkpoint_path)
+            # 크롤링 실행 및 통계 수집
+            crawl_stats = self._crawl_district(district, full_period)
+
+            # checkpoint에 통계 정보 포함하여 저장
+            self._save_checkpoint(district, checkpoint_path, crawl_stats)
             processed_count += 1
 
         # 4. 통계 반환
@@ -771,8 +1103,46 @@ class HogangnonoCrawler(APICrawler):
 
         return stats
 
-    def _save_checkpoint(self, district: Dict[str, Any], checkpoint_path: Path) -> None:
-        """Checkpoint 저장"""
+    def _load_checkpoint(self, checkpoint_path: Path) -> List[str]:
+        """Checkpoint 로드 (backward compatibility 유지)
+
+        Returns:
+            완료된 구/군 코드 리스트
+        """
+        if checkpoint_path.exists():
+            with open(checkpoint_path, "r", encoding="utf-8") as f:
+                checkpoint = json.load(f)
+                completed = checkpoint.get("completed_districts", [])
+
+                # 새 형식 (딕셔너리)
+                if isinstance(completed, dict):
+                    return list(completed.keys())
+                # 이전 형식 (리스트) - backward compatibility
+                elif isinstance(completed, list):
+                    self.logger.warning(
+                        "using_legacy_checkpoint_format",
+                        message="Checkpoint format is deprecated. Consider regenerating checkpoint.",
+                        completed_count=len(completed),
+                    )
+                    return completed
+
+        return []
+
+    def _save_checkpoint(
+        self,
+        district: Dict[str, Any],
+        checkpoint_path: Path,
+        crawl_stats: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Checkpoint 저장 (통계 정보 포함)
+
+        Args:
+            district: 구/군 정보
+            checkpoint_path: checkpoint 파일 경로
+            crawl_stats: 크롤링 통계 정보
+        """
+        import time
+
         # 기존 checkpoint 로드
         checkpoint = {}
         if checkpoint_path.exists():
@@ -780,19 +1150,78 @@ class HogangnonoCrawler(APICrawler):
                 checkpoint = json.load(f)
 
         # 완료된 구/군 추가
-        completed = checkpoint.get("completed_districts", [])
+        completed = checkpoint.get("completed_districts", {})
         district_code = district["regionCode"]
-        if district_code not in completed:
-            completed.append(district_code)
+        district_name = district["name"]
+
+        # 구/군별 상세 정보 저장
+        completed[district_code] = {
+            "name": district_name,
+            "completed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "crawl_stats": crawl_stats or {},
+        }
 
         checkpoint["completed_districts"] = completed
         checkpoint["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        checkpoint["total_completed"] = len(completed)
+
+        # 누적 통계 계산
+        if crawl_stats:
+            checkpoint["cumulative_stats"] = self._calculate_cumulative_stats(checkpoint)
 
         # 저장
         with open(checkpoint_path, "w", encoding="utf-8") as f:
             json.dump(checkpoint, f, ensure_ascii=False, indent=2)
 
-        self.logger.info("checkpoint_saved", district=district["name"])
+        self.logger.info(
+            "checkpoint_saved",
+            district=district_name,
+            district_code=district_code,
+            total_completed=len(completed),
+            current_stats=crawl_stats,
+        )
+
+    def _calculate_cumulative_stats(self, checkpoint: Dict[str, Any]) -> Dict[str, Any]:
+        """누적 통계 계산
+
+        Args:
+            checkpoint: checkpoint 데이터
+
+        Returns:
+            누적 통계 정보
+        """
+        completed_districts = checkpoint.get("completed_districts", {})
+
+        total_pois = 0
+        total_apartments = 0
+        total_valid_apartments = 0
+        total_non_apartments = 0
+
+        for district_info in completed_districts.values():
+            stats = district_info.get("crawl_stats", {})
+            if "poi_breakdown" in stats:
+                poi_breakdown = stats["poi_breakdown"]
+                total_pois += poi_breakdown.get("total", 0)
+                total_apartments += poi_breakdown.get("apartments", 0)
+                total_non_apartments += (
+                    poi_breakdown.get("transit", 0)
+                    + poi_breakdown.get("facilities", 0)
+                    + poi_breakdown.get("others", 0)
+                )
+
+            if "valid_apartments" in stats:
+                total_valid_apartments += stats["valid_apartments"]
+
+        return {
+            "total_pois": total_pois,
+            "total_apartments_found": total_apartments,
+            "total_valid_apartments": total_valid_apartments,
+            "total_non_apartments": total_non_apartments,
+            "overall_success_rate": (total_valid_apartments / total_pois if total_pois > 0 else 0),
+            "apartment_success_rate": (
+                total_valid_apartments / total_apartments if total_apartments > 0 else 0
+            ),
+        }
 
     def crawl_and_save(
         self,
@@ -956,6 +1385,201 @@ class HogangnonoCrawler(APICrawler):
             NotImplementedError: 아직 구현되지 않음
         """
         raise NotImplementedError("transform_data is not implemented yet")
+
+    def _fetch_and_save_transactions(self, apt: Dict[str, Any], district_name: str) -> None:
+        """아파트 실거래 내역을 가져와서 저장
+
+        Args:
+            apt: 아파트 정보
+            district_name: 구/군 이름
+        """
+        # 아파트 ID 추출 및 검증
+        raw_apt_id = apt.get("id")
+        apt_name = apt.get("name", "")
+
+        # ID 유효성 검증
+        apt_id = ApartmentIdValidator.validate_and_normalize(raw_apt_id)
+
+        if not apt_id:
+            # 유효하지 않은 ID 이유 로깅
+            invalid_reason = ApartmentIdValidator._get_invalid_reason(raw_apt_id)
+            self.logger.warning(
+                "invalid_apartment_id",
+                apt_name=apt_name,
+                raw_id=raw_apt_id,
+                reason=invalid_reason,
+                district=district_name,
+                note="Skipping API call for invalid apartment ID",
+            )
+            return
+
+        # Check if we should skip this apartment based on error history
+        if self.error_handler.should_skip_apartment(apt_id):
+            self.logger.info(
+                "skipping_apartment_due_to_error_history",
+                apt_name=apt_name,
+                apt_id=apt_id,
+                district=district_name,
+            )
+            return
+
+        try:
+            # Enhanced error handling with retry logic
+            response = self.error_handler.execute_with_retry(
+                self.hogangnono_client.get_apartment_transactions,
+                apartment_id=apt_id,
+                apt_id=apt_id,
+                trade_type=1,  # 매매 (API에 맞게 수정)
+                area_no=201,  # 33㎡ 면적 타입 (API에 맞게 수정)
+                full_period=False,  # 최근 3년
+            )
+
+            # Handle API response
+            error_info = self.error_handler.handle_error(response, apt_id)
+
+            if error_info:
+                # Error occurred
+                if error_info.error_type.value == "not_found":
+                    self.logger.warning(
+                        "apartment_not_found",
+                        apt_name=apt_name,
+                        apt_id=apt_id,
+                        message=error_info.message,
+                        district=district_name,
+                    )
+                else:
+                    self.logger.warning(
+                        "api_error_occurred",
+                        apt_name=apt_name,
+                        apt_id=apt_id,
+                        error_type=error_info.error_type.value,
+                        message=error_info.message,
+                        is_transient=error_info.is_transient,
+                        district=district_name,
+                    )
+            elif response.success and response.data:
+                # Success - process transactions
+                transactions = self._parse_transactions(response.data, apt_id, apt_name)
+                if transactions:
+                    self.hogangnono_writer.save_transactions(transactions)
+                    self.logger.info(
+                        "transactions_saved",
+                        apt_name=apt_name,
+                        apt_id=apt_id,
+                        transaction_count=len(transactions),
+                        district=district_name,
+                    )
+                else:
+                    self.logger.info(
+                        "no_transactions_found",
+                        apt_name=apt_name,
+                        apt_id=apt_id,
+                        district=district_name,
+                    )
+
+        except Exception as e:
+            # Handle unexpected exceptions
+            error_info = self.error_handler.classify_error(
+                Mock(success=False, error=str(e), status_code=None), apt_id
+            )
+            self.error_handler.stats.record_error(error_info)
+
+            self.logger.error(
+                "unexpected_error_fetching_transactions",
+                apt_name=apt_name,
+                apt_id=apt_id,
+                error=str(e),
+                error_type=error_info.error_type.value,
+                district=district_name,
+                exc_info=True,
+            )
+
+    def _parse_transactions(
+        self, data: Dict[str, Any], apt_id: str, apt_name: str
+    ) -> List[Dict[str, Any]]:
+        """실거래 내역 API 응답을 파싱
+
+        Args:
+            data: API 응답 데이터
+            apt_id: 아파트 ID
+            apt_name: 아파트 이름
+
+        Returns:
+            파싱된 거래내역 리스트
+        """
+        transactions = []
+
+        # API 응답 구조: data가 최상위에 있고 그 안에 shortTermReport가 있음
+        if "data" in data and "shortTermReport" in data["data"]:
+            reports = data["data"]["shortTermReport"]
+        elif "shortTermReport" in data:
+            reports = data["shortTermReport"]
+        elif "data" in data and "longTermReport" in data["data"]:
+            reports = data["data"]["longTermReport"]
+        elif "longTermReport" in data:
+            reports = data["longTermReport"]
+        else:
+            return transactions  # 데이터 없음
+
+        for report in reports:
+            if isinstance(report, dict):
+                # 날짜 형식 변환 (2025-01-31T15:00:00.000Z -> YYYYMM)
+                date_str = report.get("date", "")
+                if date_str:
+                    # "2025-01-31T15:00:00.000Z" -> "202501"
+                    trade_date = date_str[:7].replace("-", "")
+                    trade_year = int(date_str[:4])
+                else:
+                    trade_date = ""
+                    trade_year = 0
+
+                # 기본 정보
+                base_info = {
+                    "complex_id": apt_id,
+                    "complex_name": apt_name,
+                    "trade_date": trade_date,
+                    "trade_year": trade_year,
+                    "min_price": report.get("minPrice", 0),
+                    "max_price": report.get("maxPrice", 0),
+                    "avg_price": report.get("averagePrice", 0),
+                    "volume": report.get("volume", 0),
+                    "trade_type": "A1",  # 매매
+                    "trade_type_name": "매매",
+                    "deal_price": report.get("averagePrice", 0),  # 평균가를 거래가로 사용
+                    "deposit": 0,  # 매매는 보증금 없음
+                    "monthly_rent": 0,  # 매매는 월세 없음
+                    "is_delete": "N",
+                    "is_renew": "N",
+                }
+
+                # 개별 거래내역(trades)이 있다면 각각 추가
+                if "trades" in report and isinstance(report["trades"], list):
+                    for trade in report["trades"]:
+                        if isinstance(trade, dict):
+                            # 개별 거래의 날짜 처리
+                            trade_date_str = trade.get("date", date_str)
+                            if trade_date_str:
+                                trade_date_formatted = trade_date_str[:7].replace("-", "")
+                                trade_year_formatted = int(trade_date_str[:4])
+                            else:
+                                trade_date_formatted = trade_date
+                                trade_year_formatted = trade_year
+
+                            transaction = {
+                                **base_info,
+                                "trade_date": trade_date_formatted,
+                                "trade_year": trade_year_formatted,
+                                "deal_price": trade.get("price", report.get("averagePrice", 0)),
+                                "floor": trade.get("floor", ""),
+                                "area": trade.get("area", 0),
+                                "direction": trade.get("direction", ""),
+                            }
+                            transactions.append(transaction)
+                else:
+                    # 월간 요약 정보만 있는 경우
+                    transactions.append(base_info)
+
+        return transactions
 
     def navigate_to_page(self, url: str) -> None:
         """페이지 이동 (Playwright 사용)

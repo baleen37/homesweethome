@@ -1,0 +1,59 @@
+# 프로덕션 환경 설정
+
+# 기본 설정
+base_url: "https://hogangnono.com"
+timeout: 30
+headless: true  # 프로덕션에서는 헤드리스
+output_file: null
+
+# Rate Limiting 설정
+rate_limit_delay: 2.0  # 프로덕션에서는 충분한 딜레이
+rate_limit_min: 0.5
+rate_limit_max: 10.0
+rate_limit_increment: 1.0
+rate_limit_decrement_after: 10
+daily_request_limit: 50000  # 일일 최대 요청 수
+
+# 페이징 설정
+page_size: 100  # 최대 사이즈
+max_page: 200
+
+# 재시도 설정
+retry_attempts: 3
+retry_delay: 1.0
+
+# 쓰레딩 설정
+use_threading: true
+max_workers: 8  # 프로덕션에서는 최대 worker
+
+# 지역 설정
+region_code: null  # 전체 지역
+start_date: null
+end_date: null
+
+# 필터링 기본값
+default_property_type: "apartment"
+default_transaction_type: "sale"
+
+# 출력 디렉토리
+output_dir: "output"
+
+# 로그 레벨
+log_level: "INFO"
+
+# 지역 경계 (서울 전체)
+region_bounds: [37.413294, 126.734086, 37.715133, 127.183394]  # 서울시 전체
+
+# 성능 최적화 설정
+# 대량 데이터 처리를 위한 최적화 옵션
+batch_size: 50  # 한 번에 처리하는 데이터 배치 크기
+cache_enabled: true  # 응답 캐싱 활성화
+cache_ttl: 3600  # 캐시 유효 시간 (초)
+
+# 에러 핸들링 설정
+# 안정적인 운영을 위한 에러 처리 전략
+error_handling:
+  max_retries: 3  # 최대 재시도 횟수
+  circuit_breaker_threshold: 10  # 서킷 브레이커 동작 임계값
+  skip_404_errors: true  # 404 에러 건너뛰기
+  track_error_patterns: true  # 에러 패턴 추적 활성화

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 import structlog
+from ..models.api_responses import ComplexInfo, complex_info_from_api_response
 
 logger = structlog.get_logger()
 
@@ -116,141 +117,125 @@ class HogangnonoDataMapper:
         self,
         item: Dict[str, Any],
         fetch_dong_code_func: Optional[Callable[[str, str], Optional[str]]] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """호갱노노 데이터를 네이버 형식으로 매핑
+    ) -> Optional[ComplexInfo]:
+        """호갱노노 데이터를 ComplexInfo 객체로 매핑
 
         Args:
             item: 호갱노노 아파트/매물 데이터
             fetch_dong_code_func: 동 코드를 조회하기 위한 함수 (선택사항)
 
         Returns:
-            네이버 CSV 형식으로 매핑된 데이터
+            ComplexInfo 객체로 매핑된 데이터, 실패 시 None
         """
+        item_id = item.get("id", "unknown")
+        item_name = item.get("name", "unknown")
+
+        # Validate item is a valid apartment
+        if not self._is_valid_apartment_data(item):
+            self.logger.warning(
+                "invalid_apartment_data_skipped",
+                item_id=item_id,
+                item_name=item_name,
+                reason="Data does not appear to be a valid apartment",
+            )
+            return None
+
+        # Convert to ComplexInfo for type safety
         try:
-            # 기본 정보 매핑
-            complex_id = str(item.get("id") or item.get("apt_id", ""))
-            if not complex_id:
+            complex_info = complex_info_from_api_response(item)
+
+            # Validate complex_info was created successfully
+            if not complex_info.id or not complex_info.name:
+                self.logger.warning(
+                    "invalid_complex_info_skipped",
+                    item_id=item_id,
+                    item_name=item_name,
+                    complex_id=complex_info.id,
+                    complex_name=complex_info.name,
+                    reason="Missing required fields in ComplexInfo",
+                )
                 return None
 
-            complex_name = item.get("name", "") or item.get("apt_name", "")
-            address = item.get("address", "") or item.get("full_address", "")
-
-            # 위치 정보
-            lat = item.get("lat") or item.get("latitude")
-            lng = item.get("lng") or item.get("longitude")
-
-            # 건물 기본 정보
-            build_year = item.get("build_year") or item.get("completion_year")
-            households = item.get("households") or item.get("household_count")
-            floors = item.get("floors") or item.get("max_floor")
-
-            # 거래 정보가 있는 경우
-            trade_info = item.get("trade", {}) or item.get("recent_trade", {})
-
-            # 거래 타입 결정
-            trade_type = trade_info.get("type", "sale")
-            if trade_type == "sale":
-                trade_type_code = TradeType.SALE
-                trade_type_name = TradeType.SALE_NAME
-            elif trade_type == "jeonse":
-                trade_type_code = TradeType.JEONSE
-                trade_type_name = TradeType.JEONSE_NAME
-            elif trade_type == "monthly":
-                trade_type_code = TradeType.MONTHLY
-                trade_type_name = TradeType.MONTHLY_NAME
-            else:
-                trade_type_code = TradeType.SALE
-                trade_type_name = TradeType.SALE_NAME
-
-            # 매물 상세 정보
-            exclusive_area = trade_info.get("exclusive_area") or trade_info.get("area")
-            if exclusive_area:
-                # 평형으로 변환 (제곱미터 → 평)
-                pyeong = float(exclusive_area) / SQM_TO_PYEONG_RATIO
-                pyeong_type_number = round(pyeong)  # 올바른 반올림 적용
-                pyeong_name = f"{pyeong_type_number}평형"
-            else:
-                pyeong_type_number = 0
-                pyeong_name = ""
-
-            floor = trade_info.get("floor") or trade_info.get("floor_info", "")
-            deal_price = trade_info.get("price") or trade_info.get("deal_price", 0)
-            deposit = trade_info.get("deposit") or trade_info.get("jeonse_price", 0)
-            monthly_rent = trade_info.get("monthly") or trade_info.get("monthly_rent", 0)
-
-            # 거래일
-            trade_date = trade_info.get("date") or trade_info.get("trade_date", "")
-            if trade_date and len(trade_date) >= 4:
-                # 연도만 추출 (YYYY-MM-DD, YYYY.MM.DD, YYYYMM 등)
-                year_str = trade_date[:4]
-                if year_str.isdigit():
-                    trade_year = int(year_str)
-                else:
-                    trade_year = 0
-            else:
-                trade_year = 0
-
             # 주소에서 구와 동 정보 추출
-            gu_name, dong_name = self._parse_gu_dong_from_address(address)
+            try:
+                gu_name, dong_name = self._parse_gu_dong_from_address(complex_info.address)
+            except Exception as e:
+                self.logger.warning(
+                    "address_parsing_failed",
+                    item_id=item_id,
+                    item_name=item_name,
+                    address=complex_info.address,
+                    error=str(e),
+                )
+                gu_name, dong_name = None, None
 
             # 동 코드 조회
             dong_code = None
             gu_code = None
             if gu_name and dong_name:
-                # 먼저 매핑된 정보에서 조회
-                dong_code = self.get_dong_code(gu_name, dong_name)
+                try:
+                    # 먼저 매핑된 정보에서 조회
+                    dong_code = self.get_dong_code(gu_name, dong_name)
 
-                # 없고 fetch 함수가 제공된 경우 호출
-                if not dong_code and fetch_dong_code_func:
-                    dong_code = fetch_dong_code_func(gu_name, dong_name)
+                    # 없고 fetch 함수가 제공된 경우 호출
+                    if not dong_code and fetch_dong_code_func:
+                        self.logger.info(
+                            "diagnostic_fetching_dong_code",
+                            component="HogangnonoDataMapper",
+                            gu_name=gu_name,
+                            dong_name=dong_name,
+                        )
+                        dong_code = fetch_dong_code_func(gu_name, dong_name)
 
-                    # 조회된 코드를 매핑에 추가
+                        # 조회된 코드를 매핑에 추가
+                        if dong_code:
+                            self.update_dong_code_mapping(gu_name, {dong_name: dong_code})
+
                     if dong_code:
-                        self.update_dong_code_mapping(gu_name, {dong_name: dong_code})
+                        # 구 코드는 동 코드의 앞 5자리
+                        gu_code = dong_code[:5]
+                except Exception as e:
+                    self.logger.warning(
+                        "dong_code_fetching_failed",
+                        item_id=item_id,
+                        item_name=item_name,
+                        gu_name=gu_name,
+                        dong_name=dong_name,
+                        error=str(e),
+                    )
+                    dong_code, gu_code = None, None
 
-                if dong_code:
-                    # 구 코드는 동 코드의 앞 5자리
-                    gu_code = dong_code[:5]
-
-            # 결과 조합
-            result = {
-                # 단지 정보 (complexes.csv용)
-                "complex_id": complex_id,
-                "complex_name": complex_name,
-                "address": address,
-                "latitude": lat,
-                "longitude": lng,
-                "build_year": int(build_year) if build_year else 0,
-                "households": int(households) if households else 0,
-                "floors": int(floors) if floors else 0,
-                # 거래 정보 (transactions.csv용)
-                "pyeong_type_number": pyeong_type_number,
-                "pyeong_name": pyeong_name,
-                "trade_type": trade_type_code,
-                "trade_type_name": trade_type_name,
-                "trade_date": trade_date,
-                "trade_year": trade_year,
-                "floor": str(floor),
-                "deal_price": int(str(deal_price).replace(",", "")) if deal_price else 0,
-                "deposit": int(str(deposit).replace(",", "")) if deposit else 0,
-                "monthly_rent": int(str(monthly_rent).replace(",", "")) if monthly_rent else 0,
-                "trade_category": trade_type,
-                "is_delete": "N",
-                "is_renew": "N",
-                # 추가: 행정구역 정보
-                "gu_code": gu_code or "",
-                "dong_code": dong_code or "",
-                "gu_name": gu_name or "",
-                "dong_name": dong_name or "",
-            }
-
-            return result
+            # Create new ComplexInfo with administrative codes
+            # ComplexInfo is immutable, so we need to create a new instance
+            return ComplexInfo(
+                id=complex_info.id,
+                name=complex_info.name,
+                address=complex_info.address,
+                latitude=complex_info.latitude,
+                longitude=complex_info.longitude,
+                build_year=complex_info.build_year,
+                households=complex_info.households,
+                floors=complex_info.floors,
+                elevator_count=complex_info.elevator_count,
+                parking_count=complex_info.parking_count,
+                heating_type=complex_info.heating_type,
+                total_floor_area=complex_info.total_floor_area,
+                total_site_area=complex_info.total_site_area,
+                trade_info=complex_info.trade_info,
+                gu_code=gu_code,
+                dong_code=dong_code,
+                gu_name=gu_name,
+                dong_name=dong_name,
+            )
 
         except Exception as e:
             self.logger.error(
                 "mapping_error",
-                item=item,
+                item_id=item_id,
+                item_name=item_name,
                 error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
             )
             return None
 
@@ -263,6 +248,11 @@ class HogangnonoDataMapper:
         Returns:
             (구 이름, 동 이름) 튜플
         """
+        if not address or not isinstance(address, str):
+            return None, None
+
+        # Normalize address
+        address = address.strip()
         if not address:
             return None, None
 
@@ -271,24 +261,85 @@ class HogangnonoDataMapper:
             return None, None
 
         # 주소 파싱
-        parts = address.split()
-        gu = None
-        dong = None
+        try:
+            parts = address.split()
+            gu = None
+            dong = None
 
-        for i, part in enumerate(parts):
-            # 구 찾기 (시가 아닌 구)
-            if part.endswith("구") and "시" not in part:
-                gu = part
-                # 다음 파트가 동인지 확인
-                if i + 1 < len(parts):
-                    next_part = parts[i + 1]
-                    # 번지가 포함된 동 처리 (예: 역삼동 825-24)
-                    dong_part = next_part.split("-")[0]
-                    if dong_part.endswith("동"):
-                        dong = dong_part
-                break
+            for i, part in enumerate(parts):
+                # 구 찾기 (시가 아닌 구)
+                if part.endswith("구") and "시" not in part:
+                    gu = part
+                    # 다음 파트가 동인지 확인
+                    if i + 1 < len(parts):
+                        next_part = parts[i + 1]
+                        # 번지가 포함된 동 처리 (예: 역삼동 825-24)
+                        dong_part = next_part.split("-")[0]
+                        if dong_part.endswith("동"):
+                            dong = dong_part
+                    break
 
-        return gu, dong
+            # Validate extracted gu and dong
+            if gu and len(gu) < 2:  # Too short for a valid gu name
+                gu = None
+            if dong and len(dong) < 2:  # Too short for a valid dong name
+                dong = None
+
+            return gu, dong
+        except Exception:
+            # If parsing fails, return None values
+            return None, None
+
+    def _is_valid_apartment_data(self, item: Dict[str, Any]) -> bool:
+        """Check if item represents valid apartment data
+
+        Args:
+            item: Raw data item
+
+        Returns:
+            True if item appears to be a valid apartment
+        """
+        if not isinstance(item, dict):
+            return False
+
+        # Check ID format
+        item_id = str(item.get("id", ""))
+        if not item_id:
+            return False
+
+        # Exclude known non-apartment patterns
+        excluded_patterns = [
+            "bi",  # Subway stations
+            "1zg",  # Subway stations
+            "bh",  # Subway stations
+            "1H",  # Hospitals
+            "1A",  # Marts
+        ]
+
+        for pattern in excluded_patterns:
+            if item_id.startswith(pattern):
+                return False
+
+        # Must have some apartment-like characteristics
+        has_name = bool(item.get("name"))
+        has_coordinates = item.get("lat") is not None and item.get("lng") is not None
+        has_households = item.get("households") is not None
+        has_floors = item.get("floors") is not None
+        has_address = bool(item.get("address"))
+
+        # Check for obvious non-apartments
+        name = item.get("name", "")
+        description = item.get("description", "")
+
+        if any(keyword in name for keyword in ["역", "병원", "마트", "점"]):
+            return False
+        if any(keyword in description for keyword in ["호선", "선", "역", "지하철", "종합병원"]):
+            return False
+
+        # Must have at least some apartment-like data
+        apartment_indicators = [has_name, has_coordinates, has_households, has_floors, has_address]
+
+        return sum(apartment_indicators) >= 3  # At least 3 indicators must be true
 
     def extract_complex_info(self, mapped_data: Dict[str, Any]) -> Dict[str, Any]:
         """매핑된 데이터에서 단지 정보만 추출
@@ -339,4 +390,80 @@ class HogangnonoDataMapper:
             "trade_category": mapped_data["trade_category"],
             "is_delete": mapped_data["is_delete"],
             "is_renew": mapped_data["is_renew"],
+        }
+
+    def _complex_info_to_dict(self, complex_info: ComplexInfo) -> Dict[str, Any]:
+        """Convert ComplexInfo back to dictionary for compatibility
+
+        Args:
+            complex_info: ComplexInfo object
+
+        Returns:
+            Dictionary representation
+        """
+        # 거래 정보 처리
+        pyeong_type_number = 0
+        pyeong_name = ""
+        trade_type_code = TradeType.SALE
+        trade_type_name = TradeType.SALE_NAME
+        trade_date = ""
+        floor = ""
+        deal_price = 0
+        deposit = 0
+        monthly_rent = 0
+        trade_category = "sale"
+
+        if complex_info.trade_info:
+            trade_type = complex_info.trade_info.trade_type
+            if trade_type == "sale":
+                trade_type_code = TradeType.SALE
+                trade_type_name = TradeType.SALE_NAME
+            elif trade_type == "jeonse":
+                trade_type_code = TradeType.JEONSE
+                trade_type_name = TradeType.JEONSE_NAME
+            elif trade_type == "monthly":
+                trade_type_code = TradeType.MONTHLY
+                trade_type_name = TradeType.MONTHLY_NAME
+
+            if complex_info.trade_info.exclusive_area:
+                pyeong = complex_info.trade_info.exclusive_area / SQM_TO_PYEONG_RATIO
+                pyeong_type_number = round(pyeong)
+                pyeong_name = f"{pyeong_type_number}평형"
+
+            trade_date = complex_info.trade_info.trade_date or ""
+            floor = complex_info.trade_info.floor or ""
+            deal_price = complex_info.trade_info.price or 0
+            deposit = complex_info.trade_info.deposit or 0
+            monthly_rent = complex_info.trade_info.monthly_rent or 0
+            trade_category = trade_type
+
+        return {
+            # 단지 정보 (complexes.csv용)
+            "complex_id": complex_info.id,
+            "complex_name": complex_info.name,
+            "address": complex_info.address,
+            "latitude": complex_info.latitude,
+            "longitude": complex_info.longitude,
+            "build_year": complex_info.build_year or 0,
+            "households": complex_info.households or 0,
+            "floors": complex_info.floors or 0,
+            # 거래 정보 (transactions.csv용)
+            "pyeong_type_number": pyeong_type_number,
+            "pyeong_name": pyeong_name,
+            "trade_type": trade_type_code,
+            "trade_type_name": trade_type_name,
+            "trade_date": trade_date,
+            "trade_year": complex_info.trade_info.trade_year if complex_info.trade_info else 0,
+            "floor": floor,
+            "deal_price": deal_price,
+            "deposit": deposit,
+            "monthly_rent": monthly_rent,
+            "trade_category": trade_category,
+            "is_delete": "N",
+            "is_renew": "N",
+            # 추가: 행정구역 정보
+            "gu_code": complex_info.gu_code or "",
+            "dong_code": complex_info.dong_code or "",
+            "gu_name": complex_info.gu_name or "",
+            "dong_name": complex_info.dong_name or "",
         }

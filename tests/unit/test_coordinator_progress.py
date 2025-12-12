@@ -2,22 +2,25 @@
 
 import tempfile
 from pathlib import Path
+from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
+# Import test setup FIRST to configure path and mocks
 
+# Now import crawler modules
 from crawler.coordinator import CrawlCoordinator
 from crawler.progress_tracker import ProgressTracker
 
 
-class TestCrawlCoordinatorProgress:
+class TestCrawlCoordinatorProgress(TestCase):
     """CrawlCoordinator progress tracking 통합 테스트"""
 
-    def setup_method(self):
+    def setUp(self):
         """테스트 메서드 실행 전 설정"""
         self.temp_dir = Path(tempfile.mkdtemp())
         self.checkpoint_path = self.temp_dir / "checkpoint.json"
 
-    def teardown_method(self):
+    def tearDown(self):
         """테스트 메서드 실행 후 정리"""
         import shutil
 
