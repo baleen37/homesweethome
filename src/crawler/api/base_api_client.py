@@ -14,7 +14,7 @@ from structlog import get_logger
 
 from crawler.config import Config, USER_AGENT
 from ..utils.retry import Retryable, BackoffStrategy, RetryError
-from ..utils.enhanced_error_handler import EnhancedErrorHandler, CircuitBreaker
+from ..utils.simple_error_handler import SimpleErrorHandler
 
 
 @dataclass
@@ -215,14 +215,8 @@ class BaseAPIClient(ABC):
         self.timeout = config.TIMEOUT
         self.max_retries = config.RETRY_ATTEMPTS
 
-        # 개선된 에러 핸들러 초기화
-        self.error_handler = EnhancedErrorHandler(max_retries=self.max_retries, retry_delay=1.0)
-
-        # 서킷 브레이커 초기화
-        self.circuit_breaker = CircuitBreaker(
-            failure_threshold=10,
-            timeout=60,
-        )
+        # 단순화된 에러 핸들러 초기화
+        self.error_handler = SimpleErrorHandler(max_retries=self.max_retries, retry_delay=1.0)
 
     @abstractmethod
     def get_required_headers(self) -> Dict[str, str]:
@@ -349,17 +343,6 @@ class BaseAPIClient(ABC):
                     "Failed to initialize session", "INIT_ERROR", None
                 )
 
-        # 서킷 브레이커 확인 - 연쇄 실패 방지
-        if self.circuit_breaker.state == "OPEN":
-            # 서킷 브레이커 리셋 시도
-            if self.circuit_breaker._should_attempt_reset():
-                self.circuit_breaker.state = "HALF_OPEN"
-            else:
-                # 서킷 브레이커가 열려있으면 요청 거부
-                return self._create_error_response(
-                    "Circuit breaker is OPEN - too many failures", "CIRCUIT_BREAKER_OPEN", 503
-                )
-
         # 재시도 로직 적용
         retryable = Retryable(
             max_attempts=self.max_retries + 1,
@@ -413,9 +396,6 @@ class BaseAPIClient(ABC):
             response_time = time.time() - start_time
             self._update_response_stats(api_response, response_time)
 
-            # 서킷 브레이커 성공 처리
-            self.circuit_breaker._on_success()
-
             return api_response
 
         except requests.exceptions.HTTPError as e:
@@ -427,12 +407,9 @@ class BaseAPIClient(ABC):
                 self._update_response_stats(api_response, time.time() - start_time)
                 return api_response
 
-            self.circuit_breaker._on_failure()
             raise
 
         except Exception as e:
-            self.circuit_breaker._on_failure()
-
             error_msg = str(e)
             error_type = "UNKNOWN_ERROR"
 

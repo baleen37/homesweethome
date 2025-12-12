@@ -18,11 +18,11 @@ from datetime import datetime
 
 from .api import APICrawler
 from ..api.hogangnono_client import HogangnonoAPIClient, SearchParams
-from ..config import HogangnonoConfig
+from ..config import Config
 from ..writers.hogangnono_csv_writer import HogangnonoCSVWriter
 from ..utils.checkpoint import CheckpointManager
 from ..utils.bbox_division import BBoxDivision
-from ..utils.enhanced_error_handler import EnhancedErrorHandler, ErrorType
+from ..utils.simple_error_handler import SimpleErrorHandler
 from ..data_mappers import HogangnonoDataMapper
 from ..validators.data_validator import ApartmentValidator, filter_apartments
 from ..models.api_responses import POIInfo
@@ -32,11 +32,11 @@ from ..models.api_responses import POIInfo
 class CrawlerDependencies:
     """크롤러 의존성 주입을 위한 데이터 클래스"""
 
-    config: HogangnonoConfig
+    config: Config
     api_client: HogangnonoAPIClient
     data_mapper: HogangnonoDataMapper
     validator: ApartmentValidator
-    error_handler: EnhancedErrorHandler
+    error_handler: SimpleErrorHandler
     bbox_divider: BBoxDivision
     checkpoint_manager: CheckpointManager
     csv_writer: HogangnonoCSVWriter
@@ -71,7 +71,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
         self.deps = dependencies
 
         # 기본 설정
-        base_url = dependencies.config.base_url
+        base_url = dependencies.config.BASE_URL
         default_headers = {
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
@@ -85,7 +85,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
             "Referer": "https://hogangnono.com/",
-            "User-Agent": dependencies.config.user_agent,
+            "User-Agent": dependencies.config.USER_AGENT,
         }
 
         # APICrawler 초기화
@@ -93,8 +93,8 @@ class ImprovedHogangnonoCrawler(APICrawler):
             config=dependencies.config,
             base_url=base_url,
             default_headers=default_headers,
-            rate_limit_delay=dependencies.config.rate_limit_delay,
-            timeout=dependencies.config.timeout,
+            rate_limit_delay=dependencies.config.RATE_LIMIT_DELAY,
+            timeout=dependencies.config.TIMEOUT,
         )
 
         # 출력 설정
@@ -190,7 +190,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
         if not apt_id or not str(apt_id).isdigit():
             self.logger.warning("invalid_apartment_id_format", apt_id=apt_id, apt_name=apt_name)
             # 에러 핸들러에 등록
-            self.deps.error_handler.deps.id_filter.mark_invalid(apt_id, "Invalid ID format")
+            self.deps.error_handler.mark_apartment_invalid(apt_id)
             return False
 
         # 이름에 아파트 관련 키워드 있는지 확인 (Defense-in-Depth)
@@ -245,39 +245,32 @@ class ImprovedHogangnonoCrawler(APICrawler):
             )
 
             # 성공 처리
-            if response.success:
+            if hasattr(response, "success") and response.success:
                 self.stats["successful_requests"] += 1
 
                 # 캐시에 저장 (성공한 데이터만)
-                if response.data:
+                if hasattr(response, "data") and response.data:
                     self._apartment_cache[cache_key] = response.data
-
-                # 에러 핸들러에 성공 기록
-                self.deps.error_handler.handle_error(response, apt_id)
 
                 return response.data
             else:
                 self.stats["failed_requests"] += 1
 
-                # 에러 핸들링
-                error_info = self.deps.error_handler.handle_error(response, apt_id)
-                if error_info:
-                    if error_info.error_type == ErrorType.NOT_FOUND:
-                        self.logger.info(
-                            "apartment_not_found",
-                            apt_id=apt_id,
-                            apt_name=apt_name,
-                            message=error_info.message,
-                        )
-                    else:
-                        self.logger.warning(
-                            "api_error_for_apartment",
-                            apt_id=apt_id,
-                            apt_name=apt_name,
-                            error_type=error_info.error_type.value,
-                            message=error_info.message,
-                            is_transient=error_info.is_transient,
-                        )
+                # 404 에러 확인
+                if hasattr(response, "status_code") and response.status_code == 404:
+                    self.logger.info(
+                        "apartment_not_found",
+                        apt_id=apt_id,
+                        apt_name=apt_name,
+                    )
+                else:
+                    error_msg = getattr(response, "error", "Unknown error")
+                    self.logger.warning(
+                        "api_error_for_apartment",
+                        apt_id=apt_id,
+                        apt_name=apt_name,
+                        error=error_msg,
+                    )
 
                 return None
 
@@ -291,11 +284,9 @@ class ImprovedHogangnonoCrawler(APICrawler):
                 exc_info=True,
             )
 
-            # 예외도 에러 핸들러에 기록
-            mock_response = type(
-                "MockResponse", (), {"success": False, "error": str(e), "status_code": None}
-            )()
-            self.deps.error_handler.handle_error(mock_response, apt_id)
+            # 예외 처리 시 404 에러 확인
+            if "404" in str(e).lower() and apt_id:
+                self.deps.error_handler.mark_apartment_invalid(apt_id)
 
             return None
 
@@ -356,7 +347,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
 
             # API 레이트 리밋 고려
             if i + self.batch_size < len(apartments):
-                time.sleep(self.deps.config.rate_limit_delay)
+                time.sleep(self.deps.config.RATE_LIMIT_DELAY)
 
         return stats
 
@@ -486,7 +477,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
                 **total_stats,
                 "duration_seconds": duration,
                 "requests_stats": self.stats,
-                "error_handler_stats": self.deps.error_handler.get_error_summary(),
+                "invalid_apartments_count": len(self.deps.error_handler._invalid_apartment_ids),
                 "cache_stats": {
                     "apartment_cache_size": len(self._apartment_cache),
                     "dong_code_cache_size": len(self._dong_code_cache),
@@ -892,7 +883,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
         """크롤러 통계 정보 반환"""
         return {
             "performance_stats": self.stats,
-            "error_stats": self.deps.error_handler.get_error_summary(),
+            "invalid_apartments_count": len(self.deps.error_handler._invalid_apartment_ids),
             "cache_stats": {
                 "apartment_cache_size": len(self._apartment_cache),
                 "dong_code_cache_size": len(self._dong_code_cache),

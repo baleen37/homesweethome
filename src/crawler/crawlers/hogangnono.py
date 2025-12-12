@@ -15,7 +15,7 @@ from ..config import CrawlerConfig
 from ..writers import HogangnonoCSVWriter
 from ..utils.checkpoint import CheckpointManager
 from ..utils.bbox_division import BBoxDivision
-from ..utils.enhanced_error_handler import EnhancedErrorHandler
+from ..utils.simple_error_handler import SimpleErrorHandler
 from ..data_mappers import HogangnonoDataMapper
 from ..validators.data_validator import ApartmentValidator
 from ..validators.apartment_id_validator import ApartmentIdValidator
@@ -105,7 +105,7 @@ class HogangnonoCrawler(APICrawler):
         self.bbox_divider = BBoxDivision(max_pois_per_bbox=900)
 
         # 향상된 에러 핸들러 초기화
-        self.error_handler = EnhancedErrorHandler(
+        self.error_handler = SimpleErrorHandler(
             max_retries=config.max_retries if hasattr(config, "max_retries") else 3, retry_delay=1.0
         )
 

@@ -14,7 +14,7 @@ from .config import Config
 from .api.hogangnono_client import HogangnonoAPIClient
 from .data_mappers import HogangnonoDataMapper
 from .validators.data_validator import ApartmentValidator
-from .utils.enhanced_error_handler import EnhancedErrorHandler
+from .utils.simple_error_handler import SimpleErrorHandler
 from .utils.bbox_division import BBoxDivision
 from .utils.checkpoint import CheckpointManager
 from .writers.hogangnono_csv_writer import HogangnonoCSVWriter
@@ -54,7 +54,7 @@ def create_crawler(
     api_client = HogangnonoAPIClient(config)
     data_mapper = HogangnonoDataMapper(dong_code_mapping_file=output_dir / "dong_code_mapping.json")
     validator = ApartmentValidator()
-    error_handler = EnhancedErrorHandler(
+    error_handler = SimpleErrorHandler(
         max_retries=config.RETRY_ATTEMPTS, retry_delay=config.RETRY_DELAY
     )
     bbox_divider = BBoxDivision(max_pois_per_bbox=900)
@@ -137,7 +137,7 @@ def _create_test_dependencies(
     """
     data_mapper = HogangnonoDataMapper(dong_code_mapping_file=output_dir / "dong_code_mapping.json")
     validator = ApartmentValidator()
-    error_handler = EnhancedErrorHandler(
+    error_handler = SimpleErrorHandler(
         max_retries=config.RETRY_ATTEMPTS, retry_delay=config.RETRY_DELAY
     )
     bbox_divider = BBoxDivision(max_pois_per_bbox=900)

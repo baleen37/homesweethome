@@ -19,6 +19,7 @@ class Config:
     BASE_URL = "https://hogangnono.com"
     TIMEOUT = 30
     HEADLESS = True
+    USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
 
     # Rate Limiting 설정
     RATE_LIMIT_DELAY = 2.0  # 요청 간 대기 시간 (초)
