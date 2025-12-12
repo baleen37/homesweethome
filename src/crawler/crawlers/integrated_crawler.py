@@ -12,9 +12,8 @@ import json
 import time
 
 from ..config import CrawlerConfig
-from ..api.hogangnono_client import HogangnonoAPIClient
+from ..api.hogangnono_client import HogangnonoAPIClient, SearchParams
 from ..writers.hogangnono_csv_writer import HogangnonoCSVWriter
-from ..data_mappers.hogangnono_data_mapper import HogangnonoDataMapper
 from ..coordinator.progress_tracker import ProgressTracker
 from ..utils.bbox_division import BBoxDivision
 from ..utils.checkpoint import CheckpointManager
@@ -27,8 +26,6 @@ class CrawlMethod(Enum):
 
     AUTO = "auto"  # 자동 선택 (기본값)
     BBOX_ONLY = "bbox"  # bbox 기반만 사용
-    SEARCH_ONLY = "search"  # 검색 기반만 사용
-    HYBRID = "hybrid"  # 두 방식 모두 사용 후 병합
 
 
 class IntegratedCrawler:
@@ -64,9 +61,6 @@ class IntegratedCrawler:
         # 공통 컴포넌트 초기화
         self.api_client = HogangnonoAPIClient(config)
         self.writer = HogangnonoCSVWriter(str(self.output_dir))
-        self.data_mapper = HogangnonoDataMapper(
-            dong_code_mapping_file=self.output_dir / "dong_code_mapping.json"
-        )
         self.progress_tracker = ProgressTracker(
             checkpoint_file=self.output_dir / "integrated_checkpoint.json"
         )
@@ -75,11 +69,10 @@ class IntegratedCrawler:
         )
 
         # bbox 분할 유틸리티
-        self.bbox_divider = BBoxDivision(max_pois_per_bbox=900)
+        self.bbox_divider = BBoxDivision()
 
-        # 크롤러별 인스턴스 (지연 초기화)
+        # bbox 크롤러 인스턴스 (지연 초기화)
         self._bbox_crawler = None
-        self._search_crawler = None
 
         # 수집된 아파트 ID 저장 (중복 방지)
         self.collected_apartment_ids = set()
@@ -104,20 +97,6 @@ class IntegratedCrawler:
             )
         return self._bbox_crawler
 
-    @property
-    def search_crawler(self):
-        """검색 기반 크롤러 인스턴스 (지연 초기화)"""
-        if self._search_crawler is None:
-            from .apartment_search_crawler import ApartmentSearchCrawler
-
-            self._search_crawler = ApartmentSearchCrawler(
-                api_client=self.api_client,
-                data_mapper=self.data_mapper,
-                writer=self.writer,
-                progress_tracker=self.progress_tracker,
-            )
-        return self._search_crawler
-
     async def crawl_all(
         self,
         regions: Optional[List[str]] = None,
@@ -125,13 +104,13 @@ class IntegratedCrawler:
         use_bbox: Optional[bool] = None,
         use_search: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """전체 크롤링 실행
+        """전체 크롤링 실행 (bbox 기반만)
 
         Args:
-            regions: 대상 지역 목록 (bbox 기반)
-            keywords: 검색 키워드 목록 (검색 기반)
-            use_bbox: bbox 기반 사용 여부 (None이면 method에 따름)
-            use_search: 검색 기반 사용 여부 (None이면 method에 따름)
+            regions: 크롤링할 지역 목록
+            keywords: 검색 키워드 목록 (사용하지 않음)
+            use_bbox: bbox 기반 크롤링 사용 여부
+            use_search: 검색 기반 크롤링 사용 여부 (사용하지 않음)
 
         Returns:
             크롤링 통계 정보
@@ -142,84 +121,34 @@ class IntegratedCrawler:
         checkpoint = self._load_checkpoint()
         logger.info("checkpoint_loaded", completed_methods=checkpoint.get("completed_methods", []))
 
-        # 크롤링 방식 결정
-        should_use_bbox, should_use_search = self._determine_crawl_methods(
-            use_bbox, use_search, checkpoint
-        )
+        # bbox 크롤링만 사용
+        if use_search:
+            logger.warning(
+                "search_based_crawling_deprecated",
+                message="검색 기반 크롤링은 더 이상 지원되지 않습니다. bbox 기반만 사용합니다.",
+            )
 
         stats = {
             "method": self.method.value,
-            "bbox_enabled": should_use_bbox,
-            "search_enabled": should_use_search,
-            "apartments_from_bbox": 0,
-            "apartments_from_search": 0,
-            "total_unique_apartments": 0,
-            "duplicates_removed": 0,
+            "apartments_count": 0,
             "duration_seconds": 0,
         }
 
         # bbox 기반 크롤링
-        if should_use_bbox and "bbox" not in checkpoint.get("completed_methods", []):
+        if "bbox" not in checkpoint.get("completed_methods", []):
             logger.info("starting_bbox_crawling")
             bbox_stats = await self._crawl_with_bbox(regions)
-            stats["apartments_from_bbox"] = bbox_stats["apartments_count"]
+            stats["apartments_count"] = bbox_stats["apartments_count"]
             self._save_method_checkpoint("bbox", bbox_stats)
+        else:
+            # 이미 완료된 경우 CSV에서 아파트 ID 로드
+            self._update_apartment_ids_from_csv()
+            stats["apartments_count"] = len(self.collected_apartment_ids)
 
-        # 검색 기반 크롤링
-        if should_use_search and "search" not in checkpoint.get("completed_methods", []):
-            logger.info("starting_search_crawling")
-            search_stats = await self._crawl_with_search(keywords)
-            stats["apartments_from_search"] = search_stats["apartments_count"]
-            self._save_method_checkpoint("search", search_stats)
-
-        # 중복 제거 및 통계 계산
-        stats["total_unique_apartments"] = len(self.collected_apartment_ids)
-        stats["duplicates_removed"] = (
-            stats["apartments_from_bbox"]
-            + stats["apartments_from_search"]
-            - stats["total_unique_apartments"]
-        )
         stats["duration_seconds"] = time.time() - start_time
-
-        # 최종 체크포인트 저장
-        if should_use_bbox and should_use_search:
-            self._save_method_checkpoint("both", stats)
-
         logger.info("crawling_completed", **stats)
 
         return stats
-
-    def _determine_crawl_methods(
-        self, use_bbox: Optional[bool], use_search: Optional[bool], checkpoint: Dict[str, Any]
-    ) -> Tuple[bool, bool]:
-        """사용할 크롤링 방식 결정"""
-        completed_methods = checkpoint.get("completed_methods", [])
-
-        # 명시적 지정이 있으면 우선
-        if use_bbox is not None or use_search is not None:
-            return (
-                use_bbox if use_bbox is not None else False,
-                use_search if use_search is not None else False,
-            )
-
-        # method에 따라 결정
-        if self.method == CrawlMethod.BBOX_ONLY:
-            return (True, False)
-        elif self.method == CrawlMethod.SEARCH_ONLY:
-            return (False, True)
-        elif self.method == CrawlMethod.HYBRID:
-            return (True, True)
-        else:  # AUTO
-            # 이전 실행 결과 확인
-            if len(completed_methods) == 0:
-                # 첫 실행은 bbox로 시도
-                return (True, False)
-            elif "bbox" in completed_methods and "search" not in completed_methods:
-                # bbox가 완료됐으면 search 실행
-                return (False, True)
-            else:
-                # 둘 다 완료됐거나 첫 실행이면 bbox부터
-                return (True, False)
 
     async def _crawl_with_bbox(self, regions: Optional[List[str]]) -> Dict[str, Any]:
         """bbox 기반 크롤링 실행"""
@@ -248,31 +177,6 @@ class IntegratedCrawler:
 
         except Exception as e:
             logger.error("bbox_crawling_failed", error=str(e))
-            raise
-
-    async def _crawl_with_search(self, keywords: Optional[List[str]]) -> Dict[str, Any]:
-        """검색 기반 크롤링 실행"""
-        try:
-            async with self.search_crawler as crawler:
-                if keywords:
-                    # 특정 키워드로 크롤링
-                    await crawler.collect_by_region(keywords)
-                else:
-                    # 전체 키워드로 크롤링
-                    await crawler.crawl_all_apartments()
-
-                # 수집된 아파트 ID 업데이트
-                self.collected_apartment_ids.update(crawler.collected_apt_ids)
-
-                return {
-                    "apartments_count": len(crawler.collected_apt_ids),
-                    "keywords_processed": len(keywords)
-                    if keywords
-                    else len(crawler.search_keywords),
-                }
-
-        except Exception as e:
-            logger.error("search_crawling_failed", error=str(e))
             raise
 
     def _update_apartment_ids_from_csv(self):
@@ -350,7 +254,7 @@ class IntegratedCrawler:
             for i, bbox in enumerate(bboxes):
                 logger.info(f"processing_bbox_{i + 1}/{len(bboxes)}", region=region_name)
 
-                search_params = self.api_client.SearchParams(
+                search_params = SearchParams(
                     bbox=(
                         bbox[1],
                         bbox[0],

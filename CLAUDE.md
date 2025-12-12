@@ -60,23 +60,26 @@ uv run vulture src/
 ### Running the Crawler
 
 ```bash
-# Basic run (improved version)
-uv run python scripts/main_improved.py
+# Basic run
+uv run python scripts/main.py
 
-# With specific environment
-uv run python scripts/main_improved.py --env development
+# With specific crawling method
+uv run python scripts/main.py --method bbox
 
 # Specific districts
-uv run python scripts/main_improved.py --district 강남구,서초구
+uv run python scripts/main.py --district 강남구,서초구
 
 # Full period data collection
-uv run python scripts/main_improved.py --full-period
+uv run python scripts/main.py --full-period
 
 # With custom output directory
-uv run python scripts/main_improved.py --output results/20251212
+uv run python scripts/main.py --output results/20251212
 
 # Resume from checkpoint
-uv run python scripts/main_improved.py --resume
+uv run python scripts/main.py --resume
+
+# Crawl specific region
+uv run python scripts/main.py --region gangnam
 ```
 
 ## Architecture Overview

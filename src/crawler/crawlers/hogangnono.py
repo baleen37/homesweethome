@@ -15,11 +15,7 @@ from ..config import CrawlerConfig
 from ..writers import HogangnonoCSVWriter
 from ..utils.bbox_division import BBoxDivision
 from ..utils.simple_error_handler import SimpleErrorHandler
-from ..data_mappers import HogangnonoDataMapper
-from ..validators.data_validator import ApartmentValidator
-from ..validators.apartment_id_validator import ApartmentIdValidator
 from ..models.api_responses import POIInfo
-from ..validators.data_validator import filter_apartments
 from unittest.mock import Mock
 
 
@@ -88,16 +84,8 @@ class HogangnonoCrawler(APICrawler):
         # 호갱노노 API 클라이언트
         self.hogangnono_client = HogangnonoAPIClient(config)
 
-        # 데이터 매핑을 위한 HogangnonoDataMapper 초기화
-        self.data_mapper = HogangnonoDataMapper(
-            dong_code_mapping_file=self.output_dir / "dong_code_mapping.json"
-        )
-
-        # 데이터 검증기 초기화
-        self.apartment_validator = ApartmentValidator()
-
         # bbox 분할 유틸리티 초기화
-        self.bbox_divider = BBoxDivision(max_pois_per_bbox=900)
+        self.bbox_divider = BBoxDivision()
 
         # 향상된 에러 핸들러 초기화
         self.error_handler = SimpleErrorHandler(
@@ -111,19 +99,12 @@ class HogangnonoCrawler(APICrawler):
         )
 
     def get_dong_code(self, district_name: str, dong_name: str) -> Optional[str]:
-        """동 이름으로 코드 조회 (DataMapper 위임)"""
-        # 먼저 DataMapper의 캐시된 정보 확인
-        dong_code = self.data_mapper.get_dong_code(district_name, dong_name)
-
-        # 없으면 API에서 가져오기
-        if not dong_code:
-            dongs = self.hogangnono_client.fetch_dong_codes(district_name)
-            if dongs:
-                # DataMapper에 업데이트
-                self.data_mapper.update_dong_code_mapping(district_name, dongs)
-                dong_code = dongs.get(dong_name)
-
-        return dong_code
+        """동 이름으로 코드 조회"""
+        # API에서 가져오기
+        dongs = self.hogangnono_client.fetch_dong_codes(district_name)
+        if dongs:
+            return dongs.get(dong_name)
+        return None
 
     def get_endpoint(self) -> str:
         """API 엔드포인트 반환
@@ -173,27 +154,32 @@ class HogangnonoCrawler(APICrawler):
         else:
             items = response_data if isinstance(response_data, list) else []
 
-        # Defense-in-Depth: 먼저 아파트 데이터만 필터링
-        from ..validators.data_validator import filter_apartments
-
-        valid_items, filter_stats = filter_apartments(items)
+        # 간단한 필터링: 아파트 데이터만 선택
+        valid_items = []
+        for item in items:
+            if isinstance(item, dict) and item.get("type") == "apartment":
+                valid_items.append(item)
 
         self.logger.info(
             "data_filtering_applied",
             total_items=len(items),
             valid_items=len(valid_items),
-            invalid_items=filter_stats["invalid"],
-            invalid_reasons=filter_stats.get("reasons", {}),
         )
 
         for item in valid_items:
             try:
-                # 호갱노노 → 네이버 형식으로 매핑
-                mapped_data = self.data_mapper.map_to_naver_format(
-                    item, fetch_dong_code_func=self.get_dong_code
-                )
-                if mapped_data:
-                    apartments.append(mapped_data)
+                # 직접 데이터 매핑
+                mapped_data = {
+                    "아파트명": item.get("name", ""),
+                    "법정동": item.get("dong", ""),
+                    "지번": item.get("jibun", ""),
+                    "건축년도": item.get("build_year", ""),
+                    "층": item.get("floor", ""),
+                    "전용면적": item.get("area", ""),
+                    "거래금액": item.get("price", ""),
+                    "aptSeq": item.get("apt_seq", ""),
+                }
+                apartments.append(mapped_data)
             except Exception as e:
                 self.logger.error(
                     "failed_to_map_item",
@@ -578,8 +564,11 @@ class HogangnonoCrawler(APICrawler):
             sample_facilities=[p.get("name") for p in pois_by_type["facilities"][:3]],
         )
 
-        # 2-2. 아파트만 필터링 (Defense-in-Depth)
-        valid_apartments, filter_stats = filter_apartments(pois_by_type["apartments"])
+        # 2-2. 아파트만 필터링 (간단한 필터링)
+        valid_apartments = []
+        for poi in pois_by_type["apartments"]:
+            if isinstance(poi, dict) and poi.get("type") == "apartment":
+                valid_apartments.append(poi)
 
         self.logger.info(
             "apartment_filtering_complete",
@@ -587,7 +576,6 @@ class HogangnonoCrawler(APICrawler):
             input_count=len(pois_by_type["apartments"]),
             valid_count=len(valid_apartments),
             invalid_count=len(pois_by_type["apartments"]) - len(valid_apartments),
-            filter_stats=filter_stats,
         )
 
         # 2-3. 유효한 아파트만 저장
@@ -1377,21 +1365,19 @@ class HogangnonoCrawler(APICrawler):
         raw_apt_id = apt.get("id")
         apt_name = apt.get("name", "")
 
-        # ID 유효성 검증
-        apt_id = ApartmentIdValidator.validate_and_normalize(raw_apt_id)
-
-        if not apt_id:
-            # 유효하지 않은 ID 이유 로깅
-            invalid_reason = ApartmentIdValidator._get_invalid_reason(raw_apt_id)
+        # 간단한 ID 유효성 검증
+        if not raw_apt_id or not isinstance(raw_apt_id, str):
             self.logger.warning(
                 "invalid_apartment_id",
                 apt_name=apt_name,
                 raw_id=raw_apt_id,
-                reason=invalid_reason,
                 district=district_name,
                 note="Skipping API call for invalid apartment ID",
             )
             return
+
+        # APT_ 접두사 추가
+        apt_id = raw_apt_id if raw_apt_id.startswith("APT_") else f"APT_{raw_apt_id}"
 
         # Check if we should skip this apartment based on error history
         if self.error_handler.should_skip_apartment(apt_id):

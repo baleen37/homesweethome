@@ -92,11 +92,6 @@ def main() -> None:
         action="store_true",
         help="전체 기간 데이터 수집 (기본값: 최근 3년)",
     )
-    parser.add_argument(
-        "--stats",
-        action="store_true",
-        help="크롤링 통계 정보만 표시",
-    )
 
     args = parser.parse_args()
 
@@ -116,28 +111,6 @@ def main() -> None:
 
     # 크롤링 방식 결정
     method = CrawlMethod(args.method)
-
-    # 통계 정보만 표시
-    if args.stats:
-        try:
-            crawler = IntegratedCrawler(
-                config=config,
-                output_dir=output_dir,
-                method=method,
-            )
-            stats = crawler.get_crawl_statistics()
-            print("\n=== 크롤링 통계 정보 ===")
-            print(f"출력 디렉토리: {stats['output_directory']}")
-            print(f"크롤링 방식: {stats['method']}")
-            print(f"수집된 아파트 수: {stats['apartment_count']}")
-            if stats.get("csv_stats"):
-                print(f"complexes.csv 레코드 수: {stats['csv_stats']['complexes_record_count']}")
-                print(
-                    f"transactions.csv 레코드 수: {stats['csv_stats']['transactions_record_count']}"
-                )
-        except Exception as e:
-            print(f"통계 정보 조회 실패: {e}")
-        return
 
     # 특정 지역 크롤링
     if args.region:

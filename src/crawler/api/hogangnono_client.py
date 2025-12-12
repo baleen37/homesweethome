@@ -208,15 +208,19 @@ class HogangnonoAPIClient(BaseAPIClient):
         data = api_response.data
 
         try:
-            # 데이터 정제 적용
-            from ..validators import sanitize_api_data, validate_api_response
-
-            # 데이터 정제
-            sanitized_data = sanitize_api_data(data, "unknown")
-            if sanitized_data != data:
-                self.logger.warning("data_sanitized", changes="malformed data fixed")
-                data = sanitized_data
-                api_response.data = sanitized_data
+            # 간단한 데이터 정제 적용
+            if isinstance(data, dict):
+                # None 값을 빈 문자열로 변환
+                for key, value in data.items():
+                    if value is None:
+                        data[key] = ""
+            elif isinstance(data, list):
+                # 리스트의 각 아이템 정제
+                for item in data:
+                    if isinstance(item, dict):
+                        for key, value in item.items():
+                            if value is None:
+                                item[key] = ""
 
             # 응답 데이터 구조 분석
             structure_info = {
@@ -244,46 +248,31 @@ class HogangnonoAPIClient(BaseAPIClient):
                 structure=structure_info,
             )
 
-            # 스키마 기반 검증
+            # 간단한 응답 타입 감지
             response_type = self._detect_response_type(data)
-            validation_report = validate_api_response(data, response_type)
 
-            # 에러 처리 - 심각한 에러가 있는 경우 처리를 중단
-            if validation_report.has_errors():
-                errors = validation_report.get_errors()
-                critical_errors = [e for e in errors if e.severity.value == "critical"]
+            # 기본적인 데이터 유효성 검사
+            if not data:
+                self.logger.warning("empty_response_data", response_type=response_type)
+                return APIResponse(
+                    success=False,
+                    error="Empty response data",
+                    status_code=api_response.status_code,
+                    data=None,
+                )
 
-                if critical_errors:
-                    # Critical 에러가 있으면 응답을 실패로 처리
-                    error_messages = [e.message for e in critical_errors]
-                    self.logger.error(
-                        "api_response_critical_validation_errors",
-                        error_count=len(critical_errors),
-                        errors=error_messages,
-                    )
-                    return APIResponse(
-                        success=False,
-                        error=f"Critical validation errors: {'; '.join(error_messages)}",
-                        status_code=api_response.status_code,
-                        data=None,
-                    )
-
-                # 일반 에러가 있으면 경고 로그와 함께 계속 진행
-                non_critical_errors = [e for e in errors if e.severity.value != "critical"]
-                if non_critical_errors:
-                    self.logger.warning(
-                        "api_response_validation_errors",
-                        error_count=len(non_critical_errors),
-                        errors=[e.message for e in non_critical_errors[:5]],  # 처음 5개 에러만
-                    )
-
-            # 경고 로깅
-            warnings = validation_report.get_warnings()
-            if warnings:
-                self.logger.info(
-                    "api_response_validation_warnings",
-                    warning_count=len(warnings),
-                    warnings=[w.message for w in warnings[:3]],  # 처음 3개 경고만
+            # 응답 타입별 기본 검증
+            if response_type == "poi_list" and not isinstance(data, list):
+                self.logger.warning(
+                    "poi_list_invalid_format",
+                    expected_type="list",
+                    actual_type=type(data).__name__,
+                )
+            elif response_type == "apartment_detail" and not isinstance(data, dict):
+                self.logger.warning(
+                    "apartment_detail_invalid_format",
+                    expected_type="dict",
+                    actual_type=type(data).__name__,
                 )
 
             # POI 데이터 분석
