@@ -633,7 +633,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
                     seen_ids.add(apt_id)
 
             # API 레이트 리밋
-            time.sleep(0.5)
+            time.sleep(1.0)
 
         return all_apartments
 

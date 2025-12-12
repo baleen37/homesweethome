@@ -534,7 +534,7 @@ class TestHogangnonoAPIEndpoints:
 
             print(f"  {i + 1}. Status: {response.status_code}, Time: {elapsed:.2f}s")
 
-            time.sleep(0.5)  # 0.5초 간격
+            time.sleep(1.0)  # 1초 간격
 
         # 429 (Too Many Requests) 발생 여부
         has_rate_limit = 429 in status_codes

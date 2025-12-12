@@ -51,7 +51,7 @@ class WebAPIPatternAnalyzer:
             for js_file in js_files[:10]:  # 처음 10개만 분석
                 print(f"분석 중: {js_file}")
                 self.analyze_js_file(js_file)
-                time.sleep(0.5)
+                time.sleep(1.0)
 
             # 3. HTML에서 직접 API 패턴 찾기
             self.find_api_patterns_in_html(html_content)
@@ -303,7 +303,7 @@ class WebAPIPatternAnalyzer:
                         }
                     )
 
-                    time.sleep(0.5)
+                    time.sleep(1.0)
 
                 results[endpoint] = endpoint_results
 

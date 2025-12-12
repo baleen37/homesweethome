@@ -887,7 +887,7 @@ class HogangnonoCrawler(APICrawler):
             if i < len(bboxes) - 1:  # 마지막이 아니면 잠시 대기
                 import time
 
-                time.sleep(0.5)
+                time.sleep(1.0)
 
         self.logger.info(
             "apartment_collection_complete",
