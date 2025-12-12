@@ -118,6 +118,7 @@ class CrawlerConfig:
             max_workers: 최대 워커 수 (기본값: 환경 변수 또는 4)
             use_threading: 쓰레딩 사용 여부 (기본값: 환경 변수 또는 False)
             output_dir: 출력 디렉토리 (기본값: 환경 변수 또는 "output")
+            output_file: 출력 파일 경로 (선택사항)
         """
         # 기본값 설정
         self.page_size = kwargs.get("page_size", int(os.getenv("CRAWLER_PAGE_SIZE", "50")))
@@ -134,6 +135,7 @@ class CrawlerConfig:
             "use_threading", os.getenv("CRAWLER_USE_THREADING", "false").lower() == "true"
         )
         self.output_dir = kwargs.get("output_dir", os.getenv("CRAWLER_OUTPUT_DIR", "output"))
+        self.output_file = kwargs.get("output_file")
 
         # 유효성 검사
         self._validate()
@@ -158,14 +160,41 @@ class CrawlerConfig:
         """설정값 유효성 검사"""
         if self.page_size < 1:
             raise ValueError("page_size은 1 이상이어야 합니다")
+        if self.page_size > 200:
+            raise ValueError("page_size은 200 이하여야 합니다")
         if self.timeout < 1:
             raise ValueError("timeout은 1 이상이어야 합니다")
+        if self.timeout > 300:
+            raise ValueError("timeout은 300 이하여야 합니다")
         if self.retry_attempts < 0:
             raise ValueError("retry_attempts은 0 이상이어야 합니다")
+        if self.retry_attempts > 10:
+            raise ValueError("retry_attempts은 10 이하여야 합니다")
         if self.rate_limit_delay < 0.1:
             raise ValueError("rate_limit_delay는 0.1 이상이어야 합니다")
+        if self.rate_limit_delay > 60:
+            raise ValueError("rate_limit_delay는 60 이하여야 합니다")
         if self.max_workers < 1:
             raise ValueError("max_workers은 1 이상이어야 합니다")
+        if self.max_workers > 20:
+            raise ValueError("max_workers은 20 이하여야 합니다")
+
+        # output_file 경로 검증
+        if self.output_file:
+            output_path = Path(self.output_file)
+            if not output_path.parent.exists():
+                raise ValueError("output_file의 상위 디렉토리가 존재하지 않습니다")
+
+        # 호환성 검증
+        if self.max_workers > 10 and self.rate_limit_delay < 1.0:
+            raise ValueError("너무 많은 worker와 짧은 delay는 서버에 부하를 줄 수 있습니다")
+
+        # timeout이 전체 재시도 시간보다 작은 경우
+        total_retry_time = self.retry_attempts * self.retry_delay
+        if self.timeout < total_retry_time:
+            raise ValueError(
+                f"timeout({self.timeout})은 전체 재시도 시간({total_retry_time})보다 커야 합니다"
+            )
 
     def create_output_path(self, base_dir: Optional[str] = None) -> Path:
         """타임스탬프가 포함된 출력 파일 경로 생성"""
@@ -179,7 +208,17 @@ class CrawlerConfig:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"data_{timestamp}.csv"
 
-        return Path(base_dir) / filename
+        # 항상 상대 경로로 반환
+        base_path = Path(base_dir)
+        if base_path.is_absolute():
+            # 절대 경로를 상대 경로로 변환
+            try:
+                base_path = base_path.relative_to(Path.cwd())
+            except ValueError:
+                # 현재 디렉토리 밖에 있는 경우 그대로 사용
+                pass
+
+        return base_path / filename
 
 
 # Backward compatibility alias

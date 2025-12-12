@@ -152,10 +152,7 @@ async def run_integrated_crawl(
         stats = await crawler.crawl_all(keywords=keywords)
         print("\n=== 크롤링 완료 ===")
         print(f"소요 시간: {stats['duration_seconds']:.2f}초")
-        print(f"bbox 기반 수집: {stats['apartments_from_bbox']}개")
-        print(f"검색 기반 수집: {stats['apartments_from_search']}개")
-        print(f"총 고유 아파트: {stats['total_unique_apartments']}개")
-        print(f"중복 제거: {stats['duplicates_removed']}개")
+        print(f"수집된 아파트: {stats['apartments_count']}개")
 
         # CSV 파일 통계
         csv_stats = crawler.writer.get_stats()

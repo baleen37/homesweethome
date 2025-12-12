@@ -20,7 +20,6 @@ dev = [
     "mypy>=1.10.0",
     "pre-commit>=3.5.0",
     "types-requests>=2.31.0",
-    "types-beautifulsoup4>=4.12.0",
 ]
 
 [tool.hatch.build.targets.wheel]

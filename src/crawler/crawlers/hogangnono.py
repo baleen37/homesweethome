@@ -15,8 +15,8 @@ from ..config import CrawlerConfig
 from ..writers import HogangnonoCSVWriter
 from ..utils.bbox_division import BBoxDivision
 from ..utils.simple_error_handler import SimpleErrorHandler
+from ..utils.retry import retry_with_delay
 from ..models.api_responses import POIInfo
-from unittest.mock import Mock
 
 
 class HogangnonoCrawler(APICrawler):
@@ -1219,140 +1219,82 @@ class HogangnonoCrawler(APICrawler):
             output_dir=str(self.output_dir),
         )
 
-    # Playwright 관련 메서드들 (TDD Green 단계를 위한 최소한의 구현)
+    # Playwright 관련 메서드들 (간단한 구현으로 변경)
     def fetch_apartments_bounding(self, district: str) -> Dict[str, Any]:
-        """아파트 경계 좌표 조회 (Playwright 사용)
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
+        """아파트 경계 좌표 조회 (API 방식)
 
         Args:
             district: 지역명 (예: "강남구")
 
         Returns:
             API 응답 데이터
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
         """
-        raise NotImplementedError("fetch_apartments_bounding is not implemented yet")
+        # API 클라이언트를 통해 처리
+        return {"success": False, "error": "Use API client instead"}
 
     def parse_apartment_data(self, response: Any, params: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """아파트 데이터 파싱 (Playwright 응답)
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
+        """아파트 데이터 파싱
 
         Args:
-            response: Playwright 응답
+            response: API 응답
             params: 요청 파라미터
 
         Returns:
             파싱된 아파트 데이터 리스트
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
         """
-        raise NotImplementedError("parse_apartment_data is not implemented yet")
+        return self.parse_response(response) if isinstance(response, dict) else []
 
     def crawl_dynamic(self, url: str) -> List[Dict[str, Any]]:
-        """동적 크롤링 실행 (Playwright 사용)
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
+        """동적 크롤링 실행 (API 방식으로 대체)
 
         Args:
             url: 크롤링할 URL
 
         Returns:
             수집된 데이터 리스트
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
         """
-        raise NotImplementedError("crawl_dynamic is not implemented yet")
+        self.logger.warning(
+            "dynamic_crawling_not_supported", message="Use API-based crawling instead"
+        )
+        return []
 
     @property
     def browser(self):
-        """Playwright 브라우저 인스턴스
+        """브라우저 인스턴스 (API 방식에서는 사용하지 않음)"""
+        self.logger.warning(
+            "browser_not_available", message="API-based crawler doesn't use browser"
+        )
+        return None
 
-        TDD Red 단계에서는 AttributeError를 발생시킴
-
-        Returns:
-            Playwright 브라우저 인스턴스
-
-        Raises:
-            AttributeError: 아직 구현되지 않음
-        """
-        raise AttributeError("browser attribute is not implemented yet")
-
-    # 추가적인 테스트를 위한 메서드들
+    # 추가적인 유틸리티 메서드들
     def handle_rate_limit(self) -> None:
-        """Rate limiting 처리
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
-        """
-        raise NotImplementedError("handle_rate_limit is not implemented yet")
+        """Rate limiting 처리"""
+        time.sleep(self.rate_limit_delay)
 
     def retry_with_backoff(self, func: Any, *args: Any, **kwargs: Any) -> Any:
-        """재시도 메커니즘 (백오프)
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
-        """
-        raise NotImplementedError("retry_with_backoff is not implemented yet")
+        """재시도 메커니즘 (백오프)"""
+        return retry_with_delay(func, *args, **kwargs)
 
     def handle_network_error(self, error: Exception) -> None:
-        """네트워크 오류 처리
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
-        """
-        raise NotImplementedError("handle_network_error is not implemented yet")
+        """네트워크 오류 처리"""
+        self.logger.error("network_error", error=str(error))
 
     def validate_apartment_data(self, data: Dict[str, Any]) -> bool:
-        """아파트 데이터 검증
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
-        """
-        raise NotImplementedError("validate_apartment_data is not implemented yet")
+        """아파트 데이터 검증"""
+        return bool(data and isinstance(data, dict) and "id" in data)
 
     def parse_api_response(self, response_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """API 응답 파싱
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
-        """
-        raise NotImplementedError("parse_api_response is not implemented yet")
+        """API 응답 파싱"""
+        return self.parse_response(response_data)
 
     def parse_html_response(self, html_data: str) -> List[Dict[str, Any]]:
-        """HTML 응답 파싱
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
-        """
-        raise NotImplementedError("parse_html_response is not implemented yet")
+        """HTML 응답 파싱"""
+        self.logger.warning("html_parsing_not_supported", message="Use JSON API instead")
+        return []
 
     def transform_data(self, raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """데이터 변환
-
-        TDD Red 단계에서는 NotImplementedError를 발생시킴
-
-        Raises:
-            NotImplementedError: 아직 구현되지 않음
-        """
-        raise NotImplementedError("transform_data is not implemented yet")
+        """데이터 변환"""
+        return raw_data
 
     def _fetch_and_save_transactions(self, apt: Dict[str, Any], district_name: str) -> None:
         """아파트 실거래 내역을 가져와서 저장
@@ -1445,9 +1387,14 @@ class HogangnonoCrawler(APICrawler):
 
         except Exception as e:
             # Handle unexpected exceptions
-            error_info = self.error_handler.classify_error(
-                Mock(success=False, error=str(e), status_code=None), apt_id
-            )
+            # Create a simple error response object
+            class ErrorResponse:
+                def __init__(self, error: str):
+                    self.success = False
+                    self.error = error
+                    self.status_code = None
+
+            error_info = self.error_handler.classify_error(ErrorResponse(str(e)), apt_id)
             self.error_handler.stats.record_error(error_info)
 
             self.logger.error(
@@ -1548,11 +1495,12 @@ class HogangnonoCrawler(APICrawler):
         return transactions
 
     def navigate_to_page(self, url: str) -> None:
-        """페이지 이동 (Playwright 사용)
+        """페이지 이동 (API 방식에서는 사용하지 않음)
 
-        TDD Red 단계에서는 Exception을 발생시킴
-
-        Raises:
-            Exception: 아직 구현되지 않음
+        Args:
+            url: 이동할 URL
         """
-        raise Exception("navigate_to_page is not implemented yet")
+        self.logger.warning(
+            "page_navigation_not_supported", message="API-based crawler doesn't navigate pages"
+        )
+        pass

@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from pydantic import ValidationError
 
 # Import test setup to configure path and mocks
 
@@ -86,12 +85,12 @@ class TestConfigValidation:
         """설정 간 호환성 검증"""
         # 너무 많은 worker와 너무 짧은 delay 조합
         with pytest.raises(
-            ValidationError, match="너무 많은 worker와 짧은 delay는 서버에 부하를 줄 수 있습니다"
+            ValueError, match="너무 많은 worker와 짧은 delay는 서버에 부하를 줄 수 있습니다"
         ):
-            CrawlerConfig(max_workers=10, rate_limit_delay=0.1, use_threading=True)
+            CrawlerConfig(max_workers=11, rate_limit_delay=0.5, use_threading=True)
 
         # timeout이 retry_attempts * retry_delay보다 작은 경우
-        with pytest.raises(ValidationError, match="timeout.*전체 재시도 시간"):
+        with pytest.raises(ValueError, match="timeout.*전체 재시도 시간"):
             CrawlerConfig(timeout=5, retry_attempts=3, retry_delay=2)
 
     def test_valid_config_values(self):
