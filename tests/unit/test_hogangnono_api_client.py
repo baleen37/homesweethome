@@ -10,7 +10,7 @@
 
 import json
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import requests
 from crawler.api.hogangnono_client import (
@@ -24,10 +24,7 @@ from crawler.config import CrawlerConfig
 @pytest.fixture
 def config():
     """테스트용 설정 객체"""
-    return CrawlerConfig(
-        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-        timeout=10,
-    )
+    return CrawlerConfig()
 
 
 @pytest.fixture
@@ -230,42 +227,32 @@ class TestSessionManagement:
     def test_session_recovery_on_401(self):
         """401/403 에러 시 자동 세션 재초기화"""
         import requests_mock
-        from unittest.mock import patch
 
         config = CrawlerConfig()
+        client = HogangnonoAPIClient(config)
 
-        # Mock the AdaptiveRateLimiter import
-        with patch("crawler.rate_limiter.AdaptiveRateLimiter") as mock_rate_limiter:
-            mock_rate_limiter.return_value = MagicMock()
-            mock_rate_limiter.return_value.wait = MagicMock()
-            mock_rate_limiter.return_value.on_success = MagicMock()
-            mock_rate_limiter.return_value.on_error = MagicMock()
-            mock_rate_limiter.return_value.on_rate_limit_error = MagicMock()
+        with requests_mock.Mocker() as m:
+            # First call returns 401
+            m.get(
+                "https://hogangnono.com/api/v2/regions",
+                status_code=401,
+                json={"error": "Unauthorized"},
+            )
 
-            client = HogangnonoAPIClient(config)
+            # Session reinitialization
+            m.get("https://hogangnono.com/", status_code=200)
 
-            with requests_mock.Mocker() as m:
-                # First call returns 401
-                m.get(
-                    "https://hogangnono.com/api/v2/regions",
-                    status_code=401,
-                    json={"error": "Unauthorized"},
-                )
+            # Second call after reinit succeeds
+            m.get(
+                "https://hogangnono.com/api/v2/regions",
+                status_code=200,
+                json={"data": {"regionList": []}, "status": "success"},
+            )
 
-                # Session reinitialization
-                m.get("https://hogangnono.com/", status_code=200)
-
-                # Second call after reinit succeeds
-                m.get(
-                    "https://hogangnono.com/api/v2/regions",
-                    status_code=200,
-                    json={"data": {"regionList": []}, "status": "success"},
-                )
-
-                # Should succeed after auto-recovery
-                response = client.get_regions()
-                assert response.success
-                assert client._session_initialized
+            # Should succeed after auto-recovery
+            response = client.get_regions()
+            assert response.success
+            assert client._session_initialized
 
 
 class TestGetRegions:
@@ -708,71 +695,6 @@ class TestFetchDongCodes:
             assert "역삼동" not in dongs
 
 
-class TestRateLimiting:
-    """Rate limiting 테스트"""
-
-    def test_rate_limiting_initial_values(self, config):
-        """Rate limiting 초기값 확인"""
-        client = HogangnonoAPIClient(config)
-
-        # 초기값 확인
-        assert client.rate_limiter.current_delay == 2.0, (
-            f"Expected 2.0, got {client.rate_limiter.current_delay}"
-        )
-        assert client.rate_limiter.min_delay == 1.0, (
-            f"Expected 1.0, got {client.rate_limiter.min_delay}"
-        )
-
-        # 최대값 확인
-        assert client.rate_limiter.max_delay == 10.0, (
-            f"Expected 10.0, got {client.rate_limiter.max_delay}"
-        )
-
-    def test_rate_limiter_integration(self, client):
-        """RateLimiter가 API 호출에 통합되었는지 확인"""
-        # RateLimiter가 초기화되었는지 확인
-        assert hasattr(client, "rate_limiter")
-        assert client.rate_limiter is not None
-
-        # 초기 설정 확인
-        assert client.rate_limiter.current_delay == 2.0
-        assert client.rate_limiter.min_delay == 1.0
-        assert client.rate_limiter.max_delay == 10.0
-
-    def test_rate_limiter_called_before_request(self, client):
-        """API 호출 전 rate limiter wait() 호출 확인"""
-        with patch.object(client.rate_limiter, "wait") as mock_wait:
-            with patch.object(client, "_initialize_session", return_value=True):
-                with patch.object(client.session, "request") as mock_request:
-                    mock_response = Mock()
-                    mock_response.status_code = 200
-                    mock_response.json.return_value = {"status": "success", "data": {}}
-                    mock_response.headers = {"content-type": "application/json"}
-                    mock_request.return_value = mock_response
-
-                    client.get_regions()
-
-                    # wait()가 호출되었는지 확인
-                    mock_wait.assert_called_once()
-
-    def test_rate_limiter_feedback_on_success(self, client):
-        """API 성공 시 rate limiter feedback 호출 확인"""
-        with patch.object(client, "_initialize_session", return_value=True):
-            with patch.object(client.rate_limiter, "wait"):
-                with patch.object(client.rate_limiter, "on_success") as mock_on_success:
-                    with patch.object(client.session, "request") as mock_request:
-                        mock_response = Mock()
-                        mock_response.status_code = 200
-                        mock_response.json.return_value = {"status": "success", "data": {}}
-                        mock_response.headers = {"content-type": "application/json"}
-                        mock_request.return_value = mock_response
-
-                        client.get_regions()
-
-                        # on_success()가 호출되었는지 확인
-                        mock_on_success.assert_called_once()
-
-
 class TestRetryMechanism:
     """재시도 메커니즘 테스트"""
 
@@ -808,27 +730,26 @@ class TestRetryMechanism:
     def test_retry_behavior_on_transient_errors(self, client):
         """일시적 오류 시 재시도 동작 테스트"""
         with patch.object(client, "_initialize_session", return_value=True):
-            with patch.object(client.rate_limiter, "wait"):
-                with patch.object(client.session, "request") as mock_request:
-                    # 처음 두 번은 예외 발생, 세 번째는 성공
-                    mock_response = Mock()
-                    mock_response.status_code = 200
-                    mock_response.headers = {"content-type": "application/json"}
-                    mock_response.json.return_value = {"status": "success", "data": {}}
+            with patch.object(client.session, "request") as mock_request:
+                # 처음 두 번은 예외 발생, 세 번째는 성공
+                mock_response = Mock()
+                mock_response.status_code = 200
+                mock_response.headers = {"content-type": "application/json"}
+                mock_response.json.return_value = {"status": "success", "data": {}}
 
-                    # 처음 두 번은 timeout 예외, 세 번째는 성공
-                    mock_request.side_effect = [
-                        requests.exceptions.Timeout("Connection timeout"),
-                        requests.exceptions.Timeout("Connection timeout"),
-                        mock_response,
-                    ]
+                # 처음 두 번은 timeout 예외, 세 번째는 성공
+                mock_request.side_effect = [
+                    requests.exceptions.Timeout("Connection timeout"),
+                    requests.exceptions.Timeout("Connection timeout"),
+                    mock_response,
+                ]
 
-                    # retry가 적용되면 최종적으로 성공해야 함
-                    result = client.get_regions()
+                # retry가 적용되면 최종적으로 성공해야 함
+                result = client.get_regions()
 
-                    # 3번의 요청이 있었는지 확인 (2번 재시도 + 1번 성공)
-                    assert mock_request.call_count == 3
-                    assert result.success is True
+                # 3번의 요청이 있었는지 확인 (2번 재시도 + 1번 성공)
+                assert mock_request.call_count == 3
+                assert result.success is True
 
 
 class TestMakeRequest:

@@ -14,7 +14,7 @@ import requests
 
 from crawler.crawlers.base import BaseCrawler
 from crawler.config import CrawlerConfig
-from crawler.rate_limiter import AdaptiveRateLimiter
+from crawler.utils.retry import AdaptiveRateLimiter
 from crawler.utils.retry import retry_with_delay
 
 

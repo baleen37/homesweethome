@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, List
 import structlog
 
 from crawler.utils.checkpoint import CheckpointManager
-from crawler.rate_limiter import AdaptiveRateLimiter as RateLimiter
+from crawler.utils.retry import AdaptiveRateLimiter as RateLimiter
 from crawler.writers import HogangnonoCSVWriter
 from crawler.progress_tracker import ProgressTracker
 

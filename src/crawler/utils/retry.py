@@ -9,6 +9,38 @@ from typing import Any, Callable, TypeVar, Optional
 T = TypeVar("T")
 
 
+class AdaptiveRateLimiter:
+    """간단한 Rate Limiter 구현"""
+
+    def __init__(self, min_delay: float = 1.0, max_delay: float = 10.0, initial_delay: float = 2.0):
+        """초기화
+
+        Args:
+            min_delay: 최소 지연 시간
+            max_delay: 최대 지연 시간
+            initial_delay: 초기 지연 시간
+        """
+        self.min_delay = min_delay
+        self.max_delay = max_delay
+        self.current_delay = initial_delay
+
+    def wait(self):
+        """현재 지연 시간만큼 대기"""
+        time.sleep(self.current_delay)
+
+    def on_success(self):
+        """성공 시 지연 시간 감소"""
+        self.current_delay = max(self.min_delay, self.current_delay * 0.9)
+
+    def on_error(self):
+        """에러 시 지연 시간 증가"""
+        self.current_delay = min(self.max_delay, self.current_delay * 1.5)
+
+    def on_rate_limit_error(self):
+        """Rate limit 에러 시 최대 지연 시간으로 설정"""
+        self.current_delay = self.max_delay
+
+
 def retry_with_delay(
     func: Callable[..., T],
     max_attempts: int = 3,
