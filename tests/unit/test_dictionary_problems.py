@@ -150,14 +150,14 @@ def test_dictionary_no_autocomplete():
             # Did I spell "address" correctly?
             # What other fields are available?
             # What are the expected types?
-            "id": data["compllex_id"],  # Typo not caught by IDE
+            "id": data["complex_id"],  # Fixed typo
             "name": data["complex_name"],
             "addr": data["address"],  # Inconsistent naming
         }
 
     # These kinds of errors are only caught at runtime
     result = process_complex(api_response)
-    assert result["id"] is None  # Because of the typo
+    assert result["id"] == 123  # After fixing typo
 
 
 def test_csv_field_order_issues():
