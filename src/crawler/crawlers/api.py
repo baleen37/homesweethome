@@ -15,7 +15,7 @@ import requests
 from crawler.crawlers.base import BaseCrawler
 from crawler.config import CrawlerConfig
 from crawler.rate_limiter import AdaptiveRateLimiter
-from crawler.utils.retry import Retryable, BackoffStrategy
+from crawler.utils.retry import retry_with_delay
 
 
 class APIError(Exception):
@@ -89,15 +89,6 @@ class APICrawler(BaseCrawler, ABC):
             self.rate_limiter.current_delay = max(
                 self.rate_limiter.min_delay, min(self.rate_limiter.max_delay, rate_limit_delay)
             )
-
-        # 재시도 설정
-        self.retry_config = Retryable(
-            max_attempts=3,
-            base_delay=1.0,
-            max_delay=30.0,
-            strategy=BackoffStrategy.EXPONENTIAL,
-            jitter=True,
-        )
 
     def _setup_session(self) -> None:
         """세션 초기 설정."""
@@ -178,14 +169,17 @@ class APICrawler(BaseCrawler, ABC):
 
         # 재시도 로직과 함께 API 호출
         try:
-            response = self.retry_config.execute(
-                self._make_request,
-                url,
-                method=method,
-                params=params,
-                headers=headers,
-                data=data,
-            )
+
+            def _make_request():
+                return self._make_request(
+                    url,
+                    method=method,
+                    params=params,
+                    headers=headers,
+                    data=data,
+                )
+
+            response = retry_with_delay(_make_request, max_attempts=3, delay=1.0)
 
             # 성공 시 Rate Limiter 업데이트
             self.rate_limiter.on_success()

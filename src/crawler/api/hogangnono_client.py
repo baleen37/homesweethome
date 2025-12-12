@@ -10,7 +10,7 @@ from typing import Any, Optional, List, Dict
 from structlog import get_logger
 
 from crawler.config import Config, USER_AGENT
-from ..utils.retry import retry_transient_errors
+from ..utils.retry import retry_with_delay
 from ..models.api_responses import (
     POIInfo,
     RankingInfo,
@@ -516,24 +516,26 @@ class HogangnonoAPIClient(BaseAPIClient):
         """
         self.close()
 
-    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def fetch_ranks_rolling(self) -> dict[str, Any]:
         """인기 순위 롤링 데이터 조회
 
         Returns:
             API 응답 데이터
         """
-        response = self._make_request(
-            method="GET",
-            endpoint="/api/v2/ranks/rolling",
-        )
 
-        if not response.success:
-            raise Exception(f"Failed to fetch ranks/rolling: {response.error}")
+        def _fetch():
+            response = self._make_request(
+                method="GET",
+                endpoint="/api/v2/ranks/rolling",
+            )
 
-        return response.data
+            if not response.success:
+                raise Exception(f"Failed to fetch ranks/rolling: {response.error}")
 
-    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
+            return response.data
+
+        return retry_with_delay(_fetch, max_attempts=3, delay=1.0)
+
     def fetch_pois_bounding(self, bounds: dict[str, float]) -> dict[str, Any]:
         """POI 데이터 조회 (Bounding box 기반)
 
@@ -543,26 +545,30 @@ class HogangnonoAPIClient(BaseAPIClient):
         Returns:
             API 응답 데이터
         """
-        # 실제 API 파라미터 형식에 맞게 전달
-        params = {
-            "level": 17,
-            "startX": bounds["startX"],
-            "endX": bounds["endX"],
-            "startY": bounds["startY"],
-            "endY": bounds["endY"],
-            "isIgnorePin": False,
-        }
 
-        response = self._make_request(
-            method="GET",
-            endpoint="/api/v2/pois-bounding",
-            params=params,
-        )
+        def _fetch():
+            # 실제 API 파라미터 형식에 맞게 전달
+            params = {
+                "level": 17,
+                "startX": bounds["startX"],
+                "endX": bounds["endX"],
+                "startY": bounds["startY"],
+                "endY": bounds["endY"],
+                "isIgnorePin": False,
+            }
 
-        if not response.success:
-            raise Exception(f"Failed to fetch pois-bounding: {response.error}")
+            response = self._make_request(
+                method="GET",
+                endpoint="/api/v2/pois-bounding",
+                params=params,
+            )
 
-        return response.data
+            if not response.success:
+                raise Exception(f"Failed to fetch pois-bounding: {response.error}")
+
+            return response.data
+
+        return retry_with_delay(_fetch, max_attempts=3, delay=1.0)
 
     def to_csv_rows_complexes(self, complexes_data: dict[str, Any]) -> List[dict[str, Any]]:
         """단지 데이터를 CSV 행으로 변환
@@ -645,7 +651,6 @@ class HogangnonoAPIClient(BaseAPIClient):
 
         return apartments
 
-    @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def search_apartments_by_location(
         self, center_lng: float, center_lat: float, delta: float = 0.02, level: int = 17
     ) -> dict[str, Any]:
@@ -660,30 +665,34 @@ class HogangnonoAPIClient(BaseAPIClient):
         Returns:
             검색 결과
         """
-        # POI 데이터로부터 아파트 정보 조회
-        bounds = {
-            "startX": center_lng - delta,
-            "endX": center_lng + delta,
-            "startY": center_lat - delta,
-            "endY": center_lat + delta,
-        }
 
-        # POI 데이터 가져오기
-        pois_response = self.fetch_pois_bounding(bounds)
+        def _search():
+            # POI 데이터로부터 아파트 정보 조회
+            bounds = {
+                "startX": center_lng - delta,
+                "endX": center_lng + delta,
+                "startY": center_lat - delta,
+                "endY": center_lat + delta,
+            }
 
-        if not pois_response or not pois_response.get("data"):
-            return {"success": False, "error": "Failed to fetch POI data", "apartments": []}
+            # POI 데이터 가져오기
+            pois_response = self.fetch_pois_bounding(bounds)
 
-        # POI에서 아파트 추출
-        apartments = self.fetch_apartments_by_pois(pois_response)
+            if not pois_response or not pois_response.get("data"):
+                return {"success": False, "error": "Failed to fetch POI data", "apartments": []}
 
-        return {
-            "success": True,
-            "total_pois": len(pois_response.get("data", [])),
-            "apartments": apartments,
-            "bounds": bounds,
-            "error": None,
-        }
+            # POI에서 아파트 추출
+            apartments = self.fetch_apartments_by_pois(pois_response)
+
+            return {
+                "success": True,
+                "total_pois": len(pois_response.get("data", [])),
+                "apartments": apartments,
+                "bounds": bounds,
+                "error": None,
+            }
+
+        return retry_with_delay(_search, max_attempts=3, delay=1.0)
 
     def _get_headers(self) -> dict[str, str]:
         """API 호출용 헤더 생성 (테스트용)
