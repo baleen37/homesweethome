@@ -10,7 +10,7 @@ from pathlib import Path
 
 from structlog import get_logger
 
-from crawler.config import CrawlerConfig
+from crawler.config import Config, USER_AGENT
 from ..utils.retry import retry_transient_errors
 from ..models.api_responses import (
     POIInfo,
@@ -142,7 +142,7 @@ class HogangnonoAPIClient(BaseAPIClient):
     BaseAPIClient를 상속받아 중복을 제거하고 호갱노노 특화 기능만 구현
     """
 
-    def __init__(self, config: CrawlerConfig, cache_dir: Optional[Path] = None):
+    def __init__(self, config: Config, cache_dir: Optional[Path] = None):
         """클라이언트 초기화"""
         super().__init__(config=config, base_url="https://hogangnono.com", cache_dir=cache_dir)
         self.logger = get_logger().bind(component="HogangnonoAPIClient")
@@ -160,7 +160,7 @@ class HogangnonoAPIClient(BaseAPIClient):
 
         # 메인 페이지 접속 헤더
         headers = {
-            "User-Agent": self.config.user_agent,
+            "User-Agent": USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
             "Accept-Encoding": "gzip, deflate, br",
@@ -179,7 +179,7 @@ class HogangnonoAPIClient(BaseAPIClient):
             response = self.session.get(
                 self.base_url,
                 headers=headers,
-                timeout=self.config.timeout,
+                timeout=self.config.TIMEOUT,
             )
 
             self.logger.info(
@@ -446,7 +446,7 @@ class HogangnonoAPIClient(BaseAPIClient):
 
         # regions API는 간단한 헤더 사용
         headers = {
-            "User-Agent": self.config.user_agent,
+            "User-Agent": USER_AGENT,
             "Accept": "application/json",
         }
 

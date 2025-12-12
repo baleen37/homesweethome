@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from .config import HogangnonoConfig
+from .config import Config
 from .api.hogangnono_client import HogangnonoAPIClient
 from .data_mappers import HogangnonoDataMapper
 from .validators.data_validator import ApartmentValidator
@@ -22,42 +22,30 @@ from .crawlers.improved_hogangnono_crawler import ImprovedHogangnonoCrawler, Cra
 
 
 def create_crawler(
-    environment: str = "production",
     output_dir: Optional[Path] = None,
     region_bounds: Optional[tuple] = None,
-    **config_overrides,
 ) -> ImprovedHogangnonoCrawler:
     """설정된 크롤러 인스턴스 생성
 
     Args:
-        environment: 환경 이름 (development, staging, production, test)
         output_dir: 출력 디렉토리 (선택)
         region_bounds: 크롤링 지역 경계 (선택)
-        **config_overrides: 설정 오버라이드
 
     Returns:
         초기화된 크롤러 인스턴스
     """
-    # 환경별 설정 로드
-    if environment == "development":
-        config = _load_dev_config(**config_overrides)
-    elif environment == "staging":
-        config = _load_staging_config(**config_overrides)
-    elif environment == "test":
-        config = _load_test_config(**config_overrides)
-    else:  # production
-        config = _load_prod_config(**config_overrides)
+    config = Config()
 
     # 출력 디렉토리 설정
     if output_dir:
         output_dir = Path(output_dir)
     else:
-        output_dir = Path("output")
+        output_dir = Path(config.OUTPUT_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # 지역 경계 설정
     if not region_bounds:
-        region_bounds = (37.413294, 126.734086, 37.715133, 127.183394)  # 서울시
+        region_bounds = tuple(config.REGION_BOUNDS)  # 서울시
 
     # 로거 생성
     logger = logging.getLogger("improved_hogangnono_crawler")
@@ -67,7 +55,7 @@ def create_crawler(
     data_mapper = HogangnonoDataMapper(dong_code_mapping_file=output_dir / "dong_code_mapping.json")
     validator = ApartmentValidator()
     error_handler = EnhancedErrorHandler(
-        max_retries=config.retry_attempts, retry_delay=config.retry_delay
+        max_retries=config.RETRY_ATTEMPTS, retry_delay=config.RETRY_DELAY
     )
     bbox_divider = BBoxDivision(max_pois_per_bbox=900)
     checkpoint_manager = CheckpointManager(checkpoint_path=output_dir / "checkpoint.json")
@@ -104,7 +92,7 @@ def create_test_crawler(output_dir: Path, mock_api: bool = True) -> ImprovedHoga
     Returns:
         테스트용 크롤러
     """
-    config = _load_test_config(output_dir=output_dir)
+    config = Config.for_integration_test(str(output_dir))
 
     # 로거 생성
     logger = logging.getLogger("test_hogangnono_crawler")
@@ -131,7 +119,7 @@ def create_test_crawler(output_dir: Path, mock_api: bool = True) -> ImprovedHoga
 
 
 def _create_test_dependencies(
-    config: HogangnonoConfig,
+    config: Config,
     api_client,
     output_dir: Path,
     logger: logging.Logger,
@@ -150,7 +138,7 @@ def _create_test_dependencies(
     data_mapper = HogangnonoDataMapper(dong_code_mapping_file=output_dir / "dong_code_mapping.json")
     validator = ApartmentValidator()
     error_handler = EnhancedErrorHandler(
-        max_retries=config.retry_attempts, retry_delay=config.retry_delay
+        max_retries=config.RETRY_ATTEMPTS, retry_delay=config.RETRY_DELAY
     )
     bbox_divider = BBoxDivision(max_pois_per_bbox=900)
     checkpoint_manager = CheckpointManager(checkpoint_path=output_dir / "checkpoint.json")
@@ -167,72 +155,3 @@ def _create_test_dependencies(
         csv_writer=csv_writer,
         logger=logger,
     )
-
-
-def _load_dev_config(**overrides) -> HogangnonoConfig:
-    """개발 환경 설정 로드"""
-    config_dict = {
-        "base_url": "https://hogangnono.com",
-        "timeout": 60,
-        "rate_limit_delay": 1.0,
-        "page_size": 20,
-        "retry_attempts": 2,
-        "retry_delay": 0.5,
-        "use_threading": True,
-        "max_workers": 2,
-        "headless": False,  # 개발에서는 브라우저 보이기
-    }
-    config_dict.update(overrides)
-    return HogangnonoConfig(**config_dict)
-
-
-def _load_staging_config(**overrides) -> HogangnonoConfig:
-    """스테이징 환경 설정 로드"""
-    config_dict = {
-        "base_url": "https://staging-hogangnono.com",
-        "timeout": 30,
-        "rate_limit_delay": 2.0,
-        "page_size": 50,
-        "retry_attempts": 3,
-        "retry_delay": 1.0,
-        "use_threading": True,
-        "max_workers": 4,
-        "headless": True,
-    }
-    config_dict.update(overrides)
-    return HogangnonoConfig(**config_dict)
-
-
-def _load_prod_config(**overrides) -> HogangnonoConfig:
-    """프로덕션 환경 설정 로드"""
-    config_dict = {
-        "base_url": "https://hogangnono.com",
-        "timeout": 30,
-        "rate_limit_delay": 2.0,
-        "page_size": 100,
-        "retry_attempts": 3,
-        "retry_delay": 1.0,
-        "use_threading": True,
-        "max_workers": 8,
-        "headless": True,
-        "daily_request_limit": 50000,
-    }
-    config_dict.update(overrides)
-    return HogangnonoConfig(**config_dict)
-
-
-def _load_test_config(**overrides) -> HogangnonoConfig:
-    """테스트 환경 설정 로드"""
-    config_dict = {
-        "base_url": "https://api.test.com",
-        "timeout": 10,
-        "rate_limit_delay": 0.1,
-        "page_size": 5,
-        "retry_attempts": 1,
-        "retry_delay": 0.1,
-        "use_threading": False,
-        "max_workers": 1,
-        "headless": True,
-    }
-    config_dict.update(overrides)
-    return HogangnonoConfig(**config_dict)

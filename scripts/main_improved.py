@@ -58,12 +58,7 @@ def parse_arguments():
         """,
     )
 
-    parser.add_argument(
-        "--env",
-        choices=["development", "staging", "production", "test"],
-        default="production",
-        help="실행 환경 (기본값: production)",
-    )
+    # 환경별 설정이 제거되었으므로 --env 옵션 제거
 
     parser.add_argument(
         "--district", type=str, help="크롤링할 구 목록 (쉼표로 구분, 예: 강남구,서초구)"
@@ -150,7 +145,6 @@ def main():
 
         # 크롤러 생성
         crawler = create_crawler(
-            environment=args.env,
             output_dir=output_dir,
             region_bounds=region_bounds,
             **config_overrides,
@@ -160,10 +154,10 @@ def main():
         if args.dry_run:
             logger.info("Dry run 모드 - 설정 확인만 수행합니다")
             config = crawler.deps.config
-            logger.info(f"환경: {args.env}")
+            logger.info("환경: 고정된 설정 사용")
             logger.info(f"출력 디렉토리: {output_dir}")
-            logger.info(f"Rate Limit: {config.rate_limit_delay}초")
-            logger.info(f"Max Workers: {config.max_workers}")
+            logger.info(f"Rate Limit: {config.RATE_LIMIT_DELAY}초")
+            logger.info(f"Max Workers: {config.MAX_WORKERS}")
             logger.info(f"Batch Size: {getattr(config, 'batch_size', 'N/A')}")
             logger.info(f"Region Bounds: {region_bounds or '기본값'}")
             return
@@ -189,7 +183,7 @@ def main():
 
         # 크롤링 시작
         logger.info("크롤링을 시작합니다...")
-        logger.info(f"환경: {args.env}")
+        logger.info("환경: 고정된 설정 사용")
         logger.info(f"출력 디렉토리: {output_dir}")
 
         # 크롤링 실행

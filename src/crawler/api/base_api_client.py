@@ -12,7 +12,7 @@ import requests
 from requests import Response, Session
 from structlog import get_logger
 
-from crawler.config import CrawlerConfig
+from crawler.config import Config, USER_AGENT
 from ..utils.retry import Retryable, BackoffStrategy, RetryError
 from ..utils.enhanced_error_handler import EnhancedErrorHandler, CircuitBreaker
 
@@ -173,7 +173,7 @@ class APIResponse:
 class BaseAPIClient(ABC):
     """Base API client to eliminate common functionality duplication."""
 
-    def __init__(self, config: CrawlerConfig, base_url: str, cache_dir: Optional[Path] = None):
+    def __init__(self, config: Config, base_url: str, cache_dir: Optional[Path] = None):
         """초기화
 
         Args:
@@ -212,8 +212,8 @@ class BaseAPIClient(ABC):
         }
 
         # 네트워크 설정
-        self.timeout = config.timeout if hasattr(config, "timeout") else 30
-        self.max_retries = config.max_retries if hasattr(config, "max_retries") else 3
+        self.timeout = config.TIMEOUT
+        self.max_retries = config.RETRY_ATTEMPTS
 
         # 개선된 에러 핸들러 초기화
         self.error_handler = EnhancedErrorHandler(max_retries=self.max_retries, retry_delay=1.0)
@@ -253,7 +253,7 @@ class BaseAPIClient(ABC):
             HTTP 헤더 딕셔너리
         """
         return {
-            "User-Agent": self.config.user_agent,  # 브라우저 User-Agent 흉내
+            "User-Agent": USER_AGENT,  # 브라우저 User-Agent 흉내
             "Accept": "application/json, text/plain, */*",  # 응답 타입 지정
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",  # 언어 우선순위
             "Accept-Encoding": "gzip, deflate, br",  # 압축 지원
@@ -277,7 +277,7 @@ class BaseAPIClient(ABC):
         self.logger.info("Initializing session")
 
         headers = {
-            "User-Agent": self.config.user_agent,
+            "User-Agent": USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
             "Accept-Encoding": "gzip, deflate, br",
@@ -288,7 +288,7 @@ class BaseAPIClient(ABC):
             response = self.session.get(
                 self.base_url,
                 headers=headers,
-                timeout=self.config.timeout,
+                timeout=self.config.TIMEOUT,
             )
 
             self._session_initialized = True

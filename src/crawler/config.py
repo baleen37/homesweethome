@@ -77,6 +77,9 @@ class Config:
         return Path(base_dir) / filename
 
 
+# 간단한 user_agent 정의
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+
 # Backward compatibility alias
 HogangnonoConfig = Config
 CrawlerConfig = Config
