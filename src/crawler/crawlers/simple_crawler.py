@@ -74,9 +74,8 @@ class SimpleCrawler:
         self.invalid_apartments = set()
 
         self.logger.info(
-            "simple_crawler_initialized",
-            output_dir=str(self.output_dir),
-            region_bounds=self.region_bounds,
+            f"SimpleCrawler initialized - output_dir: {self.output_dir}, "
+            f"region_bounds: {self.region_bounds}"
         )
 
     def get_endpoint(self) -> str:

@@ -12,9 +12,7 @@ from typing import Any, Callable, Dict, List
 import structlog
 
 from crawler.utils.checkpoint import CheckpointManager
-from crawler.utils.retry import AdaptiveRateLimiter as RateLimiter
 from crawler.writers import HogangnonoCSVWriter
-from crawler.progress_tracker import ProgressTracker
 
 
 class CrawlCoordinator:
@@ -72,22 +70,8 @@ class CrawlCoordinator:
             self.checkpoint_manager = CheckpointManager(str(checkpoint_path))
             self.checkpoint_manager.load()
 
-        # Rate limiter
-        self.rate_limiter = RateLimiter()
-        # Override default delays if provided
-        if initial_delay != 2.5:
-            self.rate_limiter.current_delay = initial_delay
-        # Note: max_delay is final in AdaptiveRateLimiter, cannot be modified
-        # We'll use the provided max_delay as a soft limit in our code
-
-        # Progress Tracker
-        self.progress_tracker = None
-        if enable_progress_tracking:
-            self.progress_tracker = ProgressTracker(
-                output_dir=self.output_dir,
-                report_interval=progress_report_interval,
-                log_file="progress.log",
-            )
+        # Simple rate limiting
+        self.rate_delay = initial_delay
 
         # 통계
         self.stats: Dict[str, Any] = {

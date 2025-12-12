@@ -150,7 +150,7 @@ def main():
         # Dry run 모드
         if args.dry_run:
             logger.info("Dry run 모드 - 설정 확인만 수행합니다")
-            config = crawler.deps.config
+            config = crawler.config
             logger.info("환경: 고정된 설정 사용")
             logger.info(f"출력 디렉토리: {output_dir}")
             logger.info(f"Rate Limit: {config.RATE_LIMIT_DELAY}초")
@@ -175,7 +175,7 @@ def main():
         # 체크포인트 확인
         if args.resume:
             logger.info("체크포인트에서 재개합니다")
-            completed = crawler.deps.checkpoint_manager.get_completed_districts()
+            completed = crawler.checkpoint_manager.get_completed_districts()
             logger.info(f"이미 완료된 구/군: {len(completed)}개")
 
         # 크롤링 시작
@@ -190,8 +190,6 @@ def main():
         logger.info("크롤링이 완료되었습니다!")
         logger.info(f"처리된 구/군: {stats['districts_completed']}/{stats['districts_total']}")
         logger.info(f"발견된 아파트: {stats['apartments_found']}")
-        logger.info(f"처리된 아파트: {stats['apartments_processed']}")
-        logger.info(f"발견된 거래내역: {stats['transactions_found']}")
         logger.info(f"에러 수: {stats['errors']}")
         logger.info(f"소요 시간: {stats.get('duration_seconds', 0):.2f}초")
 

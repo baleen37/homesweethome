@@ -1,38 +1,31 @@
-# 프로젝트 소개
+# HomeSweetHome Crawler
 
-HomeSweetHome Crawler는 Python 기반 웹 크롤링 프레임워크로, 특히 호갱노노 부동산 데이터 수집에 최적화되어 있습니다.
+Python 기반 웹 크롤링 프레임워크로, 호갱노노 부동산 데이터 수집에 최적화되어 있습니다.
 
-## 설치 방법
+## 🎯 주요 특징 (2025-12-12 MVP 단순화)
 
-## 🎯 주요 특징
+### ✅ 단순화된 아키텍처
 
-### ✅ 개선 사항 (2025-12-12 리팩토링)
+1. **직관적인 구조**
+   - 의존성 주입 제거 및 직접 의존성 생성
+   - 단순한 에러 처리 (try/except)
+   - 기본 로깅만 유지
 
-1. **에러 핸들링 강화**
-   - 404 에러 발생 시 자동 스킵
-   - Circuit Breaker 패턴으로 연쇄 실패 방지
-   - 에러 타입별 분류 및 재시도 로직
-   - 일시적/영구적 에러 구분 처리
+2. **고정된 설정**
+   - 환경별 YAML 파일 제거
+   - Config 클래스로 단순화
+   - 하드코딩된 기본값 사용
 
-2. **API 호출 전 유효성 검증**
-   - 아파트 ID 형식 사전 검증
-   - 에러 기록 기반 스킵 로직
-   - 불필요한 API 호출 감소
+3. **단순화된 기능**
+   - BBox 고정 4x4 그리드 분할
+   - 기본 체크포인트 시스템
+   - 단일 CSV Writer (HogangnonoCSVWriter)
 
-3. **의존성 주입(DI) 패턴 도입**
-   - 모듈 간 결합도 감소
-   - 테스트 용이성 향상
-   - 설정과 비즈니스 로직 분리
-
-4. **성능 최적화**
-   - 캐싱 전략 (아파트 데이터, 동 코드)
-   - 배치 처리로 메모리 효율화
-   - bbox 분할로 API 제한 우회
-
-5. **환경별 설정 지원**
-   - 개발/스테이징/프로덕션 환경 분리
-   - YAML/JSON 설정 파일 지원
-   - 중앙 설정 관리
+4. **핵심 기능 유지**
+   - 아파트 정보 수집
+   - 실거래 내역 조회
+   - 지역별 크롤링
+   - 체크포인트를 통한 재개 기능
 
 ## 사용 방법
 
@@ -80,36 +73,42 @@ homesweethome/
 ├── src/
 │   └── crawler/
 │       ├── api/                 # API 클라이언트
+│       │   ├── base_api_client.py
+│       │   └── hogangnono_client.py
 │       ├── crawlers/            # 크롤러 구현
+│       │   ├── simple_crawler.py     # 메인 크롤러 (MVP)
+│       │   └── improved_hogangnono_crawler.py
 │       ├── data_mappers/        # 데이터 매핑
 │       ├── models/              # 데이터 모델
 │       ├── utils/               # 유틸리티
+│       │   ├── checkpoint.py
+│       │   ├── bbox_division.py
+│       │   └── simple_error_handler.py
 │       ├── validators/          # 데이터 검증
 │       └── writers/             # CSV/파일 출력
-├── config/                      # 환경별 설정
+│           ├── base_csv_writer.py
+│           └── hogangnono_csv_writer.py
+├── config.py                    # 단일 설정 파일
 ├── scripts/                     # 실행 스크립트
-├── tests/                       # 테스트 코드
-│   ├── unit/                    # 단위 테스트
-│   └── integration/             # 통합 테스트
-└── docs/                        # 문서
+│   └── main_improved.py         # 메인 실행 스크립트
+├── factories.py                 # 크롤러 팩토리
+└── tests/                       # 테스트 코드
+    ├── unit/                    # 단위 테스트
+    └── integration/             # 통합 테스트
 ```
 
 ## 🚀 빠른 시작
 
-### 1. 개선된 크롤러 사용
+### 1. SimpleCrawler 사용 (권장)
 
 ```python
 from pathlib import Path
-from crawler.factories import CrawlerFactory
+from crawler.factories import create_crawler
 
-# 팩토리를 통한 크롤러 생성
-factory = CrawlerFactory()
-
-# 프로덕션 환경 크롤러
-crawler = factory.get_crawler(
-    environment="production",
+# 간단한 크롤러 생성
+crawler = create_crawler(
     output_dir=Path("output"),
-    region_bounds=(37.413294, 126.734086, 37.715133, 127.183394)
+    region_bounds=(37.413294, 126.734086, 37.715133, 127.183394)  # 서울시
 )
 
 # 크롤링 실행
@@ -119,38 +118,25 @@ stats = crawler.crawl_and_save(
 )
 
 # 결과 확인
-print(f"처리된 아파트: {stats['apartments_processed']}")
-print(f"발견된 오류: {stats['errors']}")
+print(f"처리된 구/군: {stats['districts_completed']}")
+print(f"발견된 아파트: {stats['apartments_found']}")
+print(f"에러 수: {stats['errors']}")
 ```
 
-### 2. 의존성 주입 방식
+### 2. 직접 SimpleCrawler 사용
 
 ```python
-from crawler.crawlers.improved_hogangnono_crawler import ImprovedHogangnonoCrawler, CrawlerDependencies
-from crawler.config import HogangnonoConfig
-from crawler.factories import crawler_factory
+from crawler.crawlers.simple_crawler import SimpleCrawler
 
-# 환경별 컨테이너 생성
-container = crawler_factory.create_container("development")
+# 직접 크롤러 생성
+crawler = SimpleCrawler(
+    output_dir="output",
+    region_bounds=(37.413294, 126.734086, 37.715133, 127.183394)
+)
 
-# 의존성 주입된 크롤러
-crawler = container.crawler()
-
-# 크롤러 통계 확인
-stats = crawler.get_crawler_statistics()
-print(f"캐시 히트율: {stats['cache_stats']['apartment_cache_size']}")
-```
-
-### 3. 설정 파일 사용
-
-```python
-# config/development.yaml 설정 로드
-from crawler.factories import config_manager
-
-# 설정 로드
-dev_config = config_manager.load_config("development")
-if dev_config:
-    crawler = factory.get_crawler("development", **dev_config.model_dump())
+# bbox 분할 테스트
+bboxes = crawler.divide_bbox_simple(37.5, 126.9, 37.6, 127.0)
+print(f"생성된 bbox 개수: {len(bboxes)}")
 ```
 
 ## 📋 실행 방법
@@ -189,58 +175,42 @@ uv run python scripts/main_improved.py --workers 4
 
 ## 🏗️ 아키텍처
 
-### 의존성 주입 구조
+### 단순화된 구조
 
 ```
-Container (DI)
-├── Config (환경별 설정)
-├── APIClient (API 통신)
-├── DataMapper (데이터 변환)
-├── Validator (데이터 검증)
-├── ErrorHandler (에러 처리)
-├── BBoxDivider (영역 분할)
+SimpleCrawler
+├── HogangnonoAPIClient (API 통신)
+├── HogangnonoDataMapper (데이터 변환)
+├── HogangnonoCSVWriter (CSV 저장)
 ├── CheckpointManager (체크포인트)
-└── CSVWriter (CSV 저장)
-    ↓
-ImprovedHogangnonoCrawler
+└── SimpleErrorHandler (기본 에러 처리)
 ```
 
-### 에러 핸들링 흐름
+### 단순화된 에러 핸들링
 
 ```
 API 요청
     ↓
-유효성 검증 (ID 형식, 이전 에러 기록)
+try/except 블록
     ↓
-API 호출 (with 재시도)
-    ↓
-에러 분류 (404, 429, 5xx 등)
-    ↓
-처리:
-- 404: 영속적 실패로 기록, 스킵
-- 429/5xx: 일시적 실패, 재시도
-- 기타: 로깅 후 계속
+에러 발생 시:
+- 로깅
+- 계속 진행 (스킵)
 ```
 
 ## 🔧 설정
 
-### 환경별 설정 파일
+### 단일 Config 클래스
 
-- `config/development.yaml` - 개발 환경
-- `config/staging.yaml` - 스테이징 환경
-- `config/production.yaml` - 프로덕션 환경
+하드코딩된 기본값을 사용하며, 필요한 경우 직접 수정할 수 있습니다:
 
-### 주요 설정 항목
-
-```yaml
-# Rate Limiting
-rate_limit_delay: 2.0        # API 호출 간격
-retry_attempts: 3            # 재시도 횟수
-daily_request_limit: 50000   # 일일 최대 요청 수
-
-# 성능 최적화
-batch_size: 50              # 배치 처리 크기
-cache_enabled: true         # 캐싱 활성화
+```python
+# config.py 참조
+class Config:
+    BASE_URL = "https://hogangnono.com"
+    RATE_LIMIT_DELAY = 2.0
+    MAX_WORKERS = 4
+    # ...
 max_workers: 8              # 병렬 처리 worker 수
 
 # 에러 핸들링
