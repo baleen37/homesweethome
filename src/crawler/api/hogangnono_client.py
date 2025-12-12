@@ -646,42 +646,6 @@ class HogangnonoAPIClient(BaseAPIClient):
 
         return apartments
 
-    def fetch_real_estate_apis(self) -> dict[str, Any]:
-        """실제 부동산 API 테스트
-
-        다양한 부동산 관련 API 엔드포인트를 테스트하여 작동하는 것을 찾습니다.
-
-        Returns:
-            API 응답 데이터
-        """
-        # 테스트할 엔드포인트 목록
-        endpoints = [
-            "/api/v2/ranks/rolling",
-            "/api/v2/pois-bounding",
-        ]
-
-        results = {}
-
-        for endpoint in endpoints:
-            try:
-                response = self._make_request(
-                    method="GET",
-                    endpoint=endpoint,
-                )
-
-                results[endpoint] = {
-                    "success": response.success,
-                    "status_code": response.status_code,
-                    "data_count": len(response.data) if response.data else 0,
-                    "has_data": bool(response.data),
-                    "error": response.error,
-                }
-
-            except Exception as e:
-                results[endpoint] = {"success": False, "error": str(e)}
-
-        return results
-
     @retry_transient_errors(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def search_apartments_by_location(
         self, center_lng: float, center_lat: float, delta: float = 0.02, level: int = 17

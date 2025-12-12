@@ -28,21 +28,15 @@ class TransactionCSVWriter(UnifiedCSVWriter):
         self,
         output_path: Path,
         config: Optional[WriteConfig] = None,
-        use_korean_fields: bool = True,
     ):
         """Initialize TransactionCSVWriter.
 
         Args:
             output_path: Path to the output CSV file
             config: Write configuration
-            use_korean_fields: Whether to use Korean field names
         """
-        # Create appropriate strategy
-        if use_korean_fields:
-            strategy = TransactionDataTransformationStrategy()
-        else:
-            # Use English field names strategy
-            strategy = GenericTransactionStrategy()
+        # Always use Korean field names strategy
+        strategy = TransactionDataTransformationStrategy()
 
         super().__init__(
             output_path=output_path,
@@ -143,7 +137,6 @@ class TransactionCSVWriter(UnifiedCSVWriter):
         Returns:
             Filtered list of transactions
         """
-        from datetime import datetime
 
         filtered = []
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
@@ -211,32 +204,3 @@ class TransactionCSVWriter(UnifiedCSVWriter):
             "avg_price": sum(prices) / len(prices),
             "total_value": sum(prices),
         }
-
-
-class GenericTransactionStrategy:
-    """Generic strategy for transaction data with English field names."""
-
-    def transform(self, row: Dict[str, Any], fieldnames: List[str]) -> Dict[str, Any]:
-        """Transform transaction data using fieldnames from row."""
-        # Simple pass-through transformation
-        result = {}
-
-        for field in fieldnames:
-            value = row.get(field, "")
-
-            if value is None:
-                result[field] = ""
-            elif isinstance(value, bool):
-                result[field] = str(value).lower()
-            elif isinstance(value, (int, float)):
-                result[field] = str(value)
-            else:
-                result[field] = str(value)
-
-        return result
-
-    def get_fieldnames(self) -> List[str]:
-        """Get field names from transactions header standard."""
-        from crawler.writers.csv_header_standard import HeaderStandardRegistry
-
-        return HeaderStandardRegistry.get_fieldnames(CSVType.TRANSACTIONS)

@@ -8,7 +8,6 @@ from typing import Any, Dict, List
 
 from crawler.writers.data_transformation_strategy import (
     BaseDataTransformationStrategy,
-    DataTransformationStrategy,
 )
 from crawler.models.csv_models import TransactionCSVRow
 
@@ -183,23 +182,4 @@ class TransactionDataTransformationStrategy(BaseDataTransformationStrategy):
 
     def get_fieldnames(self) -> List[str]:
         """Get standard transaction field names from dataclass."""
-        return TransactionCSVRow.get_fieldnames()
-
-
-class GenericTransactionStrategy(DataTransformationStrategy):
-    """Generic transaction strategy using Protocol interface.
-
-    Alternative implementation that doesn't inherit from base class.
-    """
-
-    def __init__(self):
-        self._fieldnames = TransactionCSVRow.get_fieldnames()
-
-    def transform(self, row: Dict[str, Any], fieldnames: List[str]) -> Dict[str, Any]:
-        """Transform using delegation to base strategy."""
-        strategy = TransactionDataTransformationStrategy()
-        return strategy.transform(row, fieldnames or self._fieldnames)
-
-    def get_fieldnames(self) -> List[str]:
-        """Get field names from dataclass."""
         return TransactionCSVRow.get_fieldnames()

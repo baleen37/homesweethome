@@ -8,7 +8,6 @@ from typing import Any, Dict, List
 
 from crawler.writers.data_transformation_strategy import (
     BaseDataTransformationStrategy,
-    DataTransformationStrategy,
 )
 from crawler.models.csv_models import ComplexCSVRow
 
@@ -195,22 +194,3 @@ class ComplexDataTransformationStrategy(BaseDataTransformationStrategy):
                 normalized[field] = str(row[field])
             else:
                 normalized[field] = ""
-
-
-class GenericComplexStrategy(DataTransformationStrategy):
-    """Generic complex strategy using Protocol interface.
-
-    Alternative implementation that doesn't inherit from base class.
-    """
-
-    def __init__(self):
-        self._fieldnames = ComplexCSVRow.get_fieldnames()
-
-    def transform(self, row: Dict[str, Any], fieldnames: List[str]) -> Dict[str, Any]:
-        """Transform using delegation to base strategy."""
-        strategy = ComplexDataTransformationStrategy()
-        return strategy.transform(row, fieldnames or self._fieldnames)
-
-    def get_fieldnames(self) -> List[str]:
-        """Get field names from dataclass."""
-        return ComplexCSVRow.get_fieldnames()

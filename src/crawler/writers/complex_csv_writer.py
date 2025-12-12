@@ -28,21 +28,15 @@ class ComplexCSVWriter(UnifiedCSVWriter):
         self,
         output_path: Path,
         config: Optional[WriteConfig] = None,
-        use_korean_fields: bool = True,
     ):
         """Initialize ComplexCSVWriter.
 
         Args:
             output_path: Path to the output CSV file
             config: Write configuration
-            use_korean_fields: Whether to use Korean field names
         """
-        # Create appropriate strategy
-        if use_korean_fields:
-            strategy = ComplexDataTransformationStrategy()
-        else:
-            # Use English field names strategy
-            strategy = GenericComplexStrategy()
+        # Always use Korean field names strategy
+        strategy = ComplexDataTransformationStrategy()
 
         super().__init__(
             output_path=output_path,
@@ -158,32 +152,3 @@ class ComplexCSVWriter(UnifiedCSVWriter):
             stats["avg_deal_price_1year"] = sum(deal_prices) // len(deal_prices)
 
         return stats
-
-
-class GenericComplexStrategy:
-    """Generic strategy for complex data with English field names."""
-
-    def transform(self, row: Dict[str, Any], fieldnames: List[str]) -> Dict[str, Any]:
-        """Transform complex data using fieldnames from row."""
-        # Simple pass-through transformation
-        result = {}
-
-        for field in fieldnames:
-            value = row.get(field, "")
-
-            if value is None:
-                result[field] = ""
-            elif isinstance(value, bool):
-                result[field] = str(value).lower()
-            elif isinstance(value, (int, float)):
-                result[field] = str(value)
-            else:
-                result[field] = str(value)
-
-        return result
-
-    def get_fieldnames(self) -> List[str]:
-        """Get field names from complexes header standard."""
-        from crawler.writers.csv_header_standard import HeaderStandardRegistry
-
-        return HeaderStandardRegistry.get_fieldnames(CSVType.COMPLEXES)

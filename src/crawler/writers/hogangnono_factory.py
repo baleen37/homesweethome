@@ -69,7 +69,6 @@ class HogangnonoCSVWriter:
         Args:
             output_dir: Directory for output files
         """
-        from pathlib import Path
 
         self.output_dir = Path(output_dir)
         self.complexes_path = self.output_dir / "complexes.csv"

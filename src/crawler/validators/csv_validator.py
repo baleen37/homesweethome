@@ -6,6 +6,7 @@ data type checking, and consistency verification.
 
 import csv
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -256,22 +257,16 @@ class CSVFieldValidator:
                 return f"Value '{value}' is not a valid date format"
 
         elif self.field_def.data_type == DataType.EMAIL:
-            import re
-
             email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
             if not re.match(email_pattern, value):
                 return f"Value '{value}' is not a valid email address"
 
         elif self.field_def.data_type == DataType.PHONE:
-            import re
-
             phone_pattern = r"^\d{2,4}-?\d{3,4}-?\d{4}$"
             if not re.match(phone_pattern, value.replace(" ", "")):
                 return f"Value '{value}' is not a valid phone number"
 
         elif self.field_def.data_type == DataType.POSTAL_CODE:
-            import re
-
             postal_pattern = r"^\d{5}$|^\d{3}-\d{3}$"
             if not re.match(postal_pattern, value):
                 return f"Value '{value}' is not a valid postal code"

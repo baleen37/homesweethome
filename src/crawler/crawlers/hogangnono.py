@@ -19,6 +19,8 @@ from ..utils.enhanced_error_handler import EnhancedErrorHandler
 from ..data_mappers import HogangnonoDataMapper
 from ..validators.data_validator import ApartmentValidator
 from ..validators.apartment_id_validator import ApartmentIdValidator
+from ..models.api_responses import POIInfo
+from ..utils.poi_filter import filter_apartments
 from unittest.mock import Mock
 
 
@@ -528,8 +530,6 @@ class HogangnonoCrawler(APICrawler):
         Returns:
             크롤링 통계 정보
         """
-        from ..validators.data_validator import filter_apartments
-        from ..models.api_responses import POIInfo
 
         district_code = district["regionCode"]
         district_name = district["name"]
@@ -918,7 +918,6 @@ class HogangnonoCrawler(APICrawler):
             district_name: 구/군 이름
             is_valid: 아파트 여부 검증 결과
         """
-        from ..models.api_responses import POIInfo
 
         # POI 정보 생성 및 검증
         try:
@@ -1139,7 +1138,6 @@ class HogangnonoCrawler(APICrawler):
             checkpoint_path: checkpoint 파일 경로
             crawl_stats: 크롤링 통계 정보
         """
-        import time
 
         # 기존 checkpoint 로드
         checkpoint = {}

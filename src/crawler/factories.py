@@ -7,7 +7,9 @@
 3. 테스트를 위한 Mock 객체 생성
 """
 
+import json
 import logging
+import yaml
 from pathlib import Path
 from typing import Dict, Optional
 from dependency_injector import containers, providers
@@ -313,8 +315,6 @@ class ConfigurationManager:
             config: 저장할 설정
             format: 저장 형식 (yaml 또는 json)
         """
-        import yaml
-        import json
 
         config_path = self.config_dir / f"{environment}.{format}"
         config_dict = config.model_dump()

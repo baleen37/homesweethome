@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import structlog
 
+from crawler.writers.common import normalize_row_legacy
 from crawler.writers.data_transformation_strategy import DataTransformationStrategy
 from crawler.validators.csv_validator import CSVValidator, ValidationResult
 from crawler.writers.csv_header_standard import CSVType, HeaderStandardRegistry
@@ -309,28 +310,7 @@ class UnifiedCSVWriter:
 
     def _normalize_row_legacy(self, row: Dict[str, Any], fieldnames: List[str]) -> Dict[str, Any]:
         """Legacy normalization method for backward compatibility."""
-        normalized = {}
-
-        for field in fieldnames:
-            value = row.get(field, "")
-
-            # Handle different value types
-            if value is None or value == "":
-                normalized[field] = ""
-            elif isinstance(value, bool):
-                normalized[field] = str(value).lower()
-            elif isinstance(value, (int, float)):
-                # Format based on field name
-                if any(keyword in field.lower() for keyword in ["가", "price", "amount", "fee"]):
-                    normalized[field] = f"{int(value):,}"
-                elif "율" in field or "rate" in field.lower():
-                    normalized[field] = f"{float(value):.2f}"
-                else:
-                    normalized[field] = str(value)
-            else:
-                normalized[field] = str(value)
-
-        return normalized
+        return normalize_row_legacy(row, fieldnames)
 
     def _ensure_directory(self) -> None:
         """Ensure output directory exists."""

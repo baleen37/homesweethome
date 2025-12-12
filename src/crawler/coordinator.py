@@ -490,7 +490,6 @@ class CrawlCoordinator:
 
             # 테스트에서 메모리 안정성을 확인하기 위해 약간의 대기 시간 추가
             # 실제 크롤링 작업 시뮬레이션 (2초 대기)
-            import time
 
             time.sleep(2.0)
 

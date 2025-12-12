@@ -6,10 +6,11 @@ for the new unified writer architecture.
 
 from pathlib import Path
 
+from crawler.writers.hogangnono_base_wrapper import BaseHogangnonoWrapper
 from crawler.writers.hogangnono_factory import create_hogangnono_complex_writer
 
 
-class HogangnonoComplexesCSVWriter:
+class HogangnonoComplexesCSVWriter(BaseHogangnonoWrapper):
     """Compatibility wrapper for Hogangnono complex data writer.
 
     This class maintains backward compatibility while using the new
@@ -39,37 +40,13 @@ class HogangnonoComplexesCSVWriter:
         "data_source",
     ]
 
-    def __init__(self, output_path: Path) -> None:
-        """Initialize HogangnonoComplexesCSVWriter.
+    def _create_writer(self, output_path: Path):
+        """Create the underlying writer using the factory function.
 
         Args:
             output_path: Path to the CSV file
-        """
-        # Use the factory function to create the actual writer
-        self._writer = create_hogangnono_complex_writer(output_path)
-
-    def write(self, data: list[dict], mode: str = "w", write_header: bool = True) -> None:
-        """Write data to CSV.
-
-        Args:
-            data: List of dictionaries to write
-            mode: Write mode ('w' or 'a')
-            write_header: Whether to write header
-        """
-        self._writer.write(data, mode=mode, write_header=write_header)
-
-    def append(self, data: list[dict]) -> None:
-        """Append data to CSV.
-
-        Args:
-            data: List of dictionaries to append
-        """
-        self._writer.append(data)
-
-    def get_file_info(self) -> dict:
-        """Get file information.
 
         Returns:
-            Dictionary with file statistics
+            The actual writer instance
         """
-        return self._writer.get_stats()
+        return create_hogangnono_complex_writer(output_path)

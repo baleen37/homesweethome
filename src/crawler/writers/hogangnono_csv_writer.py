@@ -5,6 +5,7 @@ for the new unified writer architecture.
 """
 
 import json
+import re
 from typing import Any, List, Dict
 from datetime import datetime
 import structlog
@@ -315,8 +316,6 @@ class HogangnonoCSVWriter:
             amount_str = amount_str.replace(",", "")
 
             # 숫자만 추출
-            import re
-
             numbers = re.findall(r"\d+", amount_str)
             if numbers:
                 return int(numbers[0])
