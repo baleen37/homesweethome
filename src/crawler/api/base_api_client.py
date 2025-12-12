@@ -10,7 +10,7 @@ from requests import Response, Session
 from structlog import get_logger
 
 from crawler.config import Config, USER_AGENT
-from ..utils.retry import Retryable, BackoffStrategy, RetryError
+from ..utils.retry import retry_with_delay
 from ..utils.simple_error_handler import SimpleErrorHandler
 
 
@@ -277,24 +277,7 @@ class BaseAPIClient(ABC):
                     status_code=None,
                 )
 
-        # 재시도 로직 적용
-        retryable = Retryable(
-            max_attempts=self.max_retries + 1,
-            base_delay=1.0,
-            max_delay=30.0,
-            strategy=BackoffStrategy.EXPONENTIAL,
-            jitter=True,
-            exponential_base=2.0,
-            retry_on=(
-                requests.exceptions.Timeout,
-                requests.exceptions.ConnectionError,
-                requests.exceptions.HTTPError,
-                Exception,
-            ),
-            retry_on_predicate=self._is_retryable_error,
-            stop_on=(requests.exceptions.HTTPError,),
-        )
-
+        # 단순화된 재시도 로직 적용
         try:
 
             def make_http_request():
@@ -320,7 +303,9 @@ class BaseAPIClient(ABC):
 
                 return api_response
 
-            api_response = retryable.execute(make_http_request)
+            api_response = retry_with_delay(
+                make_http_request, max_attempts=self.max_retries + 1, delay=1.0, logger=self.logger
+            )
 
             return api_response
 
@@ -340,8 +325,6 @@ class BaseAPIClient(ABC):
                 pass
             elif isinstance(e, requests.exceptions.ConnectionError):
                 pass
-            elif isinstance(e, RetryError):
-                error_msg = f"Max retries exceeded: {str(e)}"
 
             return APIResponse(
                 success=False,
