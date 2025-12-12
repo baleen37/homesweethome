@@ -1,43 +1,75 @@
 """CSV writer for Hogangnono complexes data.
 
-This module provides HogangnonoComplexesCSVWriter class that handles complexes.csv
-file for Hogangnono data using the refactored base class.
+This module provides HogangnonoComplexesCSVWriter as a compatibility wrapper
+for the new unified writer architecture.
 """
 
 from pathlib import Path
 
-from crawler.writers.base_hogangnono_writer import BaseHogangnonoCSVWriter
-from crawler.writers.hogangnono_strategy import HogangnonoComplexStrategy
-from crawler.writers.csv_header_standard import CSVType
-from crawler.writers.data_transformation_strategy import DataTransformationStrategy
+from crawler.writers.hogangnono_factory import create_hogangnono_complex_writer
 
 
-class HogangnonoComplexesCSVWriter(BaseHogangnonoCSVWriter):
-    """호갱노노 단지 데이터를 CSV로 저장하는 전용 클래스
+class HogangnonoComplexesCSVWriter:
+    """Compatibility wrapper for Hogangnono complex data writer.
 
-    이 클래스는 Strategy 패턴을 사용하여 호갱노노 데이터를 네이버 형식으로 변환합니다.
+    This class maintains backward compatibility while using the new
+    unified writer architecture internally.
     """
 
     # Fieldnames for backward compatibility
-    FIELDNAMES = HogangnonoComplexStrategy().get_fieldnames()
+    FIELDNAMES = [
+        "complex_id",
+        "complex_name",
+        "real_estate_type",
+        "address",
+        "completion_year_month",
+        "total_dong_count",
+        "total_household_count",
+        "min_area",
+        "max_area",
+        "deal_count",
+        "lease_count",
+        "rent_count",
+        "pyeong_types",
+        "fetched_at",
+        "poi_type",
+        "poi_category",
+        "validation_result",
+        "validation_reason",
+        "data_source",
+    ]
 
     def __init__(self, output_path: Path) -> None:
-        """Initialize HogangnonoComplexesCSVWriter with Hogangnono strategy.
+        """Initialize HogangnonoComplexesCSVWriter.
 
         Args:
             output_path: Path to the CSV file
         """
-        super().__init__(output_path, CSVType.COMPLEXES)
+        # Use the factory function to create the actual writer
+        self._writer = create_hogangnono_complex_writer(output_path)
 
-    def _create_strategy(self, csv_type: CSVType) -> DataTransformationStrategy:
-        """Create the complexes strategy.
+    def write(self, data: list[dict], mode: str = "w", write_header: bool = True) -> None:
+        """Write data to CSV.
 
         Args:
-            csv_type: Type of CSV (should be COMPLEXES)
+            data: List of dictionaries to write
+            mode: Write mode ('w' or 'a')
+            write_header: Whether to write header
+        """
+        self._writer.write(data, mode=mode, write_header=write_header)
+
+    def append(self, data: list[dict]) -> None:
+        """Append data to CSV.
+
+        Args:
+            data: List of dictionaries to append
+        """
+        self._writer.append(data)
+
+    def get_file_info(self) -> dict:
+        """Get file information.
 
         Returns:
-            HogangnonoComplexStrategy instance
+            Dictionary with file statistics
         """
-        if csv_type != CSVType.COMPLEXES:
-            raise ValueError(f"HogangnonoComplexesCSVWriter expects COMPLEXES type, got {csv_type}")
-        return HogangnonoComplexStrategy()
+        return self._writer.get_stats()

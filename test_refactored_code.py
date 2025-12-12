@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 try:
     from crawler.api.base_api_client import BaseAPIClient, APIResponse
-    from crawler.api.hogangnono_client_refactored import HogangnonoAPIClient, SearchParams
+    from crawler.api.hogangnono_client import HogangnonoAPIClient, SearchParams
     from crawler.writers.abstract_csv_writer import AbstractCSVWriter
     from crawler.validators.base_validator import (
         BaseValidator,

@@ -1,185 +1,359 @@
-"""CSV writer that handles dataclass objects directly
+"""Dataclass CSV writer with automatic type conversion.
 
-This module provides CSV writers that can handle dataclass objects
-and convert them to CSV format with proper validation.
+This module provides DataClassCSVWriter that can handle dataclass objects
+directly and convert them to CSV format with proper type safety.
 """
 
+from dataclasses import is_dataclass, fields
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type, TypeVar, get_type_hints
 import structlog
 
-from crawler.models.api_responses import ComplexInfo, POIInfo
-from crawler.models.csv_models import ComplexCSVRow, TransactionCSVRow
+from crawler.writers.unified_csv_writer import UnifiedCSVWriter, WriteConfig
+from crawler.writers.data_transformation_strategy import DataTransformationStrategy
+from crawler.writers.csv_header_standard import CSVType
 
-logger = structlog.get_logger().bind(component="DataclassCSVWriter")
+logger = structlog.get_logger().bind(component="DataClassCSVWriter")
+
+T = TypeVar("T")
 
 
-class DataclassComplexCSVWriter:
-    """CSV writer that handles ComplexInfo dataclass objects
+class DataClassCSVWriter(UnifiedCSVWriter):
+    """CSV writer that handles dataclass objects directly.
 
-    This writer converts ComplexInfo objects to CSV format with proper
-    validation and type safety.
+    Features:
+    - Automatic dataclass field extraction
+    - Type-aware value conversion
+    - Nested dataclass support
+    - Validation integration
     """
 
-    def __init__(self, output_path: Path) -> None:
-        """Initialize the writer
+    def __init__(
+        self,
+        output_path: Path,
+        dataclass_type: Optional[Type[T]] = None,
+        strategy: Optional[DataTransformationStrategy] = None,
+        csv_type: Optional[CSVType] = None,
+        config: Optional[WriteConfig] = None,
+        strict_mode: bool = True,
+    ):
+        """Initialize DataClassCSVWriter.
 
         Args:
             output_path: Path to the output CSV file
+            dataclass_type: Type of dataclass to handle
+            strategy: Data transformation strategy
+            csv_type: Type of CSV for header standardization
+            config: Write configuration
+            strict_mode: Whether to enforce strict type checking
         """
-        self.output_path = output_path
-        self.logger = structlog.get_logger().bind(component="DataclassComplexCSVWriter")
+        self.dataclass_type = dataclass_type
+        self.strict_mode = strict_mode
 
-    def write_complex_info(self, complex_infos: List[ComplexInfo]) -> None:
-        """Write ComplexInfo objects to CSV
+        # Create strategy if not provided and dataclass_type is given
+        if not strategy and dataclass_type and is_dataclass(dataclass_type):
+            strategy = DataClassStrategy(dataclass_type)
 
-        Args:
-            complex_infos: List of ComplexInfo objects to write
-        """
-        if not complex_infos:
-            self.logger.info("no_data_to_write")
-            return
-
-        # Convert ComplexInfo objects to CSV rows
-        csv_rows = []
-        for complex_info in complex_infos:
-            try:
-                csv_row = ComplexCSVRow.from_complex_info(complex_info)
-                csv_rows.append(csv_row.to_dict())
-            except Exception as e:
-                self.logger.error(
-                    "complex_to_csv_failed", complex_id=complex_info.id, error=str(e), exc_info=True
-                )
-
-        # Write using base CSV writer
-        from crawler.writers.hogangnono_complexes_writer import HogangnonoComplexesCSVWriter
-
-        base_writer = HogangnonoComplexesCSVWriter(self.output_path)
-        base_writer.write(csv_rows)
-
-        self.logger.info(
-            "complex_info_written", count=len(csv_rows), output_path=str(self.output_path)
+        super().__init__(
+            output_path=output_path,
+            strategy=strategy,
+            csv_type=csv_type,
+            config=config,
         )
 
-    def write_poi_info(
-        self, poi_infos: List[POIInfo], validation_results: Optional[List[Dict[str, str]]] = None
-    ) -> None:
-        """Write POIInfo objects to CSV with validation results
+        # Extract fieldnames from dataclass if available
+        if dataclass_type and is_dataclass(dataclass_type):
+            self._dataclass_fields = [f.name for f in fields(dataclass_type)]
+        else:
+            self._dataclass_fields = []
+
+    def write_dataclasses(self, dataclass_objects: List[T]) -> None:
+        """Write dataclass objects to CSV.
 
         Args:
-            poi_infos: List of POIInfo objects to write
-            validation_results: Optional list of validation results for each POI
+            dataclass_objects: List of dataclass instances to write
         """
-        if not poi_infos:
-            self.logger.info("no_data_to_write")
+        if not dataclass_objects:
+            logger.info("no_dataclasses_to_write")
             return
 
-        # Convert POIInfo objects to CSV rows
-        csv_rows = []
-        for i, poi_info in enumerate(poi_infos):
+        # Convert dataclass objects to dictionaries
+        dict_data = []
+        for obj in dataclass_objects:
             try:
-                # Get validation result if provided
-                validation_result = ""
-                validation_reason = ""
-                if validation_results and i < len(validation_results):
-                    validation_result = validation_results[i].get("result", "")
-                    validation_reason = validation_results[i].get("reason", "")
-
-                csv_row = ComplexCSVRow.from_poi_info(
-                    poi_info,
-                    validation_result=validation_result,
-                    validation_reason=validation_reason,
-                )
-                csv_rows.append(csv_row.to_dict())
+                dict_data.append(self._convert_dataclass_to_dict(obj))
             except Exception as e:
-                self.logger.error(
-                    "poi_to_csv_failed", poi_id=poi_info.id, error=str(e), exc_info=True
-                )
-
-        # Write using base CSV writer
-        from crawler.writers.hogangnono_complexes_writer import HogangnonoComplexesCSVWriter
-
-        base_writer = HogangnonoComplexesCSVWriter(self.output_path)
-        base_writer.write(csv_rows)
-
-        self.logger.info("poi_info_written", count=len(csv_rows), output_path=str(self.output_path))
-
-
-class DataclassTransactionCSVWriter:
-    """CSV writer that handles transaction data from ComplexInfo objects
-
-    This writer extracts transaction information from ComplexInfo objects
-    and writes it to CSV format.
-    """
-
-    def __init__(self, output_path: Path) -> None:
-        """Initialize the writer
-
-        Args:
-            output_path: Path to the output CSV file
-        """
-        self.output_path = output_path
-        self.logger = structlog.get_logger().bind(component="DataclassTransactionCSVWriter")
-
-    def write_from_complex_infos(self, complex_infos: List[ComplexInfo]) -> None:
-        """Extract and write transaction data from ComplexInfo objects
-
-        Args:
-            complex_infos: List of ComplexInfo objects containing transaction data
-        """
-        if not complex_infos:
-            self.logger.info("no_data_to_write")
-            return
-
-        # Convert ComplexInfo objects to transaction CSV rows
-        csv_rows = []
-        for complex_info in complex_infos:
-            try:
-                transaction_rows = TransactionCSVRow.from_complex_info(complex_info)
-                for row in transaction_rows:
-                    csv_rows.append(row.to_dict())
-            except Exception as e:
-                self.logger.error(
-                    "complex_to_transaction_csv_failed",
-                    complex_id=complex_info.id,
+                logger.error(
+                    "dataclass_conversion_failed",
+                    object_type=type(obj).__name__,
                     error=str(e),
-                    exc_info=True,
                 )
+                if self.strict_mode:
+                    raise
+                continue
 
-        # Write using base CSV writer
-        from crawler.writers.hogangnono_transactions_writer import HogangnonoTransactionsCSVWriter
+        # Write using parent method
+        self.write(dict_data)
 
-        base_writer = HogangnonoTransactionsCSVWriter(self.output_path)
-        base_writer.write(csv_rows)
+    def append_dataclasses(self, dataclass_objects: List[T]) -> None:
+        """Append dataclass objects to existing file.
 
-        self.logger.info(
-            "transaction_info_written", count=len(csv_rows), output_path=str(self.output_path)
-        )
+        Args:
+            dataclass_objects: List of dataclass instances to append
+        """
+        if not dataclass_objects:
+            logger.info("no_dataclasses_to_append")
+            return
+
+        # Convert dataclass objects to dictionaries
+        dict_data = []
+        for obj in dataclass_objects:
+            try:
+                dict_data.append(self._convert_dataclass_to_dict(obj))
+            except Exception as e:
+                logger.error(
+                    "dataclass_conversion_failed",
+                    object_type=type(obj).__name__,
+                    error=str(e),
+                )
+                if self.strict_mode:
+                    raise
+                continue
+
+        # Append using parent method
+        self.append(dict_data)
+
+    def _convert_dataclass_to_dict(self, obj: T) -> Dict[str, Any]:
+        """Convert a dataclass object to a dictionary.
+
+        Args:
+            obj: Dataclass instance to convert
+
+        Returns:
+            Dictionary representation of the dataclass
+        """
+        if not is_dataclass(obj):
+            if self.strict_mode:
+                raise ValueError(f"Object {obj} is not a dataclass instance")
+            else:
+                logger.warning("not_a_dataclass", object=obj)
+                return obj if isinstance(obj, dict) else {"value": obj}
+
+        result = {}
+        type_hints = get_type_hints(type(obj))
+
+        for field_info in fields(obj):
+            field_name = field_info.name
+            field_type = type_hints.get(field_name, field_info.type)
+            value = getattr(obj, field_name)
+
+            # Convert based on type
+            try:
+                result[field_name] = self._convert_value_by_type(value, field_type)
+            except Exception as e:
+                logger.warning(
+                    "field_conversion_failed",
+                    field=field_name,
+                    value=value,
+                    type=field_type,
+                    error=str(e),
+                )
+                if self.strict_mode:
+                    raise
+                result[field_name] = ""
+
+        return result
+
+    def _convert_value_by_type(self, value: Any, field_type: Type) -> str:
+        """Convert a value based on its type annotation.
+
+        Args:
+            value: Value to convert
+            field_type: Type annotation for the field
+
+        Returns:
+            Converted value as string
+        """
+        if value is None:
+            return ""
+
+        # Handle basic types
+        if field_type in (int, float):
+            return str(value)
+        elif field_type is bool:
+            return str(value).lower()
+        elif field_type is str:
+            return str(value)
+
+        # Handle Optional types
+        origin = getattr(field_type, "__origin__", None)
+        if origin is type(Optional[int]) or origin is type(Optional[float]):
+            return str(value) if value is not None else ""
+        elif origin is type(Optional[bool]):
+            return str(value).lower() if value is not None else ""
+        elif origin is type(Optional[str]):
+            return str(value) if value is not None else ""
+
+        # Handle list types
+        if origin is list:
+            if isinstance(value, list):
+                return ";".join(str(item) for item in value)
+            else:
+                return str(value)
+
+        # Handle nested dataclasses
+        if is_dataclass(field_type):
+            if is_dataclass(value):
+                # Convert nested dataclass to dict and flatten
+                nested_dict = self._convert_dataclass_to_dict(value)
+                # Prefix with field name to avoid collisions
+                return str(nested_dict)
+            else:
+                return str(value)
+
+        # Default conversion
+        return str(value)
+
+    def get_dataclass_fieldnames(self) -> List[str]:
+        """Get field names from the dataclass type.
+
+        Returns:
+            List of field names from the dataclass
+        """
+        if not self.dataclass_type or not is_dataclass(self.dataclass_type):
+            return self.get_fieldnames()
+
+        return self._dataclass_fields
+
+    def validate_dataclass_objects(self, objects: List[T]) -> List[str]:
+        """Validate dataclass objects against the writer's expectations.
+
+        Args:
+            objects: List of dataclass objects to validate
+
+        Returns:
+            List of validation error messages
+        """
+        errors = []
+
+        if not self.dataclass_type:
+            errors.append("No dataclass type specified for validation")
+            return errors
+
+        for i, obj in enumerate(objects):
+            if not is_dataclass(obj):
+                errors.append(f"Object {i} is not a dataclass instance")
+                continue
+
+            if type(obj) is not self.dataclass_type:
+                errors.append(
+                    f"Object {i} is of type {type(obj).__name__}, "
+                    f"expected {self.dataclass_type.__name__}"
+                )
+                continue
+
+            # Check required fields
+            for field_name in self._dataclass_fields:
+                if not hasattr(obj, field_name):
+                    errors.append(f"Object {i} missing required field: {field_name}")
+
+        return errors
 
 
-class DataclassCSVWriterFactory:
-    """Factory for creating appropriate dataclass CSV writers"""
+class DataClassStrategy(DataTransformationStrategy):
+    """Strategy for handling dataclass transformations."""
 
-    @staticmethod
-    def create_complex_writer(output_path: Path) -> DataclassComplexCSVWriter:
-        """Create a complex info CSV writer
+    def __init__(self, dataclass_type: Type[T]):
+        """Initialize strategy with dataclass type.
+
+        Args:
+            dataclass_type: Type of dataclass to handle
+        """
+        self.dataclass_type = dataclass_type
+        self._fieldnames = [f.name for f in fields(dataclass_type)]
+
+    def transform(self, row: Dict[str, Any], fieldnames: List[str]) -> Dict[str, Any]:
+        """Transform a dataclass row.
+
+        Args:
+            row: Dataclass instance or dictionary
+            fieldnames: Expected output field names
+
+        Returns:
+            Transformed data as dictionary
+        """
+        if is_dataclass(row):
+            # Convert dataclass to dict
+            writer = DataClassCSVWriter(Path("dummy.csv"), self.dataclass_type)
+            return writer._convert_dataclass_to_dict(row)
+        else:
+            # Pass through dict as-is
+            return row
+
+    def get_fieldnames(self) -> List[str]:
+        """Get field names from the dataclass."""
+        return self._fieldnames.copy()
+
+
+class MixedDataWriter:
+    """Writer that can handle both dataclass objects and regular dictionaries."""
+
+    def __init__(
+        self,
+        output_path: Path,
+        dataclass_type: Optional[Type[T]] = None,
+        strategy: Optional[DataTransformationStrategy] = None,
+        csv_type: Optional[CSVType] = None,
+        config: Optional[WriteConfig] = None,
+    ):
+        """Initialize MixedDataWriter.
 
         Args:
             output_path: Path to the output CSV file
-
-        Returns:
-            DataclassComplexCSVWriter instance
+            dataclass_type: Optional dataclass type for automatic detection
+            strategy: Data transformation strategy
+            csv_type: Type of CSV for header standardization
+            config: Write configuration
         """
-        return DataclassComplexCSVWriter(output_path)
+        self.output_path = output_path
+        self.dataclass_type = dataclass_type
+        self.strategy = strategy
+        self.csv_type = csv_type
+        self.config = config or WriteConfig()
 
-    @staticmethod
-    def create_transaction_writer(output_path: Path) -> DataclassTransactionCSVWriter:
-        """Create a transaction CSV writer
+        # Create appropriate writer based on input type
+        self._writer = None
+
+    def write(self, data: List[Any]) -> None:
+        """Write mixed data (dataclasses and dictionaries).
 
         Args:
-            output_path: Path to the output CSV file
-
-        Returns:
-            DataclassTransactionCSVWriter instance
+            data: List of dataclass objects or dictionaries
         """
-        return DataclassTransactionCSVWriter(output_path)
+        if not data:
+            return
+
+        # Detect data type from first item
+        first_item = data[0]
+
+        if is_dataclass(first_item):
+            # Use DataClassCSVWriter
+            if not self._writer or not isinstance(self._writer, DataClassCSVWriter):
+                self._writer = DataClassCSVWriter(
+                    output_path=self.output_path,
+                    dataclass_type=type(first_item),
+                    strategy=self.strategy,
+                    csv_type=self.csv_type,
+                    config=self.config,
+                )
+            self._writer.write_dataclasses(data)
+        else:
+            # Use regular UnifiedCSVWriter
+            if not self._writer or isinstance(self._writer, DataClassCSVWriter):
+                self._writer = UnifiedCSVWriter(
+                    output_path=self.output_path,
+                    strategy=self.strategy,
+                    csv_type=self.csv_type,
+                    config=self.config,
+                )
+            self._writer.write(data)

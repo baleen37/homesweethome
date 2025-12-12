@@ -1,0 +1,505 @@
+{
+  "summary": {
+    "total_files": 161,
+    "std_lib_modules": 38,
+    "third_party_modules": 33,
+    "internal_modules": 3
+  },
+  "std_lib_usage": {
+    "sys": 22,
+    "unittest": 63,
+    "pathlib": 76,
+    "asyncio": 4,
+    "json": 38,
+    "argparse": 4,
+    "datetime": 33,
+    "ast": 7,
+    "os": 13,
+    "re": 16,
+    "typing": 257,
+    "time": 45,
+    "urllib": 3,
+    "difflib": 1,
+    "dataclasses": 33,
+    "collections": 14,
+    "hashlib": 4,
+    "threading": 8,
+    "subprocess": 4,
+    "csv": 19,
+    "tempfile": 17,
+    "logging": 16,
+    "abc": 16,
+    "gc": 7,
+    "io": 2,
+    "gzip": 1,
+    "concurrent": 3,
+    "enum": 10,
+    "shutil": 5,
+    "multiprocessing": 1,
+    "math": 1,
+    "tracemalloc": 1,
+    "weakref": 1,
+    "contextlib": 3,
+    "random": 3,
+    "unicodedata": 1,
+    "types": 1,
+    "itertools": 1
+  },
+  "third_party_usage": {
+    "unit": 3,
+    "structlog": 25,
+    "test_playwright_verification": 1,
+    "astor": 1,
+    "requests": 21,
+    "find_unused_imports_tdd": 3,
+    "pytest": 38,
+    "tests": 5,
+    "dotenv": 3,
+    "pydantic": 7,
+    "pandas": 4,
+    "playwright": 2,
+    "requests_mock": 2,
+    "yaml": 2,
+    "dependency_injector": 2,
+    "config": 4,
+    "api": 9,
+    "data_mappers": 5,
+    "validators": 20,
+    "utils": 23,
+    "writers": 7,
+    "models": 23,
+    "coordinator": 2,
+    "hogangnono": 1,
+    "apartment_search_crawler": 1,
+    "aiohttp": 4,
+    "ijson": 1,
+    "psutil": 5,
+    "numpy": 2,
+    "api_responses": 11,
+    "rate_limiter": 2,
+    "base_api_client": 2,
+    "reporting": 1
+  },
+  "internal_usage": {
+    "src": 76,
+    "crawler": 269,
+    "crawlers": 2
+  },
+  "patterns_by_directory": {
+    ".": {
+      "std_lib": {
+        "sys": 8,
+        "unittest": 4,
+        "pathlib": 17,
+        "asyncio": 1,
+        "json": 6,
+        "argparse": 1,
+        "datetime": 5,
+        "ast": 7,
+        "os": 4,
+        "re": 4,
+        "typing": 28,
+        "time": 5,
+        "urllib": 1,
+        "difflib": 1,
+        "dataclasses": 1,
+        "collections": 8,
+        "hashlib": 1,
+        "threading": 1,
+        "subprocess": 1,
+        "csv": 2,
+        "tempfile": 1
+      },
+      "third_party": {
+        "unit": 3,
+        "structlog": 1,
+        "test_playwright_verification": 1,
+        "astor": 1,
+        "requests": 1,
+        "find_unused_imports_tdd": 3
+      },
+      "internal": {
+        "src": 12,
+        "crawler": 9
+      }
+    },
+    "tests": {
+      "std_lib": {
+        "sys": 4,
+        "pathlib": 2,
+        "typing": 4,
+        "unittest": 4
+      },
+      "third_party": {
+        "pytest": 2,
+        "structlog": 2,
+        "tests": 1,
+        "dotenv": 2,
+        "pydantic": 2,
+        "pandas": 1,
+        "playwright": 1,
+        "requests": 1,
+        "requests_mock": 1
+      },
+      "internal": {
+        "crawler": 1
+      }
+    },
+    "scripts": {
+      "std_lib": {
+        "asyncio": 2,
+        "argparse": 3,
+        "logging": 3,
+        "sys": 4,
+        "pathlib": 5,
+        "typing": 3,
+        "json": 2,
+        "time": 2,
+        "unittest": 2,
+        "subprocess": 1
+      },
+      "third_party": {
+        "structlog": 1
+      },
+      "internal": {
+        "crawler": 12,
+        "src": 5
+      }
+    },
+    "src/crawler": {
+      "std_lib": {
+        "time": 6,
+        "pathlib": 5,
+        "typing": 19,
+        "os": 1,
+        "datetime": 1,
+        "urllib": 1,
+        "sys": 1,
+        "logging": 1,
+        "json": 3,
+        "unittest": 1
+      },
+      "third_party": {
+        "structlog": 4,
+        "dotenv": 1,
+        "pydantic": 4,
+        "yaml": 2,
+        "dependency_injector": 2,
+        "config": 1,
+        "api": 1,
+        "data_mappers": 1,
+        "validators": 1,
+        "utils": 3,
+        "writers": 1
+      },
+      "internal": {
+        "crawler": 7,
+        "crawlers": 2
+      }
+    },
+    "src/crawler/writers": {
+      "std_lib": {
+        "pathlib": 12,
+        "typing": 46,
+        "abc": 8,
+        "csv": 6,
+        "gc": 1,
+        "io": 1,
+        "logging": 1,
+        "threading": 1,
+        "gzip": 1,
+        "concurrent": 1,
+        "enum": 1,
+        "dataclasses": 2,
+        "datetime": 4,
+        "re": 4,
+        "shutil": 1,
+        "json": 1
+      },
+      "third_party": {
+        "validators": 1,
+        "structlog": 6
+      },
+      "internal": {
+        "crawler": 55,
+        "src": 2
+      }
+    },
+    "src/crawler/crawlers": {
+      "std_lib": {
+        "json": 3,
+        "time": 6,
+        "pathlib": 3,
+        "typing": 25,
+        "unittest": 1,
+        "logging": 3,
+        "dataclasses": 1,
+        "datetime": 1,
+        "abc": 4,
+        "csv": 1,
+        "enum": 1,
+        "urllib": 1
+      },
+      "third_party": {
+        "api": 8,
+        "config": 3,
+        "writers": 6,
+        "utils": 9,
+        "data_mappers": 4,
+        "validators": 6,
+        "models": 3,
+        "requests": 1,
+        "coordinator": 2,
+        "hogangnono": 1,
+        "apartment_search_crawler": 1,
+        "aiohttp": 1,
+        "structlog": 1
+      },
+      "internal": {
+        "crawler": 6
+      }
+    },
+    "src/crawler/processing": {
+      "std_lib": {
+        "gc": 1,
+        "logging": 1,
+        "time": 1,
+        "multiprocessing": 1,
+        "pathlib": 1,
+        "dataclasses": 1,
+        "typing": 5,
+        "concurrent": 2
+      },
+      "third_party": {
+        "pandas": 1,
+        "ijson": 1
+      },
+      "internal": {
+        "crawler": 7
+      }
+    },
+    "src/crawler/utils": {
+      "std_lib": {
+        "math": 1,
+        "logging": 2,
+        "typing": 25,
+        "gc": 1,
+        "os": 2,
+        "time": 4,
+        "tracemalloc": 1,
+        "weakref": 1,
+        "collections": 3,
+        "contextlib": 1,
+        "dataclasses": 4,
+        "json": 1,
+        "tempfile": 1,
+        "datetime": 5,
+        "pathlib": 1,
+        "threading": 2,
+        "random": 1,
+        "enum": 2
+      },
+      "third_party": {
+        "psutil": 1,
+        "numpy": 1,
+        "structlog": 3,
+        "models": 2
+      },
+      "internal": {
+        "crawler": 1
+      }
+    },
+    "src/crawler/models": {
+      "std_lib": {
+        "dataclasses": 13,
+        "datetime": 5,
+        "typing": 32,
+        "unicodedata": 1,
+        "re": 2,
+        "enum": 4,
+        "logging": 1
+      },
+      "third_party": {
+        "validators": 10,
+        "api_responses": 11
+      },
+      "internal": {}
+    },
+    "src/crawler/api": {
+      "std_lib": {
+        "gc": 1,
+        "json": 3,
+        "logging": 1,
+        "time": 3,
+        "asyncio": 1,
+        "typing": 16,
+        "dataclasses": 4,
+        "hashlib": 2,
+        "abc": 2,
+        "pathlib": 3,
+        "types": 1,
+        "unittest": 1
+      },
+      "third_party": {
+        "aiohttp": 3,
+        "requests": 6,
+        "structlog": 3,
+        "utils": 11,
+        "rate_limiter": 2,
+        "models": 10,
+        "validators": 2,
+        "base_api_client": 2
+      },
+      "internal": {
+        "crawler": 5
+      }
+    },
+    "src/crawler/data_mappers": {
+      "std_lib": {
+        "json": 1,
+        "pathlib": 1,
+        "typing": 9,
+        "gc": 1,
+        "time": 1,
+        "dataclasses": 1
+      },
+      "third_party": {
+        "structlog": 1,
+        "models": 2
+      },
+      "internal": {
+        "crawler": 1
+      }
+    },
+    "src/crawler/validators": {
+      "std_lib": {
+        "re": 6,
+        "logging": 2,
+        "typing": 22,
+        "csv": 1,
+        "dataclasses": 3,
+        "datetime": 1,
+        "enum": 2,
+        "pathlib": 1,
+        "hashlib": 1,
+        "abc": 2
+      },
+      "third_party": {
+        "structlog": 3,
+        "models": 6
+      },
+      "internal": {}
+    },
+    "src/crawler/monitoring": {
+      "std_lib": {
+        "json": 1,
+        "logging": 1,
+        "time": 1,
+        "threading": 1,
+        "itertools": 1,
+        "collections": 2,
+        "contextlib": 1,
+        "dataclasses": 1,
+        "pathlib": 1,
+        "typing": 5,
+        "datetime": 1
+      },
+      "third_party": {
+        "psutil": 1,
+        "numpy": 1
+      },
+      "internal": {
+        "crawler": 2
+      }
+    },
+    "tests/unit": {
+      "std_lib": {
+        "csv": 8,
+        "pathlib": 16,
+        "typing": 6,
+        "tempfile": 13,
+        "unittest": 45,
+        "datetime": 8,
+        "time": 7,
+        "shutil": 4,
+        "json": 10,
+        "sys": 4,
+        "threading": 1,
+        "collections": 1,
+        "os": 2,
+        "io": 1
+      },
+      "third_party": {
+        "pytest": 24,
+        "requests": 8,
+        "pydantic": 1,
+        "requests_mock": 1,
+        "tests": 3
+      },
+      "internal": {
+        "crawler": 114,
+        "src": 57
+      }
+    },
+    "tests/integration": {
+      "std_lib": {
+        "sys": 1,
+        "os": 3,
+        "time": 7,
+        "gc": 1,
+        "pathlib": 5,
+        "unittest": 4,
+        "tempfile": 2,
+        "csv": 1,
+        "datetime": 2,
+        "json": 5,
+        "subprocess": 2,
+        "threading": 1
+      },
+      "third_party": {
+        "pytest": 12,
+        "requests": 3,
+        "pandas": 1,
+        "tests": 1,
+        "psutil": 2,
+        "reporting": 1
+      },
+      "internal": {
+        "crawler": 49
+      }
+    },
+    "tests/helpers": {
+      "std_lib": {
+        "random": 1,
+        "typing": 4,
+        "json": 1,
+        "pathlib": 1
+      },
+      "third_party": {
+        "playwright": 1,
+        "requests": 1
+      },
+      "internal": {}
+    },
+    "tests/integration/helpers": {
+      "std_lib": {
+        "pathlib": 2,
+        "typing": 8,
+        "time": 2,
+        "os": 1,
+        "threading": 1,
+        "json": 1,
+        "dataclasses": 2,
+        "contextlib": 1,
+        "random": 1,
+        "gc": 1,
+        "unittest": 1
+      },
+      "third_party": {
+        "pandas": 1,
+        "psutil": 1
+      },
+      "internal": {}
+    }
+  }
+}

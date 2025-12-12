@@ -14,6 +14,18 @@ from .api_responses import (
     RegionInfo,
 )
 
+from .apartment_models import (
+    RealEstateType,
+    POICategory,
+    BoundingBox,
+    Apartment,
+    POI,
+    PoiData,
+    ApartmentComplex,
+    ApartmentFilter,
+    CrawlStats,
+)
+
 from .validators import (
     validate_coordinates,
     validate_price,
@@ -30,6 +42,16 @@ __all__ = [
     "TradeInfo",
     "RankingInfo",
     "RegionInfo",
+    # Apartment Models
+    "RealEstateType",
+    "POICategory",
+    "BoundingBox",
+    "Apartment",
+    "POI",
+    "PoiData",
+    "ApartmentComplex",
+    "ApartmentFilter",
+    "CrawlStats",
     # Validators
     "validate_coordinates",
     "validate_price",

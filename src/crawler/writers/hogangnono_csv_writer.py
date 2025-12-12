@@ -1,17 +1,15 @@
 """CSV writer for Hogangnono real estate data.
 
-This module provides HogangnonoCSVWriter class for converting Hogangnono API responses
-to Naver-compatible CSV format and saving them to files.
+This module provides HogangnonoCSVWriter as a compatibility wrapper
+for the new unified writer architecture.
 """
 
 import json
-from pathlib import Path
 from typing import Any, List, Dict
 from datetime import datetime
 import structlog
 
-from crawler.writers.hogangnono_complexes_writer import HogangnonoComplexesCSVWriter
-from crawler.writers.hogangnono_transactions_writer import HogangnonoTransactionsCSVWriter
+from crawler.writers.hogangnono_factory import HogangnonoCSVWriter as NewHogangnonoCSVWriter
 
 logger = structlog.get_logger().bind(component="HogangnonoCSVWriter")
 
@@ -22,11 +20,50 @@ class HogangnonoCSVWriter:
     호갱노노 API 응답 데이터를 받아 네이버 CSV 형식으로 변환하여 저장합니다.
     - complexes.csv: 단지 정보 저장
     - transactions.csv: 거래내역 저장
+
+    This is a compatibility wrapper that delegates to the new implementation.
     """
 
-    # 네이버 CSV 형식 필드명 (기존 TransactionCSVWriter와 동일)
-    COMPLEXES_FIELDNAMES = HogangnonoComplexesCSVWriter.FIELDNAMES
-    TRANSACTIONS_FIELDNAMES = HogangnonoTransactionsCSVWriter.FIELDNAMES
+    # 네이버 CSV 형식 필드명
+    COMPLEXES_FIELDNAMES = [
+        "complex_id",
+        "complex_name",
+        "real_estate_type",
+        "address",
+        "completion_year_month",
+        "total_dong_count",
+        "total_household_count",
+        "min_area",
+        "max_area",
+        "deal_count",
+        "lease_count",
+        "rent_count",
+        "pyeong_types",
+        "fetched_at",
+        "poi_type",
+        "poi_category",
+        "validation_result",
+        "validation_reason",
+        "data_source",
+    ]
+
+    TRANSACTIONS_FIELDNAMES = [
+        "complex_id",
+        "complex_name",
+        "pyeong_type_number",
+        "pyeong_name",
+        "trade_type",
+        "trade_type_name",
+        "trade_date",
+        "trade_year",
+        "floor",
+        "deal_price",
+        "deposit",
+        "monthly_rent",
+        "trade_category",
+        "is_delete",
+        "is_renew",
+    ]
 
     def __init__(self, output_dir: str = "output") -> None:
         """HogangnonoCSVWriter 초기화
@@ -34,13 +71,8 @@ class HogangnonoCSVWriter:
         Args:
             output_dir: 출력 디렉토리 경로
         """
-        self.output_dir = Path(output_dir)
-        self.complexes_path = self.output_dir / "complexes.csv"
-        self.transactions_path = self.output_dir / "transactions.csv"
-
-        # 전용 CSV writer 인스턴스 생성
-        self.complexes_writer = HogangnonoComplexesCSVWriter(self.complexes_path)
-        self.transactions_writer = HogangnonoTransactionsCSVWriter(self.transactions_path)
+        # Delegate to the new implementation
+        self._impl = NewHogangnonoCSVWriter(output_dir)
 
     def save_complexes(self, complexes_data: List[Dict[str, Any]]) -> None:
         """단지 데이터를 complexes.csv로 저장
@@ -48,36 +80,7 @@ class HogangnonoCSVWriter:
         Args:
             complexes_data: 호갱노노에서 가져온 단지 데이터 리스트
         """
-        # 진단 로깅: 저장 시작
-        logger.info(
-            "diagnostic_save_complexes_start",
-            component="HogangnonoCSVWriter",
-            input_count=len(complexes_data),
-            output_path=str(self.complexes_path),
-            sample_input=complexes_data[0] if complexes_data else None,
-        )
-
-        if not complexes_data:
-            logger.info("diagnostic_save_complexes_skip", reason="empty_data")
-            return
-
-        # 출력 디렉토리 생성
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-        # 전용 writer를 사용하여 데이터 저장 (내부에서 정규화됨)
-        # 검증을 일시적으로 비활성화하여 테스트 데이터를 허용
-        self.complexes_writer._enable_validation = False
-        self.complexes_writer.append(complexes_data)
-        self.complexes_writer._enable_validation = True
-
-        # 진단 로깅: 저장 완료
-        logger.info(
-            "diagnostic_save_complexes_complete",
-            component="HogangnonoCSVWriter",
-            output_path=str(self.complexes_path),
-            file_exists=self.complexes_path.exists(),
-            file_size=self.complexes_path.stat().st_size if self.complexes_path.exists() else 0,
-        )
+        self._impl.save_complexes(complexes_data)
 
     def save_transactions(self, transactions_data: List[Dict[str, Any]]) -> None:
         """거래내역 데이터를 transactions.csv로 저장
@@ -85,17 +88,7 @@ class HogangnonoCSVWriter:
         Args:
             transactions_data: 호갱노노에서 가져온 거래내역 데이터 리스트
         """
-        if not transactions_data:
-            return
-
-        # 출력 디렉토리 생성
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-        # 전용 writer를 사용하여 데이터 저장 (내부에서 정규화됨)
-        # 검증을 일시적으로 비활성화하여 테스트 데이터를 허용
-        self.transactions_writer._enable_validation = False
-        self.transactions_writer.append(transactions_data)
-        self.transactions_writer._enable_validation = True
+        self._impl.save_transactions(transactions_data)
 
     def transform_to_naver_format(
         self, hogangnono_data: Dict[str, Any], data_type: str = "complex"
@@ -109,12 +102,7 @@ class HogangnonoCSVWriter:
         Returns:
             변환된 네이버 형식 데이터
         """
-        if data_type == "complex":
-            return self.transform_complex_to_naver_format(hogangnono_data)
-        elif data_type == "transaction":
-            return self.transform_transaction_to_naver_format(hogangnono_data)
-        else:
-            raise ValueError(f"Unsupported data_type: {data_type}")
+        return self._impl.transform_to_naver_format(hogangnono_data, data_type)
 
     def transform_complex_to_naver_format(self, complex_data: Dict[str, Any]) -> Dict[str, Any]:
         """단지 데이터를 네이버 형식으로 변환
@@ -373,15 +361,7 @@ class HogangnonoCSVWriter:
         Returns:
             파일 통계 정보
         """
-        complexes_info = self.complexes_writer.get_file_info()
-        transactions_info = self.transactions_writer.get_file_info()
-
-        return {
-            "complexes_file_size": complexes_info["file_size"],
-            "transactions_file_size": transactions_info["file_size"],
-            "complexes_record_count": complexes_info["record_count"],
-            "transactions_record_count": transactions_info["record_count"],
-        }
+        return self._impl.get_stats()
 
     async def write(self, data: List[Dict[str, Any]]) -> None:
         """비동기 write 래퍼 (ApartmentSearchCrawler 호환용)
@@ -389,9 +369,4 @@ class HogangnonoCSVWriter:
         Args:
             data: 저장할 데이터 리스트
         """
-        # 이 메서드는 단일 아파트 데이터 또는 리스트를 받을 수 있음
-        if isinstance(data, dict):
-            data = [data]
-
-        # complexes 데이터로 가정하고 저장
-        self.save_complexes(data)
+        await self._impl.write(data)

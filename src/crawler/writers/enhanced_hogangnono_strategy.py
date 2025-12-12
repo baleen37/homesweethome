@@ -4,7 +4,7 @@ import csv
 from typing import List, Dict, Any
 from pathlib import Path
 
-from src.crawler.models.apartment_data import ApartmentComplex, PoiData
+from src.crawler.models import ApartmentComplex, PoiData
 
 
 class EnhancedHogangnonoComplexStrategy:

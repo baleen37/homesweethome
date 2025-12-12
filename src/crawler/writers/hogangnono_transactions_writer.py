@@ -1,45 +1,71 @@
 """CSV writer for Hogangnono transactions data.
 
-This module provides HogangnonoTransactionsCSVWriter class that handles transactions.csv
-file for Hogangnono data using the refactored base class.
+This module provides HogangnonoTransactionsCSVWriter as a compatibility wrapper
+for the new unified writer architecture.
 """
 
 from pathlib import Path
 
-from crawler.writers.base_hogangnono_writer import BaseHogangnonoCSVWriter
-from crawler.writers.hogangnono_strategy import HogangnonoTransactionStrategy
-from crawler.writers.csv_header_standard import CSVType
-from crawler.writers.data_transformation_strategy import DataTransformationStrategy
+from crawler.writers.hogangnono_factory import create_hogangnono_transaction_writer
 
 
-class HogangnonoTransactionsCSVWriter(BaseHogangnonoCSVWriter):
-    """호갱노노 거래내역 데이터를 CSV로 저장하는 전용 클래스
+class HogangnonoTransactionsCSVWriter:
+    """Compatibility wrapper for Hogangnono transaction data writer.
 
-    이 클래스는 Strategy 패턴을 사용하여 호갱노노 데이터를 네이버 형식으로 변환합니다.
+    This class maintains backward compatibility while using the new
+    unified writer architecture internally.
     """
 
     # Fieldnames for backward compatibility
-    FIELDNAMES = HogangnonoTransactionStrategy().get_fieldnames()
+    FIELDNAMES = [
+        "complex_id",
+        "complex_name",
+        "pyeong_type_number",
+        "pyeong_name",
+        "trade_type",
+        "trade_type_name",
+        "trade_date",
+        "trade_year",
+        "floor",
+        "deal_price",
+        "deposit",
+        "monthly_rent",
+        "trade_category",
+        "is_delete",
+        "is_renew",
+    ]
 
     def __init__(self, output_path: Path) -> None:
-        """Initialize HogangnonoTransactionsCSVWriter with Hogangnono strategy.
+        """Initialize HogangnonoTransactionsCSVWriter.
 
         Args:
             output_path: Path to the CSV file
         """
-        super().__init__(output_path, CSVType.TRANSACTIONS)
+        # Use the factory function to create the actual writer
+        self._writer = create_hogangnono_transaction_writer(output_path)
 
-    def _create_strategy(self, csv_type: CSVType) -> DataTransformationStrategy:
-        """Create the transactions strategy.
+    def write(self, data: list[dict], mode: str = "w", write_header: bool = True) -> None:
+        """Write data to CSV.
 
         Args:
-            csv_type: Type of CSV (should be TRANSACTIONS)
+            data: List of dictionaries to write
+            mode: Write mode ('w' or 'a')
+            write_header: Whether to write header
+        """
+        self._writer.write(data, mode=mode, write_header=write_header)
+
+    def append(self, data: list[dict]) -> None:
+        """Append data to CSV.
+
+        Args:
+            data: List of dictionaries to append
+        """
+        self._writer.append(data)
+
+    def get_file_info(self) -> dict:
+        """Get file information.
 
         Returns:
-            HogangnonoTransactionStrategy instance
+            Dictionary with file statistics
         """
-        if csv_type != CSVType.TRANSACTIONS:
-            raise ValueError(
-                f"HogangnonoTransactionsCSVWriter expects TRANSACTIONS type, got {csv_type}"
-            )
-        return HogangnonoTransactionStrategy()
+        return self._writer.get_stats()
