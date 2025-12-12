@@ -11,8 +11,6 @@ import pytest
 from crawler.coordinator import CrawlCoordinator
 from crawler.config import CrawlerConfig
 from crawler.crawlers.hogangnono import HogangnonoCrawler
-from crawler.writers.complexes_csv_writer import ComplexesCSVWriter
-from crawler.writers.transaction_csv_writer import TransactionCSVWriter
 
 
 @pytest.mark.integration
@@ -153,11 +151,10 @@ def test_writers_with_real_data(tmp_path):
     output_dir = tmp_path / "output"
     output_dir.mkdir()
 
-    # Create writers with Path objects
-    complexes_file = output_dir / "complexes.csv"
-    transactions_file = output_dir / "transactions.csv"
-    complexes_writer = ComplexesCSVWriter(complexes_file)
-    transactions_writer = TransactionCSVWriter(transactions_file)
+    # Create writer
+    from crawler.writers import HogangnonoCSVWriter
+
+    csv_writer = HogangnonoCSVWriter(str(output_dir))
 
     # Mock real data structure (based on API responses)
     test_complexes = [
@@ -210,8 +207,8 @@ def test_writers_with_real_data(tmp_path):
     ]
 
     # Test writing
-    complexes_writer.write(test_complexes)
-    transactions_writer.write(test_transactions)
+    csv_writer.write_complexes(test_complexes)
+    csv_writer.write_transactions(test_transactions)
 
     # Verify files
     complexes_file = output_dir / "complexes.csv"

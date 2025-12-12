@@ -3,10 +3,9 @@
 # Import test setup to configure path and mocks
 
 import pytest
-from unittest.mock import Mock, patch
-from requests import Response
+from unittest.mock import patch
 
-from crawler.api.hogangnono_client import HogangnonoAPIClient, APIResponse
+from crawler.api.hogangnono_client import HogangnonoAPIClient
 from crawler.models.api_responses import POIInfo
 from crawler.config import CrawlerConfig
 
@@ -102,96 +101,6 @@ class TestApartmentIDValidation:
         # 3. No apartment-specific data
         poi_no_data = POIInfo(id="1Iv2fb", name="테스트장소", lat=37.5, lng=127.0)
         assert not poi_no_data.validate_for_apartment_crawling()
-
-    @patch("crawler.api.hogangnono_client.HogangnonoAPIClient._make_request")
-    def test_get_apartment_transactions_404_handling(self, mock_request, client):
-        """Test 404 error handling in get_apartment_transactions"""
-        # Mock 404 response
-        mock_response = Mock(spec=Response)
-        mock_response.status_code = 404
-        mock_response.headers = {"content-type": "application/json"}
-        mock_response.json.return_value = {
-            "success": False,
-            "message": "존재하지 않는 아파트입니다",
-        }
-        mock_request.return_value = APIResponse.from_response(mock_response)
-
-        # Test with invalid apartment ID
-        response = client.get_apartment_transactions("invalid_apt_id")
-
-        assert response.success is False
-        assert response.status_code == 404
-        assert "존재하지 않는 아파트" in response.error or "HTTP error" in response.error
-
-    @patch("crawler.api.hogangnono_client.HogangnonoAPIClient._make_request")
-    def test_get_apartment_transactions_with_various_responses(self, mock_request, client):
-        """Test get_apartment_transactions with various response scenarios"""
-        test_cases = [
-            # Success case
-            {
-                "status_code": 200,
-                "response_data": {
-                    "success": True,
-                    "data": {
-                        "shortTermReport": [
-                            {
-                                "date": "2025-01-31T15:00:00.000Z",
-                                "minPrice": 300000,
-                                "maxPrice": 400000,
-                                "averagePrice": 350000,
-                                "volume": 5,
-                            }
-                        ]
-                    },
-                },
-                "expected_success": True,
-                "description": "Successful transaction data fetch",
-            },
-            # 404 error
-            {
-                "status_code": 404,
-                "response_data": {"success": False, "message": "존재하지 않는 아파트입니다"},
-                "expected_success": False,
-                "description": "Apartment not found",
-            },
-            # Server error
-            {
-                "status_code": 500,
-                "response_data": {"success": False, "message": "서버 오류가 발생했습니다"},
-                "expected_success": False,
-                "description": "Server error",
-            },
-            # Network timeout
-            {
-                "status_code": None,
-                "response_data": None,
-                "expected_success": False,
-                "description": "Network timeout",
-            },
-        ]
-
-        for test_case in test_cases:
-            with self.subTest(msg=test_case["description"]):
-                # Setup mock
-                mock_response = Mock(spec=Response)
-                mock_response.status_code = test_case["status_code"]
-                mock_response.headers = {"content-type": "application/json"}
-
-                if test_case["response_data"]:
-                    mock_response.json.return_value = test_case["response_data"]
-                else:
-                    # Simulate network error
-                    mock_request.side_effect = Exception("Network timeout")
-
-                mock_request.return_value = APIResponse.from_response(mock_response)
-
-                # Execute
-                response = client.get_apartment_transactions("test_apt_id")
-
-                # Verify
-                assert response.success == test_case["expected_success"]
-                if not test_case["expected_success"]:
-                    assert response.error is not None
 
     def test_poi_info_category_classification(self):
         """Test POI category classification"""

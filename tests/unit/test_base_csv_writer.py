@@ -18,7 +18,7 @@ class ConcreteTestCSVWriter(BaseCSVWriter):
 
     FIELDNAMES = ["id", "name", "value", "active"]
 
-    def _normalize_row_legacy(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Simple normalization for testing."""
         # Simple normalization: convert None to empty string
         # Convert boolean to lowercase 'true'/'false' for CSV compatibility

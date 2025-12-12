@@ -8,8 +8,14 @@ from pathlib import Path
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from crawler.models.apartment_data import PoiData, ApartmentComplex
-from crawler.models.apartment_models import POI, Apartment, RealEstateType, POICategory
+from crawler.models.apartment_models import (
+    PoiData,
+    ApartmentComplex,
+    POI,
+    Apartment,
+    RealEstateType,
+    POICategory,
+)
 
 
 class TestPoiDataVsPOI:

@@ -9,9 +9,7 @@ import sys
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from crawler.writers.hogangnono_csv_writer import HogangnonoCSVWriter
-from crawler.writers.hogangnono_complexes_writer import HogangnonoComplexesCSVWriter
-from crawler.writers.hogangnono_transactions_writer import HogangnonoTransactionsCSVWriter
+from crawler.writers import HogangnonoCSVWriter
 
 
 class TestHogangnonoCSVWriterBehavior:
@@ -231,31 +229,22 @@ class TestIndividualWritersBehavior:
         with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
             yield Path(f.name)
 
-    def test_complexes_writer_initialization(self, temp_csv_file):
-        """Test HogangnonoComplexesCSVWriter initialization."""
-        writer = HogangnonoComplexesCSVWriter(temp_csv_file)
+    def test_hogangnono_writer_initialization(self, temp_output_dir):
+        """Test HogangnonoCSVWriter initialization."""
+        writer = HogangnonoCSVWriter(str(temp_output_dir))
 
-        assert writer.output_path == temp_csv_file
-        assert hasattr(writer, "strategy")
-        assert hasattr(writer, "validator")
-        assert hasattr(writer, "csv_type")
+        assert writer.output_dir == temp_output_dir
+        assert writer.complexes_path == temp_output_dir / "complexes.csv"
+        assert writer.transactions_path == temp_output_dir / "transactions.csv"
+        assert hasattr(writer, "COMPLEXES_FIELDNAMES")
+        assert hasattr(writer, "TRANSACTIONS_FIELDNAMES")
 
-    def test_transactions_writer_initialization(self, temp_csv_file):
-        """Test HogangnonoTransactionsCSVWriter initialization."""
-        writer = HogangnonoTransactionsCSVWriter(temp_csv_file)
+    def test_hogangnono_writer_fieldnames(self, temp_output_dir):
+        """Test that HogangnonoCSVWriter has correct fieldnames."""
+        writer = HogangnonoCSVWriter(str(temp_output_dir))
 
-        assert writer.output_path == temp_csv_file
-        assert hasattr(writer, "strategy")
-        assert hasattr(writer, "validator")
-        assert hasattr(writer, "csv_type")
-
-    def test_writers_have_different_fieldnames(self, temp_csv_file):
-        """Test that complexes and transactions writers have different fieldnames."""
-        complexes_writer = HogangnonoComplexesCSVWriter(temp_csv_file)
-        transactions_writer = HogangnonoTransactionsCSVWriter(temp_csv_file)
-
-        complexes_fields = set(complexes_writer.FIELDNAMES)
-        transactions_fields = set(transactions_writer.FIELDNAMES)
+        complexes_fields = set(writer.COMPLEXES_FIELDNAMES)
+        transactions_fields = set(writer.TRANSACTIONS_FIELDNAMES)
 
         # They should have different fields
         assert complexes_fields != transactions_fields

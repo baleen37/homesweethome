@@ -97,6 +97,10 @@ class ValidationResult:
             return 1.0
         return self.valid_rows / self.total_rows
 
+    def is_valid(self) -> bool:
+        """Check if validation passed without errors"""
+        return len(self.errors) == 0
+
     def add_error(self, error: ValidationError):
         """Add a validation error"""
         self.errors.append(error)

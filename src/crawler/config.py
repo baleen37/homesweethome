@@ -1,267 +1,72 @@
 """
 크롤러 설정 관리 모듈
 
-이 모듈은 호갱노노 크롤러 설정을 관리합니다.
-환경 변수를 통해 설정을 로드할 수 있습니다.
-
-사용 예시:
-    # 기본 설정
-    config = HogangnonoConfig()
-    print(config.base_url)  # https://hogangnono.com
-
-    # 환경 변수에서 설정 로드
-    config = HogangnonoConfig.from_env()
+간단한 하드코딩된 설정을 제공합니다.
 """
 
-import os
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlparse
 
-from dotenv import load_dotenv
-from pydantic import BaseModel, Field, field_validator, model_validator
-
-# Export both classes for explicit imports
-__all__ = ["HogangnonoConfig", "CrawlerConfig"]
+# Export classes for explicit imports
+__all__ = ["Config"]
 
 
-class HogangnonoConfig(BaseModel):
-    """호갱노노 크롤러 설정"""
+class Config:
+    """간단한 크롤러 설정 (하드코딩된 값)"""
 
     # 기본 설정
-    base_url: str = Field(default="https://hogangnono.com", description="호갱노노 기본 URL")
-    timeout: int = Field(default=30, description="요청 타임아웃 (초)")
-    headless: bool = Field(default=True, description="헤드리스 모드 사용 여부")
-    output_file: str | None = Field(default=None, description="출력 파일 경로")
-
-    # API 인증
-    api_key: str | None = Field(default=None, description="호갱노노 API 키")
+    BASE_URL = "https://hogangnono.com"
+    TIMEOUT = 30
+    HEADLESS = True
 
     # Rate Limiting 설정
-    rate_limit_delay: float = Field(default=2.0, description="요청 간 대기 시간 (초)")
-    rate_limit_min: float = Field(default=0.1, description="최소 대기 시간 (초)")
-    rate_limit_max: float = Field(default=10.0, description="최대 대기 시간 (초)")
-    rate_limit_increment: float = Field(default=0.5, description="429 에러 시 증가량 (초)")
-    rate_limit_decrement_after: int = Field(
-        default=10, description="성공 시 감소까지의 연속 성공 횟수"
-    )
-    daily_request_limit: int = Field(default=10000, description="일일 최대 요청 수")
+    RATE_LIMIT_DELAY = 2.0  # 요청 간 대기 시간 (초)
+    RETRY_ATTEMPTS = 3
+    RETRY_DELAY = 1.0
 
     # 페이징 설정
-    page_size: int = Field(default=50, description="한 페이지당 조회 건수")
-    max_page: int = Field(default=200, description="최대 조회 페이지")
-
-    # 재시도 설정
-    retry_attempts: int = Field(default=3, description="재시도 횟수")
-    retry_delay: float = Field(default=1.0, description="재시도 대기 시간 (초)")
+    PAGE_SIZE = 50
 
     # 쓰레딩 설정
-    use_threading: bool = Field(default=False, description="멀티쓰레딩 사용 여부")
-    max_workers: int = Field(default=4, description="최대 작업자 수")
-
-    # User-Agent 설정
-    user_agent: str = Field(
-        default="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-        description="HTTP 요청 User-Agent",
-    )
-
-    # 지역 설정
-    region_code: str | None = Field(default=None, description="법정동코드 (예: 11680: 서울 강남구)")
-    start_date: str | None = Field(default=None, description="조회 시작일 (YYYY-MM 형식)")
-    end_date: str | None = Field(default=None, description="조회 종료일 (YYYY-MM 형식)")
+    USE_THREADING = False
+    MAX_WORKERS = 4
 
     # 필터링 기본값
-    default_property_type: str = Field(default="apartment", description="기본 매물 타입")
-    default_transaction_type: str = Field(default="sale", description="기본 거래 타입")
+    DEFAULT_PROPERTY_TYPE = "apartment"
+    DEFAULT_TRANSACTION_TYPE = "sale"
 
-    @field_validator("base_url")
-    @classmethod
-    def validate_base_url(cls, v: str) -> str:
-        """base_url URL 형식 검증"""
-        if not v:
-            raise ValueError("base_url는 필수입니다")
+    # 출력 디렉토리
+    OUTPUT_DIR = "output"
 
-        parsed = urlparse(v)
-        if not parsed.scheme or not parsed.netloc:
-            raise ValueError("base_url은 유효한 URL 형식이어야 합니다")
+    # 로그 레벨
+    LOG_LEVEL = "INFO"
 
-        return v
+    # 지역 경계 (서울)
+    REGION_BOUNDS = [37.413294, 126.734086, 37.715133, 127.183394]
 
-    @field_validator("api_key")
-    @classmethod
-    def validate_api_key(cls, v: str | None) -> str | None:
-        """api_key 필수 여부 검증"""
-        if v is not None and len(v.strip()) == 0:
-            raise ValueError("api_key가 비어있습니다")
-        return v
-
-    @field_validator("timeout")
-    @classmethod
-    def validate_timeout(cls, v: int) -> int:
-        """timeout 범위 검증"""
-        if v < 1:
-            raise ValueError("timeout은 1 이상이어야 합니다")
-        if v > 300:
-            raise ValueError("timeout은 300 이하여야 합니다")
-        return v
-
-    @field_validator("rate_limit_delay")
-    @classmethod
-    def validate_rate_limit_delay(cls, v: float) -> float:
-        """rate_limit_delay 범위 검증"""
-        if v < 0.1:
-            raise ValueError("rate_limit_delay는 0.1 이상이어야 합니다")
-        if v > 60:
-            raise ValueError("rate_limit_delay는 60 이하여야 합니다")
-        return v
-
-    @field_validator("page_size")
-    @classmethod
-    def validate_page_size(cls, v: int) -> int:
-        """page_size 범위 검증"""
-        if v < 1:
-            raise ValueError("page_size은 1 이상이어야 합니다")
-        if v > 200:
-            raise ValueError("page_size은 200 이하여야 합니다")
-        return v
-
-    @field_validator("retry_attempts")
-    @classmethod
-    def validate_retry_attempts(cls, v: int) -> int:
-        """retry_attempts 범위 검증"""
-        if v < 0:
-            raise ValueError("retry_attempts은 0 이상이어야 합니다")
-        if v > 10:
-            raise ValueError("retry_attempts은 10 이하여야 합니다")
-        return v
-
-    @field_validator("retry_delay")
-    @classmethod
-    def validate_retry_delay(cls, v: float) -> float:
-        """retry_delay 범위 검증"""
-        if v < 0.1:
-            raise ValueError("retry_delay는 0.1 이상이어야 합니다")
-        if v > 10:
-            raise ValueError("retry_delay는 10 이하여야 합니다")
-        return v
-
-    @field_validator("max_workers")
-    @classmethod
-    def validate_max_workers(cls, v: int) -> int:
-        """max_workers 범위 검증"""
-        if v < 1:
-            raise ValueError("max_workers은 1 이상이어야 합니다")
-        if v > 20:
-            raise ValueError("max_workers은 20 이하여야 합니다")
-        return v
-
-    @field_validator("output_file")
-    @classmethod
-    def validate_output_file(cls, v: str | None) -> str | None:
-        """output_file 경로 검증"""
-        if v is not None:
-            path = Path(v)
-            if not path.parent.exists():
-                raise ValueError("output_file의 상위 디렉토리가 존재하지 않습니다")
-        return v
-
-    @field_validator("start_date", "end_date")
-    @classmethod
-    def validate_date_format(cls, v: str | None) -> str | None:
-        """날짜 형식 검증 (YYYY-MM)"""
-        if v is not None:
-            try:
-                datetime.strptime(v, "%Y-%m")
-            except ValueError:
-                raise ValueError("날짜는 YYYY-MM 형식이어야 합니다")
-        return v
-
-    @model_validator(mode="after")
-    def validate_compatibility(self) -> "HogangnonoConfig":
-        """설정 간 호환성 검증"""
-        # 너무 많은 worker와 너무 짧은 delay 조합 검증
-        if self.use_threading and self.max_workers > 5 and self.rate_limit_delay < 0.5:
-            raise ValueError("너무 많은 worker와 짧은 delay는 서버에 부하를 줄 수 있습니다")
-
-        # timeout이 전체 재시도 시간보다 작은 경우 검증
-        total_retry_time = self.retry_attempts * self.retry_delay
-        if self.timeout < total_retry_time:
-            raise ValueError(
-                f"timeout({self.timeout}s)은 전체 재시도 시간({total_retry_time}s)보다 커야 합니다"
-            )
-
-        return self
+    def __init__(self):
+        """설정 초기화"""
+        pass
 
     @classmethod
-    def from_env(cls, **overrides: int | bool | str | None) -> "HogangnonoConfig":
-        """
-        환경 변수에서 설정 로드
+    def for_integration_test(cls, output_dir: str) -> "Config":
+        """통합 테스트용 설정 생성"""
+        config = cls()
+        config.OUTPUT_DIR = output_dir
+        config.TIMEOUT = 30
+        config.RATE_LIMIT_DELAY = 2.0
+        config.PAGE_SIZE = 20
+        config.USE_THREADING = False
+        config.MAX_WORKERS = 1
+        config.RETRY_ATTEMPTS = 3
+        config.RETRY_DELAY = 1.0
+        return config
 
-        환경 변수 우선순위:
-        1. CLI 오버라이드 (overrides 파라미터)
-        2. HOGANGNONO_* 변수
-        3. CRAWLER_* 변수 (하위 호환성)
-        4. 기본값
-        """
-        load_dotenv()
-
-        # 기본 설정 (기존 CRAWLER_* 변수들)
-        config_dict = {
-            "base_url": os.getenv("HOGANGNONO_BASE_URL", "https://hogangnono.com"),
-            "timeout": int(os.getenv("CRAWLER_TIMEOUT", os.getenv("HOGANGNONO_TIMEOUT", "30"))),
-            "headless": os.getenv("CRAWLER_HEADLESS", "true").lower() == "true",
-            "output_file": os.getenv("CRAWLER_OUTPUT_FILE"),
-            "api_key": os.getenv("HOGANGNONO_API_KEY", os.getenv("CRAWLER_API_KEY")),
-            "rate_limit_delay": float(os.getenv("HOGANGNONO_RATE_LIMIT", "2.0")),
-            "rate_limit_min": float(os.getenv("HOGANGNONO_RATE_LIMIT_MIN", "0.1")),
-            "rate_limit_max": float(os.getenv("HOGANGNONO_RATE_LIMIT_MAX", "10.0")),
-            "rate_limit_increment": float(os.getenv("HOGANGNONO_RATE_LIMIT_INCREMENT", "0.5")),
-            "rate_limit_decrement_after": int(
-                os.getenv("HOGANGNONO_RATE_LIMIT_DECREMENT_AFTER", "10")
-            ),
-            "daily_request_limit": int(os.getenv("HOGANGNONO_DAILY_REQUEST_LIMIT", "10000")),
-            "page_size": int(os.getenv("HOGANGNONO_PAGE_SIZE", "50")),
-            "max_page": int(os.getenv("HOGANGNONO_MAX_PAGE", "200")),
-            "retry_attempts": int(os.getenv("CRAWLER_RETRY_ATTEMPTS", "3")),
-            "retry_delay": float(os.getenv("CRAWLER_RETRY_DELAY", "1.0")),
-            "use_threading": os.getenv("CRAWLER_USE_THREADING", "false").lower() == "true",
-            "max_workers": int(os.getenv("CRAWLER_MAX_WORKERS", "4")),
-            "user_agent": os.getenv(
-                "CRAWLER_USER_AGENT",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-            ),
-            "region_code": os.getenv("CRAWLER_REGION_CODE"),
-            "start_date": os.getenv("CRAWLER_START_DATE"),
-            "end_date": os.getenv("CRAWLER_END_DATE"),
-            "default_property_type": os.getenv("HOGANGNONO_DEFAULT_PROPERTY_TYPE", "apartment"),
-            "default_transaction_type": os.getenv("HOGANGNONO_DEFAULT_TRANSACTION_TYPE", "sale"),
-        }
-
-        # CLI 오버라이드 적용
-        config_dict.update({k: v for k, v in overrides.items() if v is not None})
-
-        try:
-            return cls(**config_dict)
-        except ValueError as e:
-            raise ValueError(f"환경 변수 설정 오류: {e}")
-
-    @classmethod
-    def for_integration_test(cls, output_dir: str, districts: list[str]) -> "HogangnonoConfig":
-        """Create config for integration testing"""
-        return cls(
-            timeout=30,
-            rate_limit_delay=2.0,
-            page_size=20,
-            headless=True,
-            use_threading=False,
-            max_workers=1,
-            retry_attempts=3,
-            retry_delay=1.0,
-            output_file=f"{output_dir}/test_output.csv",
-        )
-
-    def create_output_path(self, base_dir: str = "output") -> Path:
+    def create_output_path(self, base_dir: str = None) -> Path:
         """타임스탬프가 포함된 출력 파일 경로 생성"""
+        if base_dir is None:
+            base_dir = self.OUTPUT_DIR
+
         # 디렉토리 생성
         Path(base_dir).mkdir(parents=True, exist_ok=True)
 
@@ -273,5 +78,5 @@ class HogangnonoConfig(BaseModel):
 
 
 # Backward compatibility alias
-# TODO: Remove this alias in v2.0
-CrawlerConfig = HogangnonoConfig
+HogangnonoConfig = Config
+CrawlerConfig = Config

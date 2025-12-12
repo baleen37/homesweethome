@@ -13,8 +13,7 @@ from unittest.mock import Mock
 import pytest
 
 from crawler.coordinator import CrawlCoordinator
-from crawler.writers.complexes_csv_writer import ComplexesCSVWriter
-from crawler.writers.transaction_csv_writer import TransactionCSVWriter
+from crawler.writers.hogangnono_csv_writer import HogangnonoCSVWriter
 
 # Test constants
 PYEONG_TYPES_PER_COMPLEX = 2  # 각 단지당 평형 타입 수 (84A, 84B)
@@ -113,10 +112,10 @@ class TestCrawlCoordinator:
         """CSV Writer들이 올바르게 초기화되는지 테스트"""
         coordinator = CrawlCoordinator(temp_dir)
 
-        assert isinstance(coordinator.transaction_writer, TransactionCSVWriter)
-        assert isinstance(coordinator.complexes_writer, ComplexesCSVWriter)
-        assert coordinator.transaction_writer.output_path == temp_dir / "transactions.csv"
-        assert coordinator.complexes_writer.output_path == temp_dir / "complexes.csv"
+        assert isinstance(coordinator.csv_writer, HogangnonoCSVWriter)
+        assert coordinator.csv_writer.output_dir == temp_dir
+        assert coordinator.csv_writer.transactions_path == temp_dir / "transactions.csv"
+        assert coordinator.csv_writer.complexes_path == temp_dir / "complexes.csv"
 
     def test_crawl_single_dong_saves_incrementally(
         self, temp_dir, mock_fetch_functions, sample_dong_complexes
@@ -395,8 +394,8 @@ class TestCrawlCoordinatorHelpers:
         )
 
         # Mock transaction writer
-        coordinator.transaction_writer = Mock()
-        coordinator.transaction_writer.append = Mock()
+        coordinator.csv_writer = Mock()
+        coordinator.csv_writer.write_transactions = Mock()
 
         pyeong_type_numbers = ["1", "2"]
         result = coordinator._collect_transactions_for_complex(
@@ -408,7 +407,7 @@ class TestCrawlCoordinatorHelpers:
         assert mock_fetch.call_count == expected_calls
         assert len(result) == expected_calls
         # append is called for each fetch call that returns transactions (all 6 calls)
-        assert coordinator.transaction_writer.append.call_count == expected_calls
+        assert coordinator.csv_writer.write_transactions.call_count == expected_calls
 
     def test_collect_transactions_for_complex_empty(self, coordinator):
         """빈 평형 타입 목록으로 거래내역 수집 테스트"""

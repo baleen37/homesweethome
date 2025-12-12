@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .api import APICrawler
 from ..api.hogangnono_client import HogangnonoAPIClient, SearchParams
 from ..config import CrawlerConfig
-from ..writers import TransactionCSVWriter, ComplexesCSVWriter, HogangnonoCSVWriter
+from ..writers import HogangnonoCSVWriter
 from ..utils.checkpoint import CheckpointManager
 from ..utils.bbox_division import BBoxDivision
 from ..utils.enhanced_error_handler import EnhancedErrorHandler
@@ -20,7 +20,7 @@ from ..data_mappers import HogangnonoDataMapper
 from ..validators.data_validator import ApartmentValidator
 from ..validators.apartment_id_validator import ApartmentIdValidator
 from ..models.api_responses import POIInfo
-from ..utils.poi_filter import filter_apartments
+from ..validators.data_validator import filter_apartments
 from unittest.mock import Mock
 
 
@@ -76,12 +76,6 @@ class HogangnonoCrawler(APICrawler):
         # 출력 설정
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
-        # CSV Writer 초기화
-        self.transaction_writer = TransactionCSVWriter(
-            self.output_dir / "hogangnono_transactions.csv"
-        )
-        self.complex_writer = ComplexesCSVWriter(self.output_dir / "hogangnono_complexes.csv")
 
         # 호갱노노 전용 CSV Writer
         self.hogangnono_writer = HogangnonoCSVWriter(str(self.output_dir))

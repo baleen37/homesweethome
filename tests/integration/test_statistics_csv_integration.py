@@ -4,7 +4,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from crawler.writers.complexes_csv_writer import ComplexesCSVWriter
+from crawler.writers import HogangnonoCSVWriter
 from crawler.utils.statistics import calculate_statistics_from_transactions
 
 # Import test setup to configure path and mocks
@@ -15,7 +15,7 @@ def test_statistics_and_csv_integration() -> None:
     # Create temporary directory
     with tempfile.TemporaryDirectory() as tmp_dir:
         csv_path = Path(tmp_dir) / "complexes.csv"
-        writer = ComplexesCSVWriter(csv_path)
+        writer = HogangnonoCSVWriter(tmp_dir)
 
         # Sample complex data
         complex_data = {

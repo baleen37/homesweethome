@@ -13,8 +13,7 @@ import structlog
 
 from crawler.utils.checkpoint import CheckpointManager
 from crawler.rate_limiter import AdaptiveRateLimiter as RateLimiter
-from crawler.writers.complexes_csv_writer import ComplexesCSVWriter
-from crawler.writers.transaction_csv_writer import TransactionCSVWriter
+from crawler.writers import HogangnonoCSVWriter
 from crawler.progress_tracker import ProgressTracker
 
 
@@ -23,7 +22,7 @@ class CrawlCoordinator:
 
     설계 문서의 저장 전략에 따라:
     - 각 동이 완료될 때마다 데이터 저장
-    - TransactionCSVWriter와 ComplexesCSVWriter를 사용하여 점진적 저장
+    - HogangnonoCSVWriter를 사용하여 점진적 저장
     - 체크포인트 관리를 통해 중단된 크롤링 지원
     """
 
@@ -65,8 +64,7 @@ class CrawlCoordinator:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # CSV Writer 초기화
-        self.transaction_writer = TransactionCSVWriter(self.output_dir / "transactions.csv")
-        self.complexes_writer = ComplexesCSVWriter(self.output_dir / "complexes.csv")
+        self.csv_writer = HogangnonoCSVWriter(str(self.output_dir))
 
         # 체크포인트 관리자
         self.checkpoint_manager = None
@@ -192,8 +190,8 @@ class CrawlCoordinator:
                 )
 
                 if transactions:
-                    # 거래내역을 즉시 CSV에 append
-                    self.transaction_writer.append(transactions)
+                    # 거래내역을 즉시 CSV에 저장
+                    self.csv_writer.save_transactions(transactions)
                     all_transactions.extend(transactions)
 
         return all_transactions
@@ -342,11 +340,9 @@ class CrawlCoordinator:
                 dong_stats["transactions_collected"] += len(all_transactions)
                 self.stats["total_transactions_collected"] += len(all_transactions)
 
-                # 5. 단지 정보 저장 (거래내역 통계 포함)
-                self.complexes_writer.append_with_statistics(
-                    complex_data={**complex, **detail},
-                    transactions=all_transactions,
-                )
+                # 5. 단지 정보 저장
+                complex_with_stats = {**complex, **detail}
+                self.csv_writer.save_complexes([complex_with_stats])
 
                 dong_stats["complexes_processed"] += 1
                 self.stats["total_complexes_processed"] += 1
@@ -424,14 +420,8 @@ class CrawlCoordinator:
                         )
                         break
 
-        # CSV 파일 초기화 (새로 시작하는 경우에만)
-        if start_index == 0:
-            self.transaction_writer.write_header()
-            self.complexes_writer.write_header()
-        else:
-            # 이어서 진행하는 경우 파일이 존재하는지 확인
-            self.transaction_writer.ensure_file_exists()
-            self.complexes_writer.ensure_file_exists()
+        # CSV 파일 초기화 (HogangnonoCSVWriter는 자동으로 처리)
+        # 별도의 초기화 불필요
 
         # 각 동 처리
         results: List[Dict[str, Any]] = []

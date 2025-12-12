@@ -12,11 +12,7 @@ from crawler.validators.csv_validator import (
     create_complexes_validator,
     create_transactions_validator,
 )
-from crawler.writers.csv_header_standard import (
-    CSVType,
-    HeaderStandardRegistry,
-)
-from crawler.writers.base_csv_writer import BaseCSVWriter
+from crawler.writers import HogangnonoCSVWriter
 
 
 class TestFieldDefinition(unittest.TestCase):
@@ -305,170 +301,32 @@ class TestTransactionsValidator(unittest.TestCase):
         self.assertGreater(len(result.errors), 0)
 
 
-class TestHeaderStandardRegistry(unittest.TestCase):
-    """Test HeaderStandardRegistry"""
+class TestHogangnonoCSVWriterFieldValidation(unittest.TestCase):
+    """Test HogangnonoCSVWriter field validation"""
 
-    def test_get_complexes_standard(self):
-        """Test getting complexes header standard"""
-        standard = HeaderStandardRegistry.get_standard(CSVType.COMPLEXES)
-        self.assertIsNotNone(standard)
-        self.assertEqual(standard.csv_type, CSVType.COMPLEXES)
-        self.assertGreater(len(standard.field_definitions), 0)
+    def test_complexes_has_required_fields(self):
+        """Test that complexes CSV has all required fields"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            writer = HogangnonoCSVWriter(tmpdir)
 
-    def test_get_transactions_standard(self):
-        """Test getting transactions header standard"""
-        standard = HeaderStandardRegistry.get_standard(CSVType.TRANSACTIONS)
-        self.assertIsNotNone(standard)
-        self.assertEqual(standard.csv_type, CSVType.TRANSACTIONS)
-        self.assertGreater(len(standard.field_definitions), 0)
+            # Check for essential complexes fields
+            complexes_fields = writer.COMPLEXES_FIELDNAMES
+            required_fields = ["complex_id", "complex_name", "address", "fetched_at"]
 
-    def test_get_fieldnames(self):
-        """Test getting fieldnames for CSV types"""
-        complexes_fields = HeaderStandardRegistry.get_fieldnames(CSVType.COMPLEXES)
-        self.assertIn("complex_id", complexes_fields)
-        self.assertIn("complex_name", complexes_fields)
-        self.assertIn("address", complexes_fields)
+            for field in required_fields:
+                self.assertIn(field, complexes_fields, f"Missing required field: {field}")
 
-        transactions_fields = HeaderStandardRegistry.get_fieldnames(CSVType.TRANSACTIONS)
-        self.assertIn("complex_id", transactions_fields)
-        self.assertIn("trade_type", transactions_fields)
-        self.assertIn("trade_date", transactions_fields)
+    def test_transactions_has_required_fields(self):
+        """Test that transactions CSV has all required fields"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            writer = HogangnonoCSVWriter(tmpdir)
 
-    def test_get_required_fields(self):
-        """Test getting required fields for CSV types"""
-        complexes_required = HeaderStandardRegistry.get_required_fields(CSVType.COMPLEXES)
-        self.assertIn("complex_id", complexes_required)
-        self.assertIn("complex_name", complexes_required)
-        self.assertIn("fetched_at", complexes_required)
+            # Check for essential transactions fields
+            transactions_fields = writer.TRANSACTIONS_FIELDNAMES
+            required_fields = ["complex_id", "trade_type", "trade_date", "deal_price"]
 
-        transactions_required = HeaderStandardRegistry.get_required_fields(CSVType.TRANSACTIONS)
-        self.assertIn("complex_id", transactions_required)
-        self.assertIn("trade_type", transactions_required)
-        self.assertIn("is_delete", transactions_required)
-
-
-class TestBaseCSVWriterWithValidation(unittest.TestCase):
-    """Test BaseCSVWriter with validation integration"""
-
-    def setUp(self):
-        """Set up test fixtures"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.temp_path = Path(self.temp_dir) / "test.csv"
-
-    def tearDown(self):
-        """Clean up test fixtures"""
-        import shutil
-
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def test_writer_with_validation_enabled(self):
-        """Test writer with validation enabled"""
-
-        # Create a simple test writer
-        class TestWriter(BaseCSVWriter):
-            FIELDNAMES = ["id", "name", "age"]
-
-            def _normalize_row_legacy(self, row):
-                return row
-
-        validator = CSVValidator(
-            [
-                FieldDefinition("id", DataType.STRING, required=True),
-                FieldDefinition("name", DataType.STRING, required=True),
-                FieldDefinition("age", DataType.INTEGER, required=False),
-            ]
-        )
-
-        writer = TestWriter(self.temp_path, validator=validator, enable_validation=True)
-
-        # Test valid data
-        valid_data = [
-            {"id": "1", "name": "John", "age": 30},
-            {"id": "2", "name": "Jane", "age": 25},
-        ]
-        writer.write(valid_data)
-        self.assertTrue(self.temp_path.exists())
-
-        # Test invalid data (should be skipped)
-        invalid_data = [
-            {"id": "", "name": "Invalid", "age": 30},  # Missing required id
-            {"name": "No ID", "age": 25},  # Missing id field
-        ]
-        writer.write(invalid_data)
-
-        # Check that validation errors were recorded
-        self.assertGreater(len(writer.validation_errors), 0)
-
-    def test_writer_with_header_standard(self):
-        """Test writer with header standard"""
-
-        # Create a test writer for complexes
-        class ComplexesWriter(BaseCSVWriter):
-            def _normalize_row_legacy(self, row):
-                return row
-
-        writer = ComplexesWriter(self.temp_path, csv_type=CSVType.COMPLEXES, enable_validation=True)
-
-        # Test data that needs standardization
-        test_data = [
-            {
-                "complex_id": "APT001",
-                "complex_name": "테스트 아파트",
-                "address": "서울시 강남구",
-                "extra_field": "should be removed",
-            }
-        ]
-
-        writer.write(test_data)
-        self.assertTrue(self.temp_path.exists())
-
-        # Verify header is standardized
-        with open(self.temp_path, "r", encoding="utf-8") as f:
-            header = f.readline().strip()
-            fieldnames = header.split(",")
-
-            # Should have standard fields
-            self.assertIn("complex_id", fieldnames)
-            self.assertIn("complex_name", fieldnames)
-            self.assertIn("address", fieldnames)
-
-            # Should not have extra fields
-            self.assertNotIn("extra_field", fieldnames)
-
-    def test_repair_file_functionality(self):
-        """Test file repair functionality"""
-        # Create a file with some invalid rows
-        validator = CSVValidator(
-            [
-                FieldDefinition("id", DataType.STRING, required=True),
-                FieldDefinition("name", DataType.STRING, required=True),
-            ]
-        )
-
-        class TestWriter(BaseCSVWriter):
-            FIELDNAMES = ["id", "name"]
-
-            def _normalize_row_legacy(self, row):
-                return row
-
-        writer = TestWriter(self.temp_path, validator=validator)
-
-        # Write file with invalid data
-        test_data = [
-            {"id": "1", "name": "Valid"},
-            {"id": "", "name": "Invalid"},  # Invalid row
-            {"name": "No ID"},  # Invalid row
-            {"id": "2", "name": "Valid 2"},
-        ]
-        writer.write(test_data, skip_invalid=True)
-
-        # Verify repair
-        success = writer.repair_file()
-        self.assertTrue(success)
-
-        # Verify only valid rows remain
-        validation_result = writer.validate_existing_file()
-        self.assertEqual(validation_result.status, ValidationStatus.PASSED)
+            for field in required_fields:
+                self.assertIn(field, transactions_fields, f"Missing required field: {field}")
 
 
 if __name__ == "__main__":

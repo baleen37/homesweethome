@@ -13,7 +13,7 @@ from typing import Optional
 # 프로젝트 루트를 시스템 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.crawler.factories import CrawlerFactory
+from src.crawler.factories import create_crawler
 
 
 def setup_logging(log_level: str = "INFO"):
@@ -134,11 +134,8 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        # 팩토리 초기화
-        factory = CrawlerFactory()
-
         # 설정 로드
-        config_overrides = {"output_dir": output_dir}
+        config_overrides = {}
 
         # 인자로부터 설정 오버라이드
         if args.workers:
@@ -151,19 +148,8 @@ def main():
         # 영역 좌표 파싱
         region_bounds = parse_bounds(args.bounds)
 
-        # 컨테이너 생성
-        if args.config:
-            # 사용자 지정 설정 파일
-            config_path = Path(args.config)
-            container = factory.create_container(
-                environment=args.env, config_path=config_path, **config_overrides
-            )
-        else:
-            # 기본 환경 설정
-            container = factory.create_container(environment=args.env, **config_overrides)
-
-        # 크롤러 가져오기
-        crawler = factory.get_crawler(
+        # 크롤러 생성
+        crawler = create_crawler(
             environment=args.env,
             output_dir=output_dir,
             region_bounds=region_bounds,
@@ -173,7 +159,7 @@ def main():
         # Dry run 모드
         if args.dry_run:
             logger.info("Dry run 모드 - 설정 확인만 수행합니다")
-            config = container.config()
+            config = crawler.deps.config
             logger.info(f"환경: {args.env}")
             logger.info(f"출력 디렉토리: {output_dir}")
             logger.info(f"Rate Limit: {config.rate_limit_delay}초")

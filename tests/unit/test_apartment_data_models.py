@@ -3,7 +3,7 @@
 import unittest
 
 # Import the dataclasses
-from src.crawler.models.apartment_data import ApartmentComplex, PoiData
+from src.crawler.models.apartment_models import ApartmentComplex, PoiData
 
 
 class TestApartmentComplex(unittest.TestCase):

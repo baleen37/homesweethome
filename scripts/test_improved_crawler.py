@@ -14,7 +14,7 @@ import sys
 # 프로젝트 루트를 시스템 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.crawler.factories import CrawlerFactory
+from src.crawler.factories import create_test_crawler
 from src.crawler.utils.enhanced_error_handler import EnhancedErrorHandler, ErrorType
 from src.crawler.api.hogangnono_client import APIResponse
 
@@ -118,8 +118,7 @@ class ImprovedCrawlerTester:
         self.logger.info("-" * 40)
 
         # 테스트용 크롤러 생성
-        factory = CrawlerFactory()
-        test_crawler = factory.create_test_crawler(output_dir=Path("test_output"), mock_api=True)
+        test_crawler = create_test_crawler(output_dir=Path("test_output"), mock_api=True)
 
         # 테스트 1: 캐싱 성능
         self.logger.info("테스트 1: 캐싱 성능")
@@ -134,12 +133,22 @@ class ImprovedCrawlerTester:
         test_crawler._apartment_cache.get("test_1")
         cache_hit_time = time.time() - start_time
 
+        improvement_factor = (
+            cache_miss_time / cache_hit_time
+            if cache_hit_time > 0
+            else float("inf")
+            if cache_miss_time > 0
+            else 0
+        )
         self.results["performance"]["caching"] = {
             "cache_miss_time_ns": cache_miss_time * 1000000,
             "cache_hit_time_ns": cache_hit_time * 1000000,
-            "improvement_factor": cache_miss_time / cache_hit_time if cache_hit_time > 0 else 0,
+            "improvement_factor": improvement_factor,
         }
-        self.logger.info(f"✅ 캐시 성능: {cache_miss_time / cache_hit_time:.0f}x 더 빠름")
+        if cache_hit_time > 0:
+            self.logger.info(f"✅ 캐시 성능: {cache_miss_time / cache_hit_time:.0f}x 더 빠름")
+        else:
+            self.logger.info("✅ 캐시 성능: 캐시 히트 시간이 0으로 측정됨")
 
         # 테스트 2: 배치 처리 성능
         self.logger.info("\n테스트 2: 배치 처리 성능")
@@ -176,11 +185,10 @@ class ImprovedCrawlerTester:
 
         # 테스트 1: 의존성 주입
         self.logger.info("테스트 1: 의존성 주입 확인")
-        factory = CrawlerFactory()
-        container = factory.create_container("test")
+        test_crawler = create_test_crawler(output_dir=Path("test_output"), mock_api=True)
 
         # 모든 의존성이 주입되었는지 확인
-        dependencies = container.dependencies()
+        dependencies = test_crawler.deps
         required_deps = [
             "config",
             "api_client",
@@ -210,15 +218,18 @@ class ImprovedCrawlerTester:
         environments = ["development", "staging", "production"]
         loaded_envs = []
 
+        # factories 모듈에서 설정 함수들을 직접 임포트
+        from src.crawler.factories import _load_dev_config, _load_prod_config, _load_staging_config
+
         for env in environments:
             try:
-                config = (
-                    factory._load_dev_config()
-                    if env == "development"
-                    else factory._load_prod_config()
-                    if env == "production"
-                    else factory._load_staging_config()
-                )
+                if env == "development":
+                    config = _load_dev_config()
+                elif env == "production":
+                    config = _load_prod_config()
+                else:
+                    config = _load_staging_config()
+
                 if config:
                     loaded_envs.append(env)
             except Exception as e:
@@ -257,9 +268,7 @@ class ImprovedCrawlerTester:
                 )
 
                 # 테스트용 크롤러 생성
-                test_crawler = factory.get_crawler(
-                    environment="test", output_dir=Path("test_output")
-                )
+                test_crawler = create_test_crawler(output_dir=Path("test_output"), mock_api=False)
 
                 # 실제 크롤링 시뮬레이션 (작은 규모)
                 start_time = time.time()
