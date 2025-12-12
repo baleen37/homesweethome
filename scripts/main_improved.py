@@ -38,9 +38,6 @@ def parse_arguments():
   # 기본 실행
   python scripts/main_improved.py
 
-  # 개발 환경 실행
-  python scripts/main_improved.py --env development
-
   # 특정 구만 크롤링
   python scripts/main_improved.py --district 강남구,서초구
 

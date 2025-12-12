@@ -6,6 +6,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 # Export classes for explicit imports
 __all__ = ["Config"]
@@ -62,7 +63,7 @@ class Config:
         config.RETRY_DELAY = 1.0
         return config
 
-    def create_output_path(self, base_dir: str = None) -> Path:
+    def create_output_path(self, base_dir: Optional[str] = None) -> Path:
         """타임스탬프가 포함된 출력 파일 경로 생성"""
         if base_dir is None:
             base_dir = self.OUTPUT_DIR
