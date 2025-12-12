@@ -17,7 +17,6 @@ from datetime import datetime
 from ..api.hogangnono_client import HogangnonoAPIClient, SearchParams
 from ..config import Config
 from ..writers.hogangnono_csv_writer import HogangnonoCSVWriter
-from ..utils.checkpoint import CheckpointManager
 from ..data_mappers import HogangnonoDataMapper
 
 
@@ -66,9 +65,6 @@ class SimpleCrawler:
             dong_code_mapping_file=self.output_dir / "dong_code_mapping.json"
         )
         self.csv_writer = HogangnonoCSVWriter(output_dir=str(self.output_dir))
-        self.checkpoint_manager = CheckpointManager(
-            checkpoint_path=self.output_dir / "checkpoint.json"
-        )
 
         # 간단한 상태 추적
         self.invalid_apartments = set()
@@ -291,9 +287,6 @@ class SimpleCrawler:
             except Exception as e:
                 self.logger.error(f"Failed to process apartment: {e}")
 
-        # 체크포인트 업데이트
-        self.checkpoint_manager.add_completed_district(district_name)
-
         stats = {
             "district": district_name,
             "apartments_found": len(all_apartments),
@@ -331,11 +324,6 @@ class SimpleCrawler:
             # 구/군별 크롤링
             for district in target_districts:
                 district_name = district["name"]
-
-                # 체크포인트 확인
-                if self.checkpoint_manager.is_district_completed(district_name):
-                    self.logger.info(f"건너뛰기: {district_name} (이미 완료)")
-                    continue
 
                 try:
                     district_stats = self.crawl_district(district)

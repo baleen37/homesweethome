@@ -5,7 +5,7 @@
 1. 에러 핸들러 통합 및 404 에러 자동 스킵
 2. API 호출 전 유효성 검증
 3. 의존성 주입 방식 개선
-4. 성능 최적화 (캐싱, 병렬 처리)
+4. 단순한 순차 처리
 5. 환경별 설정 지원
 """
 
@@ -20,7 +20,6 @@ from .api import APICrawler
 from ..api.hogangnono_client import HogangnonoAPIClient, SearchParams
 from ..config import Config
 from ..writers.hogangnono_csv_writer import HogangnonoCSVWriter
-from ..utils.checkpoint import CheckpointManager
 from ..utils.bbox_division import BBoxDivision
 from ..utils.simple_error_handler import SimpleErrorHandler
 from ..data_mappers import HogangnonoDataMapper
@@ -38,7 +37,6 @@ class CrawlerDependencies:
     validator: ApartmentValidator
     error_handler: SimpleErrorHandler
     bbox_divider: BBoxDivision
-    checkpoint_manager: CheckpointManager
     csv_writer: HogangnonoCSVWriter
     logger: logging.Logger
 
@@ -50,7 +48,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
     - 에러 핸들러 통합으로 404 에러 자동 스킵
     - API 호출 전 유효성 검증
     - 의존성 주입 방식으로 모듈화
-    - 성능 최적화 (캐싱, 배치 처리)
+    - 단순한 순차 처리
     - 환경별 설정 지원
     """
 
@@ -110,42 +108,15 @@ class ImprovedHogangnonoCrawler(APICrawler):
             # 서울시 기본 경계 좌표
             self.region_bounds = (37.413294, 126.734086, 37.715133, 127.183394)
 
-        # 성능 최적화를 위한 캐시
-        self._apartment_cache: Dict[str, Dict[str, Any]] = {}
-        self._dong_code_cache: Dict[str, Optional[str]] = {}
-
-        # 배치 처리 설정
-        self.batch_size = 50
-
-        # 통계 정보
-        self.stats = {
-            "total_requests": 0,
-            "successful_requests": 0,
-            "failed_requests": 0,
-            "skipped_apartments": 0,
-            "cached_requests": 0,
-            "start_time": None,
-            "end_time": None,
-        }
-
         self.logger.info(
             "improved_hogangnono_crawler_initialized",
             output_dir=str(self.output_dir),
             region_bounds=self.region_bounds,
-            batch_size=self.batch_size,
         )
 
     def get_dong_code(self, district_name: str, dong_name: str) -> Optional[str]:
-        """동 이름으로 코드 조회 (캐싱 적용)"""
-        # 캐시 키 생성
-        cache_key = f"{district_name}_{dong_name}"
-
-        # 캐시 확인
-        if cache_key in self._dong_code_cache:
-            self.logger.debug("dong_code_cache_hit", district=district_name, dong=dong_name)
-            return self._dong_code_cache[cache_key]
-
-        # DataMapper의 캐시된 정보 확인
+        """동 이름으로 코드 조회"""
+        # DataMapper에서 정보 확인
         dong_code = self.deps.data_mapper.get_dong_code(district_name, dong_name)
 
         # 없으면 API에서 가져오기
@@ -161,8 +132,6 @@ class ImprovedHogangnonoCrawler(APICrawler):
                     "failed_to_fetch_dong_codes", district=district_name, error=str(e)
                 )
 
-        # 캐시에 저장
-        self._dong_code_cache[cache_key] = dong_code
         return dong_code
 
     def validate_apartment_before_request(self, apt_id: str, apt_name: str) -> bool:
@@ -177,7 +146,6 @@ class ImprovedHogangnonoCrawler(APICrawler):
         """
         # 에러 핸들러를 통해 스킵 여부 확인
         if self.deps.error_handler.should_skip_apartment(apt_id):
-            self.stats["skipped_apartments"] += 1
             self.logger.info(
                 "apartment_skipped_by_error_handler",
                 apt_id=apt_id,
@@ -210,10 +178,10 @@ class ImprovedHogangnonoCrawler(APICrawler):
 
         return True
 
-    def fetch_apartment_data_with_cache(
+    def fetch_apartment_data(
         self, apt_id: str, apt_name: str, fetch_func: callable, *args, **kwargs
     ) -> Optional[Any]:
-        """캐싱을 적용한 아파트 데이터 조회
+        """아파트 데이터 조회
 
         Args:
             apt_id: 아파트 ID
@@ -224,21 +192,12 @@ class ImprovedHogangnonoCrawler(APICrawler):
         Returns:
             조회된 데이터 또는 None
         """
-        # 캐시 확인
-        cache_key = f"{apt_id}_{hash(str(args) + str(sorted(kwargs.items())))}"
-        if cache_key in self._apartment_cache:
-            self.stats["cached_requests"] += 1
-            self.logger.debug("apartment_data_cache_hit", apt_id=apt_id, apt_name=apt_name)
-            return self._apartment_cache[cache_key]
-
         # API 호출 전 유효성 검증
         if not self.validate_apartment_before_request(apt_id, apt_name):
             return None
 
         # 데이터 조회
         try:
-            self.stats["total_requests"] += 1
-
             # 에러 핸들러와 함께 실행
             response = self.deps.error_handler.execute_with_retry(
                 fetch_func, *args, apartment_id=apt_id, **kwargs
@@ -246,16 +205,11 @@ class ImprovedHogangnonoCrawler(APICrawler):
 
             # 성공 처리
             if hasattr(response, "success") and response.success:
-                self.stats["successful_requests"] += 1
-
-                # 캐시에 저장 (성공한 데이터만)
                 if hasattr(response, "data") and response.data:
-                    self._apartment_cache[cache_key] = response.data
+                    return response.data
 
                 return response.data
             else:
-                self.stats["failed_requests"] += 1
-
                 # 404 에러 확인
                 if hasattr(response, "status_code") and response.status_code == 404:
                     self.logger.info(
@@ -275,7 +229,6 @@ class ImprovedHogangnonoCrawler(APICrawler):
                 return None
 
         except Exception as e:
-            self.stats["failed_requests"] += 1
             self.logger.error(
                 "unexpected_error_fetching_apartment",
                 apt_id=apt_id,
@@ -290,10 +243,10 @@ class ImprovedHogangnonoCrawler(APICrawler):
 
             return None
 
-    def process_apartments_in_batches(
+    def process_apartments_sequentially(
         self, apartments: List[Dict[str, Any]], process_func: callable, district_name: str = ""
     ) -> Dict[str, Any]:
-        """아파트들을 배치로 처리
+        """아파트들을 순차적으로 처리
 
         Args:
             apartments: 처리할 아파트 리스트
@@ -308,46 +261,35 @@ class ImprovedHogangnonoCrawler(APICrawler):
             "processed": 0,
             "skipped": 0,
             "failed": 0,
-            "batch_count": (len(apartments) + self.batch_size - 1) // self.batch_size,
         }
 
-        for i in range(0, len(apartments), self.batch_size):
-            batch = apartments[i : i + self.batch_size]
-            batch_num = i // self.batch_size + 1
+        self.logger.info(
+            "processing_apartments_sequentially",
+            total_count=len(apartments),
+            district=district_name,
+        )
 
-            self.logger.info(
-                "processing_apartment_batch",
-                batch_num=batch_num,
-                total_batches=stats["batch_count"],
-                batch_size=len(batch),
-                district=district_name,
-            )
+        for apt in apartments:
+            apt_id = str(apt.get("id", ""))
+            apt_name = apt.get("name", "")
 
-            for apt in batch:
-                apt_id = str(apt.get("id", ""))
-                apt_name = apt.get("name", "")
+            # 에러 핸들러로 스킵 확인
+            if self.deps.error_handler.should_skip_apartment(apt_id):
+                stats["skipped"] += 1
+                continue
 
-                # 에러 핸들러로 스킵 확인
-                if self.deps.error_handler.should_skip_apartment(apt_id):
-                    stats["skipped"] += 1
-                    continue
-
-                try:
-                    # 처리 함수 실행
-                    result = process_func(apt, district_name)
-                    if result:
-                        stats["processed"] += 1
-                    else:
-                        stats["failed"] += 1
-                except Exception as e:
+            try:
+                # 처리 함수 실행
+                result = process_func(apt, district_name)
+                if result:
+                    stats["processed"] += 1
+                else:
                     stats["failed"] += 1
-                    self.logger.error(
-                        "batch_processing_failed", apt_id=apt_id, apt_name=apt_name, error=str(e)
-                    )
-
-            # API 레이트 리밋 고려
-            if i + self.batch_size < len(apartments):
-                time.sleep(self.deps.config.RATE_LIMIT_DELAY)
+            except Exception as e:
+                stats["failed"] += 1
+                self.logger.error(
+                    "sequential_processing_failed", apt_id=apt_id, apt_name=apt_name, error=str(e)
+                )
 
         return stats
 
@@ -419,7 +361,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
         Returns:
             크롤링 통계
         """
-        self.stats["start_time"] = datetime.now()
+        start_time = datetime.now()
 
         try:
             # 1. 지역 정보 수집
@@ -431,9 +373,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
             all_regions = regions_response.data
             target_districts = self._filter_districts(all_regions, regions, districts)
 
-            # 2. 체크포인트 로드는 개별적으로 수행됨
-
-            # 3. 구/군별 크롤링
+            # 2. 구/군별 크롤링
             total_stats = {
                 "districts_total": len(target_districts),
                 "districts_completed": 0,
@@ -444,15 +384,6 @@ class ImprovedHogangnonoCrawler(APICrawler):
             }
 
             for district in target_districts:
-                district_name = district["name"]
-
-                # 이미 완료된 구/군인지 확인
-                if self.deps.checkpoint_manager.is_district_completed(district_name):
-                    self.logger.info(
-                        "district_skipped", district=district_name, reason="already_completed"
-                    )
-                    continue
-
                 # 구/군 크롤링
                 district_stats = self._crawl_district_improved(district, full_period)
 
@@ -463,22 +394,13 @@ class ImprovedHogangnonoCrawler(APICrawler):
                 total_stats["transactions_found"] += district_stats.get("transactions_found", 0)
                 total_stats["errors"] += district_stats.get("errors", 0)
 
-                # 체크포인트 저장
-                self.deps.checkpoint_manager.add_completed_district(district_name)
-
             # 최종 통계
-            self.stats["end_time"] = datetime.now()
-            duration = (self.stats["end_time"] - self.stats["start_time"]).total_seconds()
+            end_time = datetime.now()
+            duration = (end_time - start_time).total_seconds()
 
             final_stats = {
                 **total_stats,
                 "duration_seconds": duration,
-                "requests_stats": self.stats,
-                "invalid_apartments_count": len(self.deps.error_handler._invalid_apartment_ids),
-                "cache_stats": {
-                    "apartment_cache_size": len(self._apartment_cache),
-                    "dong_code_cache_size": len(self._dong_code_cache),
-                },
             }
 
             self.logger.info("crawling_completed", **final_stats)
@@ -562,16 +484,16 @@ class ImprovedHogangnonoCrawler(APICrawler):
             stats["apartments_found"] = len(apartments)
 
             if apartments:
-                # 2. 배치 처리로 아파트 데이터 수집
+                # 2. 순차 처리로 아파트 데이터 수집
                 def process_apartment(apt, district_name):
                     return self._process_single_apartment_improved(apt, district_name, full_period)
 
-                batch_stats = self.process_apartments_in_batches(
+                sequential_stats = self.process_apartments_sequentially(
                     apartments, process_apartment, district_name
                 )
 
-                stats["apartments_processed"] = batch_stats["processed"]
-                stats["errors"] += batch_stats["failed"]
+                stats["apartments_processed"] = sequential_stats["processed"]
+                stats["errors"] += sequential_stats["failed"]
 
         except Exception as e:
             stats["errors"] += 1
@@ -734,7 +656,7 @@ class ImprovedHogangnonoCrawler(APICrawler):
 
         # 2. 실거래 내역 조회 (유효한 아파트만)
         if apt_id and apt_id.isdigit():
-            transactions_data = self.fetch_apartment_data_with_cache(
+            transactions_data = self.fetch_apartment_data(
                 apt_id,
                 apt_name,
                 self.deps.api_client.get_apartment_transactions,
@@ -875,15 +797,3 @@ class ImprovedHogangnonoCrawler(APICrawler):
                 transactions.append(base_info)
 
         return transactions
-
-    def get_crawler_statistics(self) -> Dict[str, Any]:
-        """크롤러 통계 정보 반환"""
-        return {
-            "performance_stats": self.stats,
-            "invalid_apartments_count": len(self.deps.error_handler._invalid_apartment_ids),
-            "cache_stats": {
-                "apartment_cache_size": len(self._apartment_cache),
-                "dong_code_cache_size": len(self._dong_code_cache),
-            },
-            "checkpoint_stats": self.deps.checkpoint_manager.get_stats(),
-        }

@@ -203,10 +203,7 @@ class TestSimpleCrawler:
         simple_crawler.fetch_and_save_transactions("456", "테스트아파트2")
 
     @patch("crawler.crawlers.simple_crawler.HogangnonoAPIClient")
-    @patch("crawler.crawlers.simple_crawler.CheckpointManager")
-    def test_filter_districts_default(
-        self, mock_checkpoint_class, mock_api_client_class, simple_crawler
-    ):
+    def test_filter_districts_default(self, mock_api_client_class, simple_crawler):
         """지역 필터링 기본값 테스트 (서울만)"""
         # Mock API 클라이언트 설정
         mock_api_client = Mock()
@@ -249,10 +246,7 @@ class TestSimpleCrawler:
         assert districts[1]["name"] == "중구"
 
     @patch("crawler.crawlers.simple_crawler.HogangnonoAPIClient")
-    @patch("crawler.crawlers.simple_crawler.CheckpointManager")
-    def test_filter_districts_with_districts(
-        self, mock_checkpoint_class, mock_api_client_class, simple_crawler
-    ):
+    def test_filter_districts_with_districts(self, mock_api_client_class, simple_crawler):
         """특정 구/군 필터링 테스트"""
         # Mock API 클라이언트 설정
         mock_api_client = Mock()

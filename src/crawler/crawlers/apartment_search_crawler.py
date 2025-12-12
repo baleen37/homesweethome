@@ -289,7 +289,7 @@ class ApartmentSearchCrawler:
             mapped_data = await self.data_mapper.map_apartment_data(combined_data)
 
             # 5. CSV 저장
-            await self.writer.write(mapped_data)
+            self.writer.save_complexes(mapped_data)
 
             # 6. 진행 상황 업데이트
             await self.progress_tracker.update_progress(

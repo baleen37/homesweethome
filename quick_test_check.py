@@ -15,14 +15,12 @@ import unittest
 
 # Import a few test modules to check
 from unit.test_adaptive_rate_limiter import TestAdaptiveRateLimiter
-from unit.test_base_csv_writer import TestBaseCSVWriter
 from unit.test_apartment_data_models import TestApartmentComplex
 
 # Create a test suite
 loader = unittest.TestLoader()
 suite = unittest.TestSuite()
 suite.addTest(loader.loadTestsFromTestCase(TestAdaptiveRateLimiter))
-suite.addTest(loader.loadTestsFromTestCase(TestBaseCSVWriter))
 suite.addTest(loader.loadTestsFromTestCase(TestApartmentComplex))
 
 # Run the tests

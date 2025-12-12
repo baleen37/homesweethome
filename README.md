@@ -296,23 +296,6 @@ test_crawler = factory.create_test_crawler(
 
 ## 🔍 모니터링 및 디버깅
 
-### 에러 통계 확인
-
-```python
-# 크롤러 통계
-stats = crawler.get_crawler_statistics()
-
-print(f"총 요청: {stats['performance_stats']['total_requests']}")
-print(f"성공 요청: {stats['performance_stats']['successful_requests']}")
-print(f"실패 요청: {stats['performance_stats']['failed_requests']}")
-print(f"스킵된 아파트: {stats['performance_stats']['skipped_apartments']}")
-print(f"캐시된 요청: {stats['performance_stats']['cached_requests']}")
-
-# 에러 유형별 통계
-error_stats = stats['error_stats']
-print(f"404 에러: {error_stats['error_statistics']['error_counts']['not_found']}")
-print(f"Rate Limit 에러: {error_stats['error_statistics']['error_counts']['rate_limit']}")
-```
 
 ### 체크포인트 상태
 

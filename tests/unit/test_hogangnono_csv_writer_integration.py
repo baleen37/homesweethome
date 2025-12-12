@@ -84,25 +84,3 @@ class TestHogangnonoCSVWriterIntegration:
         with open(transactions_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
             assert len(lines) >= 2, "헤더와 최소 1개의 데이터 행이 있어야 함"
-
-    def test_get_stats_returns_correct_counts(self, writer, temp_output_dir):
-        """get_stats가 올바른 레코드 수를 반환하는지 확인"""
-        # Given: 데이터 저장
-        complexes_data = [
-            {"aptSeq": "APT_001", "aptName": "아파트1"},
-            {"aptSeq": "APT_002", "aptName": "아파트2"},
-        ]
-        transactions_data = [
-            {"aptSeq": "APT_001", "dealAmount": "50000"},
-            {"aptSeq": "APT_001", "dealAmount": "55000"},
-            {"aptSeq": "APT_002", "dealAmount": "60000"},
-        ]
-
-        # When: 데이터 저장
-        writer.save_complexes(complexes_data)
-        writer.save_transactions(transactions_data)
-
-        # Then: 통계 확인
-        stats = writer.get_stats()
-        assert stats["complexes_record_count"] == 2, "단지 레코드 수는 2개여야 함"
-        assert stats["transactions_record_count"] == 3, "거래내역 레코드 수는 3개여야 함"

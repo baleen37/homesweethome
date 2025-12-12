@@ -23,7 +23,6 @@ from .apartment_models import (
     PoiData,
     ApartmentComplex,
     ApartmentFilter,
-    CrawlStats,
 )
 
 from .validators import (
@@ -51,7 +50,6 @@ __all__ = [
     "PoiData",
     "ApartmentComplex",
     "ApartmentFilter",
-    "CrawlStats",
     # Validators
     "validate_coordinates",
     "validate_price",

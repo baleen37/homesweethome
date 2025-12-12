@@ -13,7 +13,6 @@ from .api import APICrawler
 from ..api.hogangnono_client import HogangnonoAPIClient, SearchParams
 from ..config import CrawlerConfig
 from ..writers import HogangnonoCSVWriter
-from ..utils.checkpoint import CheckpointManager
 from ..utils.bbox_division import BBoxDivision
 from ..utils.simple_error_handler import SimpleErrorHandler
 from ..data_mappers import HogangnonoDataMapper
@@ -88,10 +87,6 @@ class HogangnonoCrawler(APICrawler):
 
         # 호갱노노 API 클라이언트
         self.hogangnono_client = HogangnonoAPIClient(config)
-
-        # 체크포인트 매니저 (main.py에서 접근 필요)
-        self.checkpoint_manager = CheckpointManager(str(self.output_dir / "checkpoint.json"))
-        self.checkpoint_manager.load()
 
         # 데이터 매핑을 위한 HogangnonoDataMapper 초기화
         self.data_mapper = HogangnonoDataMapper(
@@ -604,23 +599,18 @@ class HogangnonoCrawler(APICrawler):
                 note="Saving only valid apartments after filtering",
             )
 
-            # 배치 처리로 저장
-            batch_size = 50
-            for i in range(0, len(valid_apartments), batch_size):
-                batch = valid_apartments[i : i + batch_size]
-                try:
-                    for apt in batch:
-                        self._save_apartment_basic_info(apt, district_name, is_valid=True)
-                        # 유효한 아파트라면 실거래 내역도 가져오기
-                        if apt.get("id"):
-                            self._fetch_and_save_transactions(apt, district_name)
-                except Exception as e:
-                    self.logger.error(
-                        "apartment_batch_save_failed",
-                        batch_start=i,
-                        batch_size=len(batch),
-                        error=str(e),
-                    )
+            # 순차 처리로 저장
+            try:
+                for apt in valid_apartments:
+                    self._save_apartment_basic_info(apt, district_name, is_valid=True)
+                    # 유효한 아파트라면 실거래 내역도 가져오기
+                    if apt.get("id"):
+                        self._fetch_and_save_transactions(apt, district_name)
+            except Exception as e:
+                self.logger.error(
+                    "apartment_sequential_save_failed",
+                    error=str(e),
+                )
         else:
             self.logger.warning(
                 "no_valid_apartments_found",

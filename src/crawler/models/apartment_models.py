@@ -214,32 +214,6 @@ class ApartmentFilter:
 
 
 @dataclass
-class CrawlStats:
-    """크롤링 통계 정보"""
-
-    total_requests: int = 0
-    successful_requests: int = 0
-    failed_requests: int = 0
-    apartments_found: int = 0
-    apartments_processed: int = 0
-    pois_filtered: int = 0
-    start_time: datetime = field(default_factory=datetime.now)
-    end_time: Optional[datetime] = None
-
-    def success_rate(self) -> float:
-        """성공률 계산"""
-        if self.total_requests == 0:
-            return 0.0
-        return self.successful_requests / self.total_requests
-
-    def apartment_processing_rate(self) -> float:
-        """아파트 처리율 계산"""
-        if self.apartments_found == 0:
-            return 0.0
-        return self.apartments_processed / self.apartments_found
-
-
-@dataclass
 class ApartmentComplex:
     """Represents an apartment complex with full details."""
 

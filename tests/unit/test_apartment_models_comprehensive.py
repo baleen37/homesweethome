@@ -13,7 +13,6 @@ from src.crawler.models.apartment_models import (
     Apartment,
     POI,
     ApartmentFilter,
-    CrawlStats,
 )
 
 
@@ -306,37 +305,3 @@ class TestApartmentFilter:
             total_household_count=200,
         )
         assert not filter_obj.is_valid(officetel)
-
-
-class TestCrawlStats:
-    """CrawlStats 데이터클래스 테스트"""
-
-    def test_stats_initialization(self):
-        """통계 초기화 테스트"""
-        stats = CrawlStats()
-        assert stats.total_requests == 0
-        assert stats.successful_requests == 0
-        assert stats.failed_requests == 0
-        assert stats.apartments_found == 0
-        assert stats.apartments_processed == 0
-        assert stats.pois_filtered == 0
-        assert isinstance(stats.start_time, datetime)
-        assert stats.end_time is None
-
-    def test_success_rate(self):
-        """성공률 계산 테스트"""
-        stats = CrawlStats()
-        assert stats.success_rate() == 0.0
-
-        stats.total_requests = 100
-        stats.successful_requests = 80
-        assert stats.success_rate() == 0.8
-
-    def test_apartment_processing_rate(self):
-        """아파트 처리율 계산 테스트"""
-        stats = CrawlStats()
-        assert stats.apartment_processing_rate() == 0.0
-
-        stats.apartments_found = 100
-        stats.apartments_processed = 75
-        assert stats.apartment_processing_rate() == 0.75
