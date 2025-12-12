@@ -4,13 +4,18 @@
 """
 
 import time
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, Optional
 
 T = TypeVar("T")
 
 
 def retry_with_delay(
-    func: Callable[..., T], max_attempts: int = 3, delay: float = 1.0, *args: Any, **kwargs: Any
+    func: Callable[..., T],
+    max_attempts: int = 3,
+    delay: float = 1.0,
+    logger: Optional[Any] = None,
+    *args: Any,
+    **kwargs: Any,
 ) -> T:
     """단순한 재시도 함수
 
@@ -18,6 +23,7 @@ def retry_with_delay(
         func: 재시도할 함수
         max_attempts: 최대 시도 횟수 (기본값: 3)
         delay: 재시도 간 지연 시간 (초, 기본값: 1.0)
+        logger: 로거 객체 (선택사항)
         *args: 함수에 전달할 인자
         **kwargs: 함수에 전달한 키워드 인자
 
@@ -35,10 +41,26 @@ def retry_with_delay(
         except Exception as e:
             last_exception = e
             if attempt < max_attempts - 1:  # 마지막 시도가 아니면
-                print(f"시도 {attempt + 1} 실패: {str(e)}. {delay}초 후 재시도...")
+                if logger:
+                    logger.warning(
+                        "retry_attempt_failed",
+                        attempt=attempt + 1,
+                        max_attempts=max_attempts,
+                        error=str(e),
+                        delay=delay,
+                    )
+                else:
+                    print(f"시도 {attempt + 1} 실패: {str(e)}. {delay}초 후 재시도...")
                 time.sleep(delay)
             else:
-                print(f"모든 시도 ({max_attempts}회) 실패")
+                if logger:
+                    logger.error(
+                        "retry_all_attempts_failed",
+                        max_attempts=max_attempts,
+                        final_error=str(last_exception) if last_exception else "Unknown error",
+                    )
+                else:
+                    print(f"모든 시도 ({max_attempts}회) 실패")
 
     # 모든 시도가 실패하면 마지막 예외를 다시 발생
     assert last_exception is not None

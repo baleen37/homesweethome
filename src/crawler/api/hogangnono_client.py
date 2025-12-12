@@ -534,7 +534,7 @@ class HogangnonoAPIClient(BaseAPIClient):
 
             return response.data
 
-        return retry_with_delay(_fetch, max_attempts=3, delay=1.0)
+        return retry_with_delay(_fetch, max_attempts=3, delay=1.0, logger=self.logger)
 
     def fetch_pois_bounding(self, bounds: dict[str, float]) -> dict[str, Any]:
         """POI 데이터 조회 (Bounding box 기반)
@@ -568,7 +568,7 @@ class HogangnonoAPIClient(BaseAPIClient):
 
             return response.data
 
-        return retry_with_delay(_fetch, max_attempts=3, delay=1.0)
+        return retry_with_delay(_fetch, max_attempts=3, delay=1.0, logger=self.logger)
 
     def to_csv_rows_complexes(self, complexes_data: dict[str, Any]) -> List[dict[str, Any]]:
         """단지 데이터를 CSV 행으로 변환
@@ -692,7 +692,7 @@ class HogangnonoAPIClient(BaseAPIClient):
                 "error": None,
             }
 
-        return retry_with_delay(_search, max_attempts=3, delay=1.0)
+        return retry_with_delay(_search, max_attempts=3, delay=1.0, logger=self.logger)
 
     def _get_headers(self) -> dict[str, str]:
         """API 호출용 헤더 생성 (테스트용)

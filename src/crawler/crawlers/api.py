@@ -179,7 +179,9 @@ class APICrawler(BaseCrawler, ABC):
                     data=data,
                 )
 
-            response = retry_with_delay(_make_request, max_attempts=3, delay=1.0)
+            response = retry_with_delay(
+                _make_request, max_attempts=3, delay=1.0, logger=self.logger
+            )
 
             # 성공 시 Rate Limiter 업데이트
             self.rate_limiter.on_success()
