@@ -67,9 +67,33 @@ class TestCSVHeaderConsistency(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             writer = HogangnonoCSVWriter(tmpdir)
 
-            # Write headers
-            writer.write_complexes_header()
-            writer.write_transactions_header()
+            # Write sample data to create files with headers
+            writer.save_complexes(
+                [
+                    {
+                        "aptSeq": "TEST_001",
+                        "aptName": "테스트",
+                        "address": "주소",
+                        "buildYear": "2020",
+                        "dealCnt": "1",
+                        "householdCnt": "100",
+                    }
+                ]
+            )
+            writer.save_transactions(
+                [
+                    {
+                        "aptSeq": "TEST_001",
+                        "aptName": "테스트",
+                        "dealType": "매매",
+                        "dealDate": "2023.12.01",
+                        "dealAmount": "45,000",
+                        "floor": "5",
+                        "pyeong": "33",
+                        "pyeongName": "33평",
+                    }
+                ]
+            )
 
             # Check complexes CSV headers
             with open(writer.complexes_path, "r", encoding="utf-8") as f:

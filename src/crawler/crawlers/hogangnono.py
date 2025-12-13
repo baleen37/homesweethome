@@ -276,7 +276,8 @@ class HogangnonoCrawler(APICrawler):
                 # 거래 정보는 실제 거래 데이터가 있는 경우에만 추가
                 # 현재 API는 단지 정보만 제공하므로 거래내역은 추가하지 않음
                 # 거래내역은 별도의 API 호출이 필요하지만 현재는 구현되어 있지 않음
-                # TODO: 단지별 상세 API를 통해 실제 거래내역 수집 기능 구현 필요
+                # 참고: 단지별 상세 API를 통해 실제 거래내역 수집 기능은 향후 개선 필요
+                # 현재는 POI API에서 제공하는 기본 정보만 활용
 
             # 호갱노노 API는 페이지네이션을 지원하지 않음
             # 모든 데이터는 첫 번째 호출에서 반환됨 (최대 600개)
@@ -818,23 +819,8 @@ class HogangnonoCrawler(APICrawler):
             initial_bbox=(lat_min, lng_min, lat_max, lng_max),
         )
 
-        try:
-            bboxes = self.bbox_divider.adaptive_divide(
-                lat_min,
-                lng_min,
-                lat_max,
-                lng_max,
-                poi_count_func=get_poi_count_for_bbox,
-                max_depth=3,
-            )
-        except Exception as e:
-            self.logger.warning(
-                "adaptive_division_failed", error=str(e), fallback="using_standard_division"
-            )
-            # 실패 시 표준 분할 사용
-            bboxes = self.bbox_divider.divide_bbox(
-                lat_min, lng_min, lat_max, lng_max, max_grid_size=4
-            )
+        # 표준 분할 사용 (adaptive_divide는 구현되지 않음)
+        bboxes = self.bbox_divider.divide_bbox(lat_min, lng_min, lat_max, lng_max)
 
         self.logger.info("bbox_division_complete", district=district_name, total_bboxes=len(bboxes))
 
@@ -1033,7 +1019,7 @@ class HogangnonoCrawler(APICrawler):
         if not regions_response.success:
             raise Exception(f"Failed to get regions: {regions_response.error}")
 
-        all_regions = regions_response.data
+        all_regions = regions_response.data.get("data", {}).get("regionList", [])
         target_districts = self._filter_districts(all_regions, regions, districts)
         self.logger.info("target_districts_filtered", count=len(target_districts))
 
@@ -1287,7 +1273,7 @@ class HogangnonoCrawler(APICrawler):
         """API 응답 파싱"""
         return self.parse_response(response_data)
 
-    def parse_html_response(self, html_data: str) -> List[Dict[str, Any]]:
+    def parse_html_response(self, _html_data: str) -> List[Dict[str, Any]]:
         """HTML 응답 파싱"""
         self.logger.warning("html_parsing_not_supported", message="Use JSON API instead")
         return []

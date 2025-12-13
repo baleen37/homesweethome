@@ -223,7 +223,7 @@ class TestFileLogHandler(TestCase):
             assert "dong_started" in log_content
 
     @patch("builtins.open", side_effect=PermissionError("Permission denied"))
-    def test_log_file_open_failure(self, mock_open):
+    def test_log_file_open_failure(self, _mock_open):
         """로그 파일 열기 실패 테스트"""
         with patch("crawler.file_log_handler.structlog.get_logger") as mock_logger:
             mock_logger_instance = mock_logger.return_value

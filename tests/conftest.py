@@ -45,8 +45,8 @@ except ImportError:
 
     mock_pydantic.BaseModel = MockBaseModel
     mock_pydantic.Field = lambda default=None, **kwargs: default
-    mock_pydantic.field_validator = lambda field_name, **kwargs: lambda func: func
-    mock_pydantic.model_validator = lambda mode, **kwargs: lambda func: func
+    mock_pydantic.field_validator = lambda _field_name, **kwargs: lambda func: func
+    mock_pydantic.model_validator = lambda _mode, **kwargs: lambda func: func
     mock_pydantic.ValidationError = ValueError
 
     sys.modules["pydantic"] = mock_pydantic

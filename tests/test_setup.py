@@ -27,16 +27,16 @@ except ImportError:
         def __call__(self, *args, **kwargs):
             return lambda func: func
 
-        def parametrize(self, param_names, param_values):
+        def parametrize(self, _param_names, _param_values):
             return lambda func: func
 
-        def skip(self, reason=""):
+        def skip(self, _reason=""):
             return lambda func: func
 
-        def skipif(self, condition, reason=""):
+        def skipif(self, _condition, _reason=""):
             return lambda func: func
 
-        def xfail(self, reason="", **kwargs):
+        def xfail(self, _reason="", **kwargs):
             return lambda func: func
 
         def fixture(self, *args, **kwargs):
@@ -49,7 +49,7 @@ except ImportError:
                 # Decorator with params: @pytest.fixture()
                 return lambda func: func
 
-        def raises(self, expected_exception, **kwargs):
+        def raises(self, _expected_exception, **kwargs):
             return MockContextManager()
 
     # Mock context manager for pytest.raises
@@ -57,7 +57,7 @@ except ImportError:
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc_val, exc_tb):
+        def __exit__(self, _exc_type, _exc_val, _exc_tb):
             return False
 
     mock_pytest.mark = MockMark()

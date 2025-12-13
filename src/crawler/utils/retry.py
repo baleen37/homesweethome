@@ -5,6 +5,7 @@
 
 import time
 from typing import Any, Callable, TypeVar, Optional
+from structlog import get_logger
 
 T = TypeVar("T")
 
@@ -67,32 +68,30 @@ def retry_with_delay(
     """
     last_exception = None
 
+    # logger가 전달되지 않은 경우 기본 logger 사용
+    if logger is None:
+        logger = get_logger()
+
     for attempt in range(max_attempts):
         try:
             return func(*args, **kwargs)
         except Exception as e:
             last_exception = e
             if attempt < max_attempts - 1:  # 마지막 시도가 아니면
-                if logger:
-                    logger.warning(
-                        "retry_attempt_failed",
-                        attempt=attempt + 1,
-                        max_attempts=max_attempts,
-                        error=str(e),
-                        delay=delay,
-                    )
-                else:
-                    print(f"시도 {attempt + 1} 실패: {str(e)}. {delay}초 후 재시도...")
+                logger.warning(
+                    "retry_attempt_failed",
+                    attempt=attempt + 1,
+                    max_attempts=max_attempts,
+                    error=str(e),
+                    delay=delay,
+                )
                 time.sleep(delay)
             else:
-                if logger:
-                    logger.error(
-                        "retry_all_attempts_failed",
-                        max_attempts=max_attempts,
-                        final_error=str(last_exception) if last_exception else "Unknown error",
-                    )
-                else:
-                    print(f"모든 시도 ({max_attempts}회) 실패")
+                logger.error(
+                    "retry_all_attempts_failed",
+                    max_attempts=max_attempts,
+                    final_error=str(last_exception) if last_exception else "Unknown error",
+                )
 
     # 모든 시도가 실패하면 마지막 예외를 다시 발생
     assert last_exception is not None

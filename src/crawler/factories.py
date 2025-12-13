@@ -42,12 +42,11 @@ def create_crawler(
     )
 
 
-def create_test_crawler(output_dir: Path, mock_api: bool = True) -> HogangnonoCrawler:
+def create_test_crawler(output_dir: Path) -> HogangnonoCrawler:
     """테스트용 크롤러 생성
 
     Args:
         output_dir: 테스트 출력 디렉토리
-        mock_api: API를 Mock으로 사용할지 여부 (향후 확장용)
 
     Returns:
         테스트용 크롤러

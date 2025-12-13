@@ -7,16 +7,23 @@ import sys
 import subprocess
 import time
 import json
+import logging
 from pathlib import Path
 
 # Add the project root to the Python path for report generator
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# 기본 로깅 설정
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
+
 
 def main():
     """Run all integration tests and generate report"""
-    print("Starting crawling system integration tests...")
+    logger.info("Starting crawling system integration tests...")
 
     # Create output directory
     output_dir = Path("output/test-integration")
@@ -38,7 +45,7 @@ def main():
     start_time = time.time()
 
     for phase_name, test_path in phases:
-        print(f"\n=== Running {phase_name} Tests ===")
+        logger.info(f"Running {phase_name} Tests")
         phase_start = time.time()
 
         try:
@@ -60,13 +67,13 @@ def main():
             }
 
             if result.returncode == 0:
-                print(f"✅ {phase_name} tests passed ({phase_time:.2f}s)")
+                logger.info(f"✅ {phase_name} tests passed ({phase_time:.2f}s)")
             else:
-                print(f"❌ {phase_name} tests failed")
-                print(result.stderr)
+                logger.error(f"❌ {phase_name} tests failed")
+                logger.error(result.stderr)
 
         except Exception as e:
-            print(f"❌ Error running {phase_name}: {e}")
+            logger.error(f"❌ Error running {phase_name}: {e}")
             results[phase_name] = {"success": False, "error": str(e)}
 
     total_time = time.time() - start_time
@@ -89,12 +96,12 @@ def main():
         json.dump(report, f, indent=2)
 
     # Print summary
-    print("\n=== Test Summary ===")
-    print(f"Total time: {total_time:.2f}s")
-    print(
+    logger.info("=== Test Summary ===")
+    logger.info(f"Total time: {total_time:.2f}s")
+    logger.info(
         f"Phases passed: {report['summary']['passed_phases']}/{report['summary']['total_phases']}"
     )
-    print(f"Report saved to: {report_file}")
+    logger.info(f"Report saved to: {report_file}")
 
     return report["summary"]["failed_phases"] == 0
 
