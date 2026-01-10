@@ -141,3 +141,248 @@ class AsilTradePriceCrawler(BaseCrawler):
         """JSON 응답 파싱"""
         data = json.loads(content)
         return data if isinstance(data, list) else []
+
+
+class AsilTrafficCrawler(BaseCrawler):
+    """asil.kr 교통정보 크롤러"""
+
+    BASE_URL = "https://asil.kr/json/data_traffic_naver.jsp"
+    ENCODING = "euc_kr"
+
+    def __init__(
+        self,
+        s_lat: float,
+        s_lng: float,
+        e_lat: float,
+        e_lng: float,
+        zoom: int = 13,
+        traffic_types: str = "1,2,3,4",
+        year_min: int = 2021,
+        year_max: int = 2027,
+    ):
+        """
+        Args:
+            s_lat: 시작 위도
+            s_lng: 시작 경도
+            e_lat: 끝 위도
+            e_lng: 끝 경도
+            zoom: 줌 레벨 (기본값: 13)
+            traffic_types: 교통 유형 (기본값: "1,2,3,4")
+                1=지하철, 2=철도, 3=버스, 4=주요 시설
+            year_min: 최소 연도 (기본값: 2021)
+            year_max: 최대 연도 (기본값: 2027)
+        """
+        self.s_lat = s_lat
+        self.s_lng = s_lng
+        self.e_lat = e_lat
+        self.e_lng = e_lng
+        self.zoom = zoom
+        self.traffic_types = traffic_types
+        self.year_min = year_min
+        self.year_max = year_max
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "os": "android",
+            "user": "naver",
+            "s_lat": self.s_lat,
+            "s_lng": self.s_lng,
+            "e_lat": self.e_lat,
+            "e_lng": self.e_lng,
+            "zoom": self.zoom,
+            "traffic": self.traffic_types,
+            "t_min": self.year_min,
+            "t_max": self.year_max,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[dict]:
+        """JSON 응답 파싱"""
+        data = json.loads(content)
+        return data if isinstance(data, list) else []
+
+
+class AsilDongInfoCrawler(BaseCrawler):
+    """asil.kr 동/호 정보 크롤러"""
+
+    BASE_URL = "https://asil.kr/app/data/data_apt_dong.jsp"
+    ENCODING = "utf-8"
+
+    def __init__(self, apt_code: str):
+        """
+        Args:
+            apt_code: 아파트 고유 코드 (예: "20340925" = 역삼자이)
+        """
+        self.apt_code = apt_code
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {"apt": self.apt_code}
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[dict]:
+        """JSON 응답 파싱 (앞의 \r\n 제거 후 data 필드 반환)"""
+        # 응답 앞에 \r\n 8개가 선행하므로 strip() 후 파싱
+        data = json.loads(content.strip())
+        # data 필드를 반환, 없으면 빈 리스트 반환
+        return data.get("data", [])
+
+
+class AsilSchoolInfoCrawler(BaseCrawler):
+    """asil.kr 학군 정보 크롤러"""
+
+    BASE_URL = "https://asil.kr/app/data/data_school_list_2024.jsp"
+    ENCODING = "utf-8"
+
+    # 학교 유형 매핑
+    SCHOOL_TYPE_MAP = {
+        "elementary": "2",  # 초등학교
+        "middle": "3",  # 중학교
+    }
+
+    def __init__(
+        self,
+        school_type: str,
+        area_code: str | None = None,
+        bounds: dict | None = None,
+    ):
+        """
+        Args:
+            school_type: 학교 유형 ("elementary"=초등학교, "middle"=중학교)
+            area_code: 지역 코드 (예: "11680"=강남구)
+            bounds: 좌표 기반 검색 (예: {"s_lat": "37.5", "s_lng": "127.0",
+                "e_lat": "37.6", "e_lng": "127.1"})
+        """
+        if school_type not in self.SCHOOL_TYPE_MAP:
+            msg = f"school_type은 {list(self.SCHOOL_TYPE_MAP.keys())} 중 하나여야 합니다"
+            raise ValueError(msg)
+        self.school_type = school_type
+        self.area_code = area_code
+        self.bounds = bounds
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "type1": self.SCHOOL_TYPE_MAP[self.school_type],
+        }
+
+        if self.area_code:
+            params["area"] = self.area_code
+
+        if self.bounds:
+            params.update(self.bounds)
+
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/asil/index.jsp",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[dict]:
+        """JSON 응답 파싱"""
+        data = json.loads(content)
+        return data if isinstance(data, list) else []
+
+
+class AsilEducationMapCrawler(BaseCrawler):
+    """asil.kr 학군 지도 정보 크롤러"""
+
+    BASE_URL = "https://asil.kr/json/data_education.jsp"
+    ENCODING = "euc_kr"
+
+    def __init__(
+        self,
+        s_lat: float,
+        s_lng: float,
+        e_lat: float,
+        e_lng: float,
+        zoom: int = 13,
+    ):
+        """
+        Args:
+            s_lat: 시작 위도 (남서쪽)
+            s_lng: 시작 경도 (남서쪽)
+            e_lat: 끝 위도 (북동쪽)
+            e_lng: 끝 경도 (북동쪽)
+            zoom: 줌 레벨 (기본값: 13)
+        """
+        self.s_lat = s_lat
+        self.s_lng = s_lng
+        self.e_lat = e_lat
+        self.e_lng = e_lng
+        self.zoom = zoom
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "os": "pc",
+            "user": "1",
+            "s_lat": self.s_lat,
+            "s_lng": self.s_lng,
+            "e_lat": self.e_lat,
+            "e_lng": self.e_lng,
+            "zoom": self.zoom,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[dict]:
+        """JSON 응답 파싱 (GeoJSON polygon 형식)"""
+        # 빈 응답 처리
+        content = content.strip()
+        if not content or content == "[]":
+            return []
+        data = json.loads(content)
+        return data if isinstance(data, list) else []
