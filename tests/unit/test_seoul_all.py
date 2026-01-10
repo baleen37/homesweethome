@@ -7,6 +7,7 @@ import json
 
 # 스크립트의 모듈 경로
 import sys
+import time
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -17,6 +18,93 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 # 스크립트 모듈 임포트
 import seoul_all
+
+
+class TestCrawlStatsTypedDict:
+    """CrawlStats TypedDict 테스트"""
+
+    def test_crawl_stats_structure(self):
+        """CrawlStats TypedDict 구조 검증"""
+        stats: seoul_all.CrawlStats = {
+            "total_processed": 0,
+            "data_found": 0,
+            "empty_dongs": 0,
+            "error_dongs": 0,
+            "total_apartments": 0,
+            "skipped_dongs": 0,
+            "unique_seqs": set(),
+        }
+
+        # 필수 키 존재 확인
+        required_keys = {
+            "total_processed",
+            "data_found",
+            "empty_dongs",
+            "error_dongs",
+            "total_apartments",
+            "skipped_dongs",
+            "unique_seqs",
+        }
+        assert set(stats.keys()) == required_keys
+
+        # 타입 확인
+        assert isinstance(stats["total_processed"], int)
+        assert isinstance(stats["data_found"], int)
+        assert isinstance(stats["empty_dongs"], int)
+        assert isinstance(stats["error_dongs"], int)
+        assert isinstance(stats["total_apartments"], int)
+        assert isinstance(stats["skipped_dongs"], int)
+        assert isinstance(stats["unique_seqs"], set)
+
+
+class TestTimeoutWrapper:
+    """타임아웃 래퍼 테스트"""
+
+    @patch("seoul_all.AsilAptListCrawler")
+    @patch("seoul_all.log_message")
+    def test_crawl_with_timeout_success(self, mock_log, mock_crawler_class):
+        """정상 완료 시 타임아웃이 발생하지 않음"""
+        mock_crawler = Mock()
+        mock_crawler.crawl.return_value = [{"seq": "12345", "name": "테스트"}]
+        mock_crawler_class.return_value = mock_crawler
+
+        result = seoul_all.crawl_with_timeout("1156010100", timeout=5)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["seq"] == "12345"
+
+    @patch("seoul_all.AsilAptListCrawler")
+    @patch("seoul_all.log_message")
+    def test_crawl_with_timeout_actually_times_out(self, mock_log, mock_crawler_class):
+        """실제 타임아웃 발생 확인 (긴 delay 사용)"""
+
+        def slow_crawl():
+            time.sleep(10)  # 타임아웃보다 긴 대기
+            return [{"seq": "12345", "name": "테스트"}]
+
+        mock_crawler = Mock()
+        mock_crawler.crawl.side_effect = slow_crawl
+        mock_crawler_class.return_value = mock_crawler
+
+        # 1초 타임아웃
+        result = seoul_all.crawl_with_timeout("1156010100", timeout=1)
+
+        # 타임아웃으로 None 반환
+        assert result is None
+        # 타임아웃 로그 호출 확인
+        mock_log.assert_called()
+
+    @patch("seoul_all.AsilAptListCrawler")
+    @patch("seoul_all.log_message")
+    def test_crawl_with_timeout_propagates_exceptions(self, mock_log, mock_crawler_class):
+        """예외가 정상적으로 전파됨"""
+        mock_crawler = Mock()
+        mock_crawler.crawl.side_effect = ValueError("Test error")
+        mock_crawler_class.return_value = mock_crawler
+
+        with pytest.raises(ValueError, match="Test error"):
+            seoul_all.crawl_with_timeout("1156010100", timeout=5)
 
 
 class TestRetryLogic:
@@ -42,15 +130,13 @@ class TestRetryLogic:
         # 하지만 우리 구현에서는 예외가 발생하면 재시도 후 None을 반환
         assert result is None or isinstance(result, list)
 
-    @patch("seoul_all.AsilAptListCrawler")
+    @patch("seoul_all.crawl_with_timeout")
     @patch("seoul_all.log_message")
     @patch("seoul_all.time.sleep")
-    def test_exponential_backoff(self, mock_sleep, mock_log, mock_crawler_class):
+    def test_exponential_backoff(self, mock_sleep, mock_log, mock_crawl_with_timeout):
         """지수 백오프(retry 간격)가 올바른지 확인"""
-        # 항상 실패하는 크롤러
-        mock_crawler = Mock()
-        mock_crawler.crawl.side_effect = Exception("Network error")
-        mock_crawler_class.return_value = mock_crawler
+        # 항상 타임아웃하는 크롤러
+        mock_crawl_with_timeout.return_value = None
 
         # 최대 3회 재시도
         result = seoul_all.crawl_with_retry("1156010100", max_retries=3, backoff_base=2)
@@ -181,43 +267,6 @@ class TestCsvFieldMapping:
         # 필수 필드 확인
         required_fields = {"seq", "name", "dong", "dongname", "bungi"}
         assert required_fields.issubset(set(fieldnames))
-
-
-class TestStatsTypedDict:
-    """stats 딕셔너리 타입 힌트 테스트"""
-
-    def test_stats_structure(self):
-        """stats 딕셔너리 구조 검증"""
-        stats = {
-            "total_processed": 0,
-            "data_found": 0,
-            "empty_dongs": 0,
-            "error_dongs": 0,
-            "total_apartments": 0,
-            "skipped_dongs": 0,
-            "unique_seqs": set(),
-        }
-
-        # 필수 키 존재 확인
-        required_keys = {
-            "total_processed",
-            "data_found",
-            "empty_dongs",
-            "error_dongs",
-            "total_apartments",
-            "skipped_dongs",
-            "unique_seqs",
-        }
-        assert set(stats.keys()) == required_keys
-
-        # 타입 확인
-        assert isinstance(stats["total_processed"], int)
-        assert isinstance(stats["data_found"], int)
-        assert isinstance(stats["empty_dongs"], int)
-        assert isinstance(stats["error_dongs"], int)
-        assert isinstance(stats["total_apartments"], int)
-        assert isinstance(stats["skipped_dongs"], int)
-        assert isinstance(stats["unique_seqs"], set)
 
 
 class TestGenerateDongCodes:

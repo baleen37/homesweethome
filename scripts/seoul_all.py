@@ -12,9 +12,10 @@ Features:
 import csv
 import json
 import os
+import threading
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, TypedDict
 
 from crawler.asil import AsilAptListCrawler
 
@@ -86,6 +87,28 @@ CSV_FIELDNAMES = [
     "lat",
     "lng",
 ]
+
+
+class CrawlStats(TypedDict):
+    """크롤링 통계 정보를 위한 TypedDict
+
+    Attributes:
+        total_processed: 총 처리한 동 코드 수
+        data_found: 데이터가 발견된 동 코드 수
+        empty_dongs: 데이터가 없는 동 코드 수
+        error_dongs: 에러가 발생한 동 코드 수
+        total_apartments: 수집된 총 아파트 수 (중복 포함)
+        skipped_dongs: 체크포인트로 스킵된 동 코드 수
+        unique_seqs: 중복 제거된 고유 아파트 seq 집합
+    """
+
+    total_processed: int
+    data_found: int
+    empty_dongs: int
+    error_dongs: int
+    total_apartments: int
+    skipped_dongs: int
+    unique_seqs: set[str]
 
 
 def setup_csv_writer(filepath: str) -> tuple[csv.DictWriter, Any]:
@@ -170,10 +193,50 @@ def load_checkpoint(filepath: str = CHECKPOINT_FILE) -> set[str]:
         return set()
 
 
+def crawl_with_timeout(
+    dong_code: str,
+    timeout: int = REQUEST_TIMEOUT,
+) -> list[Any] | None:
+    """타임아웃이 적용된 크롤링 함수
+
+    Args:
+        dong_code: 법정동 코드
+        timeout: 타임아웃 시간 (초)
+
+    Returns:
+        크롤링 결과 리스트 (타임아웃 또는 에러 시 None)
+    """
+    result: list[Any] | None = None
+    exception: Exception | None = None
+
+    def crawl_worker() -> None:
+        nonlocal result, exception
+        try:
+            crawler = AsilAptListCrawler(dong_code=dong_code)
+            result = crawler.crawl()
+        except Exception as e:
+            exception = e
+
+    thread = threading.Thread(target=crawl_worker, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout)
+
+    if thread.is_alive():
+        # 타임아웃 발생 (스레드가 여전히 실행 중)
+        log_message(f"  [{dong_code}] 타임아웃 발생 ({timeout}초 초과)")
+        return None
+
+    if exception is not None:
+        raise exception
+
+    return result
+
+
 def crawl_with_retry(
     dong_code: str,
     max_retries: int = MAX_RETRIES,
     backoff_base: int = RETRY_BACKOFF_BASE,
+    timeout: int = REQUEST_TIMEOUT,
 ) -> list[Any] | None:
     """재시도 로직이 포함된 크롤링 함수
 
@@ -181,15 +244,24 @@ def crawl_with_retry(
         dong_code: 법정동 코드
         max_retries: 최대 재시도 횟수
         backoff_base: 지수 백오프 베이스
+        timeout: 타임아웃 시간 (초)
 
     Returns:
         크롤링 결과 리스트 (실패 시 None)
     """
     for attempt in range(max_retries):
         try:
-            crawler = AsilAptListCrawler(dong_code=dong_code)
-            results = crawler.crawl()
-            return results
+            results = crawl_with_timeout(dong_code, timeout)
+            if results is not None:
+                return results
+            # 타임아웃으로 None이 반환된 경우
+            if attempt < max_retries - 1:
+                wait_time = backoff_base**attempt
+                log_message(
+                    f"  [{dong_code}] 재시도 {attempt + 1}/{max_retries} "
+                    f"({wait_time}초 후: 타임아웃)"
+                )
+                time.sleep(wait_time)
         except Exception as e:
             if attempt < max_retries - 1:
                 # 다음 재시도까지 대기 (지수 백오프)
@@ -231,7 +303,7 @@ def map_dto_to_csv(apt: Any) -> dict[str, Any]:
     return csv_dict
 
 
-def main():
+def main() -> None:
     """서울 전체 아파트 크롤링 (streaming)"""
     # 로그 파일 생성
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -246,8 +318,8 @@ def main():
     if completed_dongs:
         log_message(f"체크포인트 로드 완료: {len(completed_dongs)}개 동 이미 완료", log_f)
 
-    # 통계
-    stats = {
+    # 통계 (TypedDict 사용)
+    stats: CrawlStats = {
         "total_processed": 0,
         "data_found": 0,
         "empty_dongs": 0,
