@@ -6,9 +6,12 @@ from crawler.asil import (
     AsilAptListCrawler,
     AsilDongInfoCrawler,
     AsilEducationMapCrawler,
+    AsilListingCrawler,
+    AsilRedevelopCrawler,
     AsilSchoolInfoCrawler,
     AsilTradePriceCrawler,
     AsilTrafficCrawler,
+    AsilVisitorStatsCrawler,
 )
 
 
@@ -315,3 +318,155 @@ class TestAsilEducationMapCrawlerIntegration:
 
         # 결과가 파싱된 데이터여야 함
         assert isinstance(result, list)
+
+
+@pytest.mark.integration
+class TestAsilVisitorStatsCrawlerIntegration:
+    """AsilVisitorStatsCrawler 통합 테스트"""
+
+    def test_fetch_real_visitor_stats_for_gangnam_station(self):
+        """강남역 좌표로 조회수/관심사용자 통계를 실제로 가져옴"""
+        crawler = AsilVisitorStatsCrawler(
+            s_lat=37.504575,
+            s_lng=127.044555,
+            e_lat=37.514575,
+            e_lng=127.054555,
+            zoom=14,
+        )
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 필수 필드 확인
+        if len(result) > 0:
+            stat = result[0]
+            assert "key" in stat
+            assert "lat" in stat
+            assert "lng" in stat
+
+    def test_fetch_visitor_stats_with_different_zoom_level(self):
+        """다른 줌 레벨로 조회수 통계를 가져옴"""
+        crawler = AsilVisitorStatsCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+            zoom=13,
+        )
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilVisitorStatsCrawler(
+            s_lat=37.504575,
+            s_lng=127.044555,
+            e_lat=37.514575,
+            e_lng=127.054555,
+        )
+
+        result = crawler.crawl()
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, list)
+
+
+@pytest.mark.integration
+class TestAsilRedevelopCrawlerIntegration:
+    """AsilRedevelopCrawler 통합 테스트"""
+
+    def test_fetch_real_redevelop_data_for_gangnam(self):
+        """강남구 좌표로 재개발 단지 정보를 실제로 가져옴"""
+        crawler = AsilRedevelopCrawler(
+            s_lat=37.48,
+            s_lng=127.00,
+            e_lat=37.62,
+            e_lng=127.15,
+        )
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 각 재개발 정보는 딕셔너리여야 함
+        for item in result:
+            assert isinstance(item, dict)
+
+    def test_fetch_redevelop_data_with_type_filter(self):
+        """유형 필터가 적용된 재개발 정보를 가져옴"""
+        crawler = AsilRedevelopCrawler(
+            s_lat=37.48,
+            s_lng=127.00,
+            e_lat=37.62,
+            e_lng=127.15,
+            type_value="1",  # 재개발 유형 1
+            zoom=12,
+        )
+        result = crawler.crawl()
+
+        assert isinstance(result, list)
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilRedevelopCrawler(
+            s_lat=37.48,
+            s_lng=127.00,
+            e_lat=37.62,
+            e_lng=127.15,
+        )
+
+        result = crawler.crawl()
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, list)
+
+
+@pytest.mark.integration
+class TestAsilListingCrawlerIntegration:
+    """AsilListingCrawler 통합 테스트"""
+
+    def test_fetch_real_listings_for_yeoksam(self):
+        """역삼동(1168010100)의 매물 정보를 실제로 가져옴"""
+        crawler = AsilListingCrawler(apt_code="1168010100")
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 매물이 있는 항목만 반환되어야 함
+        for listing in result:
+            assert listing.get("offer"), "매물 정보(offer 필드)가 있어야 함"
+
+        # 역삼동에는 적어도 1개 이상의 매물이 있어야 함
+        assert len(result) > 0
+
+        # 각 매물 정보에 필수 필드가 있어야 함
+        listing = result[0]
+        assert "seq" in listing
+        assert "name" in listing
+        assert "offer" in listing
+
+    def test_fetch_listings_with_min_household_filter(self):
+        """세대수 필터가 적용된 매물 목록을 가져옴"""
+        crawler = AsilListingCrawler(apt_code="1168010100", min_household=50)
+        result = crawler.crawl()
+
+        assert isinstance(result, list)
+        # 모든 결과에 매물 정보가 있어야 함
+        for listing in result:
+            assert listing.get("offer")
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilListingCrawler(apt_code="1168010100")
+
+        result = crawler.crawl()
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, list)
+        # 매물이 있는 항목만 필터링되어야 함
+        for listing in result:
+            assert listing.get("offer")

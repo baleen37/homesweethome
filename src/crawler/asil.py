@@ -390,3 +390,207 @@ class AsilEducationMapCrawler(BaseCrawler):
             return []
         data = json.loads(content)
         return data if isinstance(data, list) else []
+
+
+class AsilRedevelopCrawler(BaseCrawler):
+    """asil.kr 재개발 단지 크롤러"""
+
+    BASE_URL = "https://asil.kr/json/data_redevelop.jsp"
+    ENCODING = "euc_kr"
+
+    def __init__(
+        self,
+        s_lat: float,
+        s_lng: float,
+        e_lat: float,
+        e_lng: float,
+        type_value: str = "",
+        step: str = "",
+        zoom: int = 13,
+    ):
+        """
+        Args:
+            s_lat: 시작 위도 (남서쪽)
+            s_lng: 시작 경도 (남서쪽)
+            e_lat: 끝 위도 (북동쪽)
+            e_lng: 끝 경도 (북동쪽)
+            type_value: 재개발 유형 (1, 2, 3 등)
+            step: 단계
+            zoom: 줌 레벨 (기본값: 13)
+        """
+        self.s_lat = s_lat
+        self.s_lng = s_lng
+        self.e_lat = e_lat
+        self.e_lng = e_lng
+        self.type_value = type_value
+        self.step = step
+        self.zoom = zoom
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "os": "pc",
+            "user": "1",
+            "type": self.type_value,
+            "step": self.step,
+            "zoom": self.zoom,
+            "s_lat": self.s_lat,
+            "s_lng": self.s_lng,
+            "e_lat": self.e_lat,
+            "e_lng": self.e_lng,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[dict]:
+        """JSON 응답 파싱"""
+        # 빈 응답 처리
+        content = content.strip()
+        if not content or content == "[]" or content == "[":
+            return []
+        try:
+            data = json.loads(content)
+            return data if isinstance(data, list) else []
+        except json.JSONDecodeError:
+            # 불완전한 JSON 응답 처리 (API가 빈 배열을 반환하는 경우)
+            return []
+
+
+class AsilVisitorStatsCrawler(BaseCrawler):
+    """asil.kr 조회수/관심사용자 통계 크롤러"""
+
+    BASE_URL = "https://asil.kr/json/data_member.jsp"
+    ENCODING = "euc_kr"
+
+    def __init__(
+        self,
+        s_lat: float,
+        s_lng: float,
+        e_lat: float,
+        e_lng: float,
+        zoom: int = 13,
+    ):
+        """
+        Args:
+            s_lat: 시작 위도 (남서쪽)
+            s_lng: 시작 경도 (남서쪽)
+            e_lat: 끝 위도 (북동쪽)
+            e_lng: 끝 경도 (북동쪽)
+            zoom: 줌 레벨 (기본값: 13)
+        """
+        self.s_lat = s_lat
+        self.s_lng = s_lng
+        self.e_lat = e_lat
+        self.e_lng = e_lng
+        self.zoom = zoom
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "os": "pc",
+            "user": "1",
+            "s_lat": self.s_lat,
+            "s_lng": self.s_lng,
+            "e_lat": self.e_lat,
+            "e_lng": self.e_lng,
+            "zoom": self.zoom,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[dict]:
+        """JSON 응답 파싱"""
+        # 빈 응답 처리
+        content = content.strip()
+        if not content or content == "[]" or content == "[":
+            return []
+        data = json.loads(content)
+        return data if isinstance(data, list) else []
+
+
+class AsilListingCrawler(BaseCrawler):
+    """asil.kr 매물 정보 크롤러"""
+
+    BASE_URL = "https://asil.kr/app/data/data_apt_list.jsp"
+    ENCODING = "utf-8"
+
+    def __init__(
+        self,
+        apt_code: str,
+        building_type: str = "",
+        min_household: int = 0,
+        order: int = 0,
+        order_type: int = 0,
+    ):
+        """
+        Args:
+            apt_code: 아파트 고유 코드 (예: "20340925" = 역삼자이)
+            building_type: 건물 유형 ("apt"=아파트, "officetel"=오피스텔, ""=전체)
+            min_household: 최소 세대수
+            order: 정렬 순서 (0=이름순)
+            order_type: 정렬 타입 (0=오름차순, 1=내림차순)
+        """
+        self.apt_code = apt_code
+        self.building_type = building_type
+        self.min_household = min_household
+        self.order = order
+        self.order_type = order_type
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "dong": self.apt_code,
+            "building": self.building_type,
+            "household": self.min_household,
+            "order": self.order,
+            "order_type": self.order_type,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[dict]:
+        """JSON 응답 파싱 (매물이 있는 항목만 필터링)"""
+        data = json.loads(content)
+        if not isinstance(data, list):
+            return []
+        # 매물 정보(offer 필드)가 있는 항목만 필터링
+        return [item for item in data if item.get("offer")]
