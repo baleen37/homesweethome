@@ -1,6 +1,6 @@
 """ASIL 실거래가 DTO"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AsilTradePriceDTO(BaseModel):
@@ -8,6 +8,12 @@ class AsilTradePriceDTO(BaseModel):
 
     ASIL API의 apt_price_m2_mjw_newver_6.jsp 엔드포인트에서 반환하는 실거래가 데이터
     """
+
+    model_config = ConfigDict(extra="allow")
+
+    def __contains__(self, key: str) -> bool:
+        """Support 'in' operator for checking field names (including extra fields)"""
+        return key in self.model_dump()
 
     deal_year: str | None = Field(default=None, description="거래 연도")
     deal_month: str | None = Field(default=None, description="거래 월")

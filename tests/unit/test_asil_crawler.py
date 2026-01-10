@@ -450,8 +450,10 @@ class TestAsilEducationMapCrawler:
         url = crawler.get_url()
         assert "zoom=15" in url
 
-    def test_parse_returns_list_of_dicts(self):
-        """parse()는 list[dict]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilEducationMapDTO]를 반환해야 함"""
+        from crawler.dto.asil_education_map import AsilEducationMapDTO
+
         crawler = AsilEducationMapCrawler(
             s_lat=37.5,
             s_lng=127.0,
@@ -483,9 +485,9 @@ class TestAsilEducationMapCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
-        assert isinstance(result[0], dict)
-        assert result[0]["title"] == "학원수 72개"
-        assert "polygon" in result[0]
+        assert isinstance(result[0], AsilEducationMapDTO)
+        assert result[0].title == "학원수 72개"
+        assert result[0].polygon is not None
 
 
 class TestAsilVisitorStatsCrawler:

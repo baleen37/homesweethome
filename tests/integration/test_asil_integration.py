@@ -299,11 +299,12 @@ class TestAsilEducationMapCrawlerIntegration:
         # 결과가 리스트여야 함
         assert isinstance(result, list)
 
-        # 데이터가 있으면 polygon 필드 확인
+        # 데이터가 있으면 필드 확인
         if len(result) > 0:
-            assert "title" in result[0]
-            assert "lat" in result[0]
-            assert "lng" in result[0]
+            assert hasattr(result[0], 'title')
+            assert hasattr(result[0], 'lat')
+            assert hasattr(result[0], 'lng')
+            assert result[0].title is not None
 
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""

@@ -6,6 +6,8 @@ from urllib.request import Request, urlopen
 
 from crawler.base import BaseCrawler
 from crawler.dto.asil_apt_list import AsilAptListDTO
+from crawler.dto.asil_education_map import AsilEducationMapDTO  # noqa: F401
+from crawler.dto.asil_trade_price import AsilTradePriceDTO
 
 
 class AsilAptListCrawler(BaseCrawler[list[AsilAptListDTO]]):
@@ -66,7 +68,7 @@ class AsilAptListCrawler(BaseCrawler[list[AsilAptListDTO]]):
         return data if isinstance(data, list) else []
 
 
-class AsilTradePriceCrawler(BaseCrawler):
+class AsilTradePriceCrawler(BaseCrawler[list[AsilTradePriceDTO]]):
     """asil.kr 실거래가 크롤러"""
 
     BASE_URL = "https://asil.kr/app/data/apt_price_m2_mjw_newver_6.jsp"
@@ -138,10 +140,14 @@ class AsilTradePriceCrawler(BaseCrawler):
         with urlopen(request, timeout=10) as response:
             return response.read().decode(self.ENCODING)
 
-    def parse(self, content: str) -> list[dict]:
+    def parse(self, content: str) -> list[AsilTradePriceDTO]:
         """JSON 응답 파싱"""
         data = json.loads(content)
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            return []
+        # 현재 API 응답 구조를 유지하면서 DTO로 래핑
+        # 각 dict의 키를 DTO 필드에 매핑
+        return [AsilTradePriceDTO(**item) for item in data]
 
 
 class AsilTrafficCrawler(BaseCrawler):
@@ -390,7 +396,9 @@ class AsilEducationMapCrawler(BaseCrawler):
         if not content or content == "[]":
             return []
         data = json.loads(content)
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            return []
+        return [AsilEducationMapDTO(**item) for item in data]
 
 
 class AsilRedevelopCrawler(BaseCrawler):
