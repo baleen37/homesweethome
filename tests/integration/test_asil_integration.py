@@ -13,6 +13,7 @@ from crawler.asil import (
     AsilTrafficCrawler,
     AsilVisitorStatsCrawler,
 )
+from crawler.dto.asil_apt_list import AsilAptListDTO
 
 
 @pytest.mark.integration
@@ -32,8 +33,9 @@ class TestAsilAptListCrawlerIntegration:
 
         # 각 아파트 정보에 필수 필드가 있어야 함
         apt = result[0]
-        assert "seq" in apt
-        assert "name" in apt
+        assert isinstance(apt, AsilAptListDTO)
+        assert apt.seq
+        assert apt.name
 
     def test_fetch_real_apt_list_with_min_household_filter(self):
         """세대수 필터가 적용된 아파트 목록을 가져옴"""
@@ -45,7 +47,7 @@ class TestAsilAptListCrawlerIntegration:
         # 실제 API에서 필터링을 수행하는지 확인
         for apt in result:
             # 세대수 필드에 콤마가 포함된 경우 제거 (예: "1,050" → 1050)
-            household_str = apt.get("household", "0")
+            household_str = apt.household or "0"
             household = int(household_str.replace(",", ""))
             assert household >= 100
 
@@ -125,7 +127,7 @@ class TestAsilCrawlerFullWorkflow:
 
         # 2. 첫 번째 아파트 선택
         first_apt = apt_list[0]
-        apt_code = first_apt["seq"]
+        apt_code = first_apt.seq
 
         # 3. 해당 아파트의 실거래가 가져오기
         # 역삼자이의 경우 114㎡ 타입이 있으므로 해당 면적으로 조회
@@ -301,9 +303,9 @@ class TestAsilEducationMapCrawlerIntegration:
 
         # 데이터가 있으면 필드 확인
         if len(result) > 0:
-            assert hasattr(result[0], 'title')
-            assert hasattr(result[0], 'lat')
-            assert hasattr(result[0], 'lng')
+            assert hasattr(result[0], "title")
+            assert hasattr(result[0], "lat")
+            assert hasattr(result[0], "lng")
             assert result[0].title is not None
 
     def test_crawl_template_method_works(self):
@@ -439,16 +441,16 @@ class TestAsilListingCrawlerIntegration:
 
         # 매물이 있는 항목만 반환되어야 함
         for listing in result:
-            assert listing.get("offer"), "매물 정보(offer 필드)가 있어야 함"
+            assert listing.offer, "매물 정보(offer 필드)가 있어야 함"
 
         # 역삼동에는 적어도 1개 이상의 매물이 있어야 함
         assert len(result) > 0
 
         # 각 매물 정보에 필수 필드가 있어야 함
         listing = result[0]
-        assert "seq" in listing
-        assert "name" in listing
-        assert "offer" in listing
+        assert listing.seq
+        assert listing.name
+        assert listing.offer
 
     def test_fetch_listings_with_min_household_filter(self):
         """세대수 필터가 적용된 매물 목록을 가져옴"""
@@ -458,7 +460,7 @@ class TestAsilListingCrawlerIntegration:
         assert isinstance(result, list)
         # 모든 결과에 매물 정보가 있어야 함
         for listing in result:
-            assert listing.get("offer")
+            assert listing.offer
 
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
@@ -470,4 +472,4 @@ class TestAsilListingCrawlerIntegration:
         assert isinstance(result, list)
         # 매물이 있는 항목만 필터링되어야 함
         for listing in result:
-            assert listing.get("offer")
+            assert listing.offer

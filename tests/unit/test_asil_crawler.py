@@ -13,6 +13,7 @@ from crawler.asil import (
     AsilTrafficCrawler,
     AsilVisitorStatsCrawler,
 )
+from crawler.dto.asil_apt_list import AsilAptListDTO
 
 
 class TestAsilAptListCrawler:
@@ -55,8 +56,10 @@ class TestAsilAptListCrawler:
         assert "household=50" in url
         assert "order=0" in url
 
-    def test_parse_returns_list_of_dicts(self):
-        """parse()는 list[dict]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilAptListDTO]를 반환해야 함"""
+        from crawler.dto.asil_apt_list import AsilAptListDTO
+
         crawler = AsilAptListCrawler(dong_code="1168010100")
 
         # Mock JSON 응답 (실제 API 응답 형식)
@@ -79,8 +82,9 @@ class TestAsilAptListCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
-        assert result[0]["seq"] == "20340925"
-        assert result[0]["name"] == "역삼자이"
+        assert isinstance(result[0], AsilAptListDTO)
+        assert result[0].seq == "20340925"
+        assert result[0].name == "역삼자이"
 
 
 class TestAsilTradePriceCrawler:
@@ -696,8 +700,8 @@ class TestAsilListingCrawler:
         url = crawler.get_url()
         assert url.startswith("https://asil.kr/app/data/data_apt_list.jsp")
 
-    def test_parse_returns_list_of_dicts(self):
-        """parse()는 list[dict]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilAptListDTO]를 반환해야 함"""
         crawler = AsilListingCrawler(apt_code="20340925")
 
         # Mock JSON 응답 (실제 API 응답 형식)
@@ -717,9 +721,9 @@ class TestAsilListingCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
-        assert isinstance(result[0], dict)
-        assert result[0]["seq"] == "20340925"
-        assert result[0]["name"] == "역삼자이"
+        assert isinstance(result[0], AsilAptListDTO)
+        assert result[0].seq == "20340925"
+        assert result[0].name == "역삼자이"
 
     def test_parse_handles_empty_response(self):
         """parse()는 빈 응답을 처리할 수 있어야 함"""
@@ -734,15 +738,15 @@ class TestAsilListingCrawler:
         # 매물 유무가 혼합된 응답
         mock_response = """
         [
-            {"seq": "1", "name": "A", "offer": "매물 2건"},
-            {"seq": "2", "name": "B", "offer": ""},
-            {"seq": "3", "name": "C", "offer": "매물 1건"},
-            {"seq": "4", "name": "D", "offer": ""}
+            {"seq": "1", "name": "A", "dong": "123", "dongname": "test", "offer": "매물 2건"},
+            {"seq": "2", "name": "B", "dong": "123", "dongname": "test", "offer": ""},
+            {"seq": "3", "name": "C", "dong": "123", "dongname": "test", "offer": "매물 1건"},
+            {"seq": "4", "name": "D", "dong": "123", "dongname": "test", "offer": ""}
         ]
         """
 
         result = crawler.parse(mock_response)
         # 매물이 있는 항목만 반환
         assert len(result) == 2
-        assert result[0]["seq"] == "1"
-        assert result[1]["seq"] == "3"
+        assert result[0].seq == "1"
+        assert result[1].seq == "3"

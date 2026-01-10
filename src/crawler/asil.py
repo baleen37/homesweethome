@@ -62,10 +62,12 @@ class AsilAptListCrawler(BaseCrawler[list[AsilAptListDTO]]):
         with urlopen(request, timeout=10) as response:
             return response.read().decode("utf-8")
 
-    def parse(self, content: str) -> list[dict]:
+    def parse(self, content: str) -> list[AsilAptListDTO]:
         """JSON 응답 파싱"""
         data = json.loads(content)
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            return []
+        return [AsilAptListDTO(**item) for item in data]
 
 
 class AsilTradePriceCrawler(BaseCrawler[list[AsilTradePriceDTO]]):
@@ -543,7 +545,7 @@ class AsilVisitorStatsCrawler(BaseCrawler):
         return data if isinstance(data, list) else []
 
 
-class AsilListingCrawler(BaseCrawler):
+class AsilListingCrawler(BaseCrawler[list[AsilAptListDTO]]):
     """asil.kr 매물 정보 크롤러"""
 
     BASE_URL = "https://asil.kr/app/data/data_apt_list.jsp"
@@ -596,10 +598,10 @@ class AsilListingCrawler(BaseCrawler):
         with urlopen(request, timeout=10) as response:
             return response.read().decode(self.ENCODING)
 
-    def parse(self, content: str) -> list[dict]:
+    def parse(self, content: str) -> list[AsilAptListDTO]:
         """JSON 응답 파싱 (매물이 있는 항목만 필터링)"""
         data = json.loads(content)
         if not isinstance(data, list):
             return []
-        # 매물 정보(offer 필드)가 있는 항목만 필터링
-        return [item for item in data if item.get("offer")]
+        # 매물 정보(offer 필드)가 있는 항목만 필터링하여 DTO 변환
+        return [AsilAptListDTO(**item) for item in data if item.get("offer")]

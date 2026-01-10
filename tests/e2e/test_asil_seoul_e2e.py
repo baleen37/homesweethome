@@ -103,7 +103,9 @@ def test_crawl_seoul_apartments(tmp_path):
 
         # 남은 용량만큼만 추가
         remaining = MAX_APARTMENTS - len(all_apartments)
-        all_apartments.extend(results[:remaining])
+        # DTO를 dict로 변환하여 추가
+        results_dicts = [apt.model_dump() for apt in results[:remaining]]
+        all_apartments.extend(results_dicts)
 
     # 검증 1: 최소 1개 동에서 데이터를 가져왔는지
     assert len(crawled_dongs) > 0, "적어도 하나의 동에서 데이터를 가져와야 함"
