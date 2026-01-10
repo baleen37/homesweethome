@@ -19,7 +19,7 @@ jobs:
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
-        run: uv sync --dev --locked
+        run: uv sync --extra dev --locked
 
       - name: Install Playwright browser
         run: uv run playwright install chromium
