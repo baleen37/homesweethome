@@ -33,6 +33,7 @@ class TestCrawlStatsTypedDict:
             "total_apartments": 0,
             "skipped_dongs": 0,
             "unique_seqs": set(),
+            "filtered_out": 0,
         }
 
         # 필수 키 존재 확인
@@ -44,6 +45,7 @@ class TestCrawlStatsTypedDict:
             "total_apartments",
             "skipped_dongs",
             "unique_seqs",
+            "filtered_out",
         }
         assert set(stats.keys()) == required_keys
 
@@ -55,6 +57,7 @@ class TestCrawlStatsTypedDict:
         assert isinstance(stats["total_apartments"], int)
         assert isinstance(stats["skipped_dongs"], int)
         assert isinstance(stats["unique_seqs"], set)
+        assert isinstance(stats["filtered_out"], int)
 
 
 class TestTimeoutWrapper:
@@ -348,15 +351,15 @@ class TestCrawlSingleGu:
     @patch("seoul_all.log_message")
     def test_crawl_single_gu_success(self, mock_log, mock_map_dto, mock_crawl_retry):
         """정상적인 단일 구 크롤링 테스트"""
-        # Mock 설정
+        # Mock 설정 - household >= 1로 필터링 조건 충족
         mock_apt1 = Mock()
-        mock_apt1.model_dump.return_value = {"seq": "12345", "name": "아파트1"}
+        mock_apt1.model_dump.return_value = {"seq": "12345", "name": "아파트1", "household": "100"}
         mock_apt2 = Mock()
-        mock_apt2.model_dump.return_value = {"seq": "67890", "name": "아파트2"}
+        mock_apt2.model_dump.return_value = {"seq": "67890", "name": "아파트2", "household": "200"}
 
         mock_map_dto.side_effect = [
-            {"seq": "12345", "name": "아파트1", "dong": "1156010100"},
-            {"seq": "67890", "name": "아파트2", "dong": "1156010200"},
+            {"seq": "12345", "name": "아파트1", "dong": "1156010100", "household": "100"},
+            {"seq": "67890", "name": "아파트2", "dong": "1156010200", "household": "200"},
         ]
 
         # 첫 번째 동은 데이터 있음, 두 번째는 빈 결과, 세 번째는 None
@@ -385,7 +388,14 @@ class TestCrawlSingleGu:
             patch.object(seoul_all, "DONG_CODE_END", 4),
         ):  # 3개만 테스트
             stats = seoul_all.crawl_single_gu(
-                gu_code, gu_name, completed_dongs, unique_seqs, mock_writer, mock_csv_f, mock_log_f
+                gu_code,
+                gu_name,
+                completed_dongs,
+                unique_seqs,
+                mock_writer,
+                mock_csv_f,
+                mock_log_f,
+                seoul_all.FILTER_OPTIONS,
             )
 
         # 결과 검증
@@ -394,6 +404,7 @@ class TestCrawlSingleGu:
         assert stats["error"] == 1  # 세 번째 동는 에러
         assert stats["apartments"] == 2  # 첫 번째 동에서 2개 아파트
         assert stats["skipped"] == 0  # 스킵된 동 없음
+        assert "filtered_out" in stats  # 필터링 통계 필드 존재
 
         # CSV writer가 호출되었는지 확인
         assert mock_writer.writerow.call_count == 2
@@ -430,6 +441,7 @@ class TestCrawlSingleGu:
                 writer=mock_writer,
                 csv_f=mock_csv_f,
                 log_f=mock_log_f,
+                filter_options=seoul_all.FILTER_OPTIONS,
             )
 
         # 결과 검증
@@ -449,11 +461,11 @@ class TestCrawlSingleGu:
         self, mock_log, mock_map_dto, mock_crawl_retry
     ):
         """중복 아파트 제거 로직 테스트"""
-        # Mock 설정: 같은 seq를 가진 아파트 반환
+        # Mock 설정: 같은 seq를 가진 아파트 반환 (household >= 1로 필터링 조건 충족)
         mock_apt = Mock()
-        mock_apt.model_dump.return_value = {"seq": "12345", "name": "아파트1"}
+        mock_apt.model_dump.return_value = {"seq": "12345", "name": "아파트1", "household": "100"}
 
-        mock_map_dto.return_value = {"seq": "12345", "name": "아파트1"}
+        mock_map_dto.return_value = {"seq": "12345", "name": "아파트1", "household": "100"}
 
         # 같은 결과를 두 번 반환 (중복)
         mock_crawl_retry.return_value = [mock_apt]
@@ -479,6 +491,7 @@ class TestCrawlSingleGu:
                 writer=mock_writer,
                 csv_f=mock_csv_f,
                 log_f=mock_log_f,
+                filter_options=seoul_all.FILTER_OPTIONS,
             )
 
         # CSV writer가 호출되었는지 확인

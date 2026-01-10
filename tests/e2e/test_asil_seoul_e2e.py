@@ -9,6 +9,7 @@ import os
 import pytest
 
 from crawler.asil import AsilAptListCrawler
+from crawler.utils.filter import FilterOptions, filter_records, get_filter_stats
 
 # 서울 샘플 동 코드 하드코딩
 SEOUL_DONG_CODES = {
@@ -233,3 +234,229 @@ def test_export_to_csv_utf8_encoding(tmp_path):
         content = f.read()
         assert "역삼동힐스테이트" in content, "한글이 제대로 인코딩되지 않음"
         assert "서울시강남구역삼동" in content, "한글이 제대로 인코딩되지 않음"
+
+
+@pytest.mark.e2e
+def test_data_quality_analysis():
+    """e2e: 실제 데이터 품질 분석
+
+    ASIL API에서 실제로 받는 데이터의 품질을 분석합니다.
+    - household=0인 데이터 비율
+    - 좌표가 (0.0, 0.0)인 데이터 비율
+    - 빈 문자열이나 None인 필드 패턴
+    """
+    all_data = []
+
+    # 여러 동 코드에서 데이터 수집
+    for dong_code, dong_name in SEOUL_DONG_CODES.items():
+        crawler = AsilAptListCrawler(dong_code=dong_code)
+        results = crawler.crawl()
+        if results:
+            all_data.extend([apt.model_dump() for apt in results])
+
+    # 최소 데이터 확보
+    assert len(all_data) > 10, f"데이터 분석을 위해 최소 10개 이상 필요: {len(all_data)}개"
+
+    # household 필드 분석
+    household_zero_count = 0
+    household_empty_count = 0
+    household_valid_count = 0
+
+    for apt in all_data:
+        household = apt.get("household")
+        if household is None or household == "":
+            household_empty_count += 1
+        elif household == "0":
+            household_zero_count += 1
+        else:
+            household_valid_count += 1
+
+    # 좌표 분석
+    zero_coord_count = 0
+    missing_coord_count = 0
+    valid_coord_count = 0
+
+    for apt in all_data:
+        lat = apt.get("lat")
+        lng = apt.get("lng")
+        if lat is None or lng is None or lat == "" or lng == "":
+            missing_coord_count += 1
+        elif lat == "0" or lng == "0" or lat == "0.0" or lng == "0.0":
+            zero_coord_count += 1
+        else:
+            valid_coord_count += 1
+
+    # 결과 출력 (디버깅용)
+    print(f"\n===== 데이터 품질 분석 결과 (총 {len(all_data)}개) =====")
+    print("household:")
+    valid_rate = household_valid_count / len(all_data) * 100
+    print(f"  - 유효한 데이터: {household_valid_count} ({valid_rate:.1f}%)")
+    zero_rate = household_zero_count / len(all_data) * 100
+    print(f"  - 0인 데이터: {household_zero_count} ({zero_rate:.1f}%)")
+    empty_rate = household_empty_count / len(all_data) * 100
+    print(f"  - 빈 데이터: {household_empty_count} ({empty_rate:.1f}%)")
+    print("좌표:")
+    print(f"  - 유효한 좌표: {valid_coord_count} ({valid_coord_count / len(all_data) * 100:.1f}%)")
+    print(f"  - (0, 0) 좌표: {zero_coord_count} ({zero_coord_count / len(all_data) * 100:.1f}%)")
+    print(
+        f"  - 누락된 좌표: {missing_coord_count} ({missing_coord_count / len(all_data) * 100:.1f}%)"
+    )
+
+    # household=0인 데이터 샘플 출력
+    if household_zero_count > 0:
+        print("\n[household=0인 데이터 샘플]")
+        for apt in all_data:
+            if apt.get("household") == "0":
+                print(f"  - {apt.get('name')} (seq:{apt.get('seq')}, dong:{apt.get('dongname')})")
+                if household_zero_count <= 3:  # 최대 3개만 출력
+                    break
+
+    # 좌표가 (0, 0)인 데이터 샘플 출력
+    if zero_coord_count > 0:
+        print("\n[좌표가 (0, 0)인 데이터 샘플]")
+        for apt in all_data:
+            lat = apt.get("lat")
+            lng = apt.get("lng")
+            if (lat == "0" or lat == "0.0") and (lng == "0" or lng == "0.0"):
+                print(f"  - {apt.get('name')} (seq:{apt.get('seq')}, lat:{lat}, lng:{lng})")
+                if zero_coord_count <= 3:  # 최대 3개만 출력
+                    break
+
+    # 실제 존재하는 아파트인지 확인 ( household=0인 데이터가 실제 아파트인지)
+    # 이 테스트는 데이터 패턴을 파악하기 위함이며, 필터링 전략 수립에 활용
+
+
+@pytest.mark.e2e
+def test_filter_moderate_options():
+    """e2e: moderate 필터링 옵션으로 실제 데이터 필터링 테스트
+
+    moderate 옵션: household >= 1, 좌표 (0, 0) 허용
+    """
+    all_data = []
+
+    # 여러 동 코드에서 데이터 수집
+    for dong_code, dong_name in SEOUL_DONG_CODES.items():
+        crawler = AsilAptListCrawler(dong_code=dong_code)
+        results = crawler.crawl()
+        if results:
+            all_data.extend(results)
+
+    # 최소 데이터 확보
+    assert len(all_data) > 10, f"테스트를 위해 최소 10개 이상 필요: {len(all_data)}개"
+
+    # moderate 옵션으로 필터링
+    filtered_data = filter_records(all_data, FilterOptions.moderate())
+    stats = get_filter_stats(len(all_data), len(filtered_data))
+
+    # 결과 출력
+    print("\n===== Moderate 필터링 결과 =====")
+    print(f"원본 데이터: {stats['original_count']}개")
+    print(f"필터링 후: {stats['filtered_count']}개")
+    print(f"필터링 제외: {stats['removed_count']}개 ({stats['removal_rate']:.1f}%)")
+
+    # 필터링된 데이터에 household=0이 없어야 함
+    for apt in filtered_data:
+        household = apt.model_dump().get("household")
+        name = apt.model_dump().get("name")
+        seq = apt.model_dump().get("seq")
+        assert household is not None and household != "" and household != "0", (
+            f"필터링 후 household=0인 데이터 존재: {name} (seq:{seq})"
+        )
+
+    # household=1 이상인 데이터만 남아야 함
+    household_valid_count = 0
+    for apt in filtered_data:
+        household = apt.model_dump().get("household")
+        if household is not None and household != "":
+            try:
+                if int(household) >= 1:
+                    household_valid_count += 1
+            except ValueError:
+                pass
+
+    assert household_valid_count == len(filtered_data), (
+        f"모든 데이터가 household >= 1이어야 함: {household_valid_count}/{len(filtered_data)}"
+    )
+
+
+@pytest.mark.e2e
+def test_filter_strict_options():
+    """e2e: strict 필터링 옵션으로 실제 데이터 필터링 테스트
+
+    strict 옵션: household >= 1, 유효한 좌표만 (0, 0 제외)
+    """
+    all_data = []
+
+    # 여러 동 코드에서 데이터 수집
+    for dong_code, dong_name in SEOUL_DONG_CODES.items():
+        crawler = AsilAptListCrawler(dong_code=dong_code)
+        results = crawler.crawl()
+        if results:
+            all_data.extend(results)
+
+    # 최소 데이터 확보
+    assert len(all_data) > 10, f"테스트를 위해 최소 10개 이상 필요: {len(all_data)}개"
+
+    # strict 옵션으로 필터링
+    filtered_data = filter_records(all_data, FilterOptions.strict())
+    stats = get_filter_stats(len(all_data), len(filtered_data))
+
+    # 결과 출력
+    print("\n===== Strict 필터링 결과 =====")
+    print(f"원본 데이터: {stats['original_count']}개")
+    print(f"필터링 후: {stats['filtered_count']}개")
+    print(f"필터링 제외: {stats['removed_count']}개 ({stats['removal_rate']:.1f}%)")
+
+    # 필터링된 데이터에 household=0이 없어야 함
+    for apt in filtered_data:
+        household = apt.model_dump().get("household")
+        assert household is not None and household != "" and household != "0", (
+            f"필터링 후 household=0인 데이터 존재: {apt.model_dump().get('name')}"
+        )
+
+    # 필터링된 데이터에 (0, 0) 좌표가 없어야 함
+    for apt in filtered_data:
+        apt_dict = apt.model_dump()
+        lat = apt_dict.get("lat")
+        lng = apt_dict.get("lng")
+        if lat is not None and lng is not None and lat != "" and lng != "":
+            assert not (lat == "0" or lat == "0.0" or lng == "0" or lng == "0.0"), (
+                f"필터링 후 (0, 0) 좌표 데이터 존재: {apt_dict.get('name')} (lat:{lat}, lng:{lng})"
+            )
+
+
+@pytest.mark.e2e
+def test_filter_permissive_options():
+    """e2e: permissive 필터링 옵션으로 실제 데이터 필터링 테스트
+
+    permissive 옵션: 모든 데이터 유지 (household 제한 없음, 좌표 (0, 0) 허용)
+    """
+    all_data = []
+
+    # 여러 동 코드에서 데이터 수집
+    for dong_code, dong_name in SEOUL_DONG_CODES.items():
+        crawler = AsilAptListCrawler(dong_code=dong_code)
+        results = crawler.crawl()
+        if results:
+            all_data.extend(results)
+
+    # 최소 데이터 확보
+    assert len(all_data) > 10, f"테스트를 위해 최소 10개 이상 필요: {len(all_data)}개"
+
+    # permissive 옵션으로 필터링
+    filtered_data = filter_records(all_data, FilterOptions.permissive())
+    stats = get_filter_stats(len(all_data), len(filtered_data))
+
+    # 결과 출력
+    print("\n===== Permissive 필터링 결과 =====")
+    print(f"원본 데이터: {stats['original_count']}개")
+    print(f"필터링 후: {stats['filtered_count']}개")
+    print(f"필터링 제외: {stats['removed_count']}개 ({stats['removal_rate']:.1f}%)")
+
+    # permissive는 이름이 없는 데이터만 필터링
+    # 모든 데이터에 이름이 있어야 함
+    for apt in filtered_data:
+        name = apt.model_dump().get("name")
+        assert name is not None and name.strip() != "", (
+            f"필터링 후 이름이 없는 데이터 존재: seq={apt.model_dump().get('seq')}"
+        )

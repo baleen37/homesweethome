@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import Any, TextIO, TypedDict
 
 from crawler.asil import AsilAptListCrawler
+from crawler.utils.filter import FilterOptions, filter_records
 
 # 서울 25개 구 코드
 SEOUL_GU_CODES = {
@@ -75,6 +76,13 @@ RETRY_BACKOFF_BASE = 2  # 지수 백오프 베이스
 PROGRESS_LOG_INTERVAL = 10  # 진행 상황 로그 출력 간격
 CHECKPOINT_SAVE_INTERVAL = 10  # 체크포인트 저장 간격
 
+# 데이터 필터링 옵션
+# - strict: household >= 1, 유효한 좌표만
+# - moderate: household >= 1, 좌표 (0, 0) 허용
+# - permissive: 모든 데이터 유지
+# FilterOptions.strict(), FilterOptions.moderate(), FilterOptions.permissive()
+FILTER_OPTIONS = FilterOptions.moderate()
+
 # CSV 필드명 (단일 정의로 중복 제거)
 CSV_FIELDNAMES = [
     "seq",
@@ -104,6 +112,7 @@ class CrawlStats(TypedDict):
         total_apartments: 수집된 총 아파트 수 (중복 포함)
         skipped_dongs: 체크포인트로 스킵된 동 코드 수
         unique_seqs: 중복 제거된 고유 아파트 seq 집합
+        filtered_out: 필터링으로 제외된 아파트 수
     """
 
     total_processed: int
@@ -113,6 +122,7 @@ class CrawlStats(TypedDict):
     total_apartments: int
     skipped_dongs: int
     unique_seqs: set[str]
+    filtered_out: int
 
 
 def setup_csv_writer(filepath: str) -> tuple[csv.DictWriter, TextIO]:
@@ -315,6 +325,7 @@ def crawl_single_gu(
     writer: csv.DictWriter,
     csv_f: TextIO,
     log_f: TextIO,
+    filter_options: FilterOptions,
 ) -> dict[str, int]:
     """단일 구 크롤링
 
@@ -326,11 +337,19 @@ def crawl_single_gu(
         writer: CSV DictWriter 객체
         csv_f: CSV 파일 객체
         log_f: 로그 파일 객체
+        filter_options: 데이터 필터링 옵션
 
     Returns:
-        구별 통계 (found, empty, error, apartments, skipped)
+        구별 통계 (found, empty, error, apartments, skipped, filtered_out)
     """
-    gu_stats = {"found": 0, "empty": 0, "error": 0, "apartments": 0, "skipped": 0}
+    gu_stats = {
+        "found": 0,
+        "empty": 0,
+        "error": 0,
+        "apartments": 0,
+        "skipped": 0,
+        "filtered_out": 0,
+    }
 
     dong_codes = generate_dong_codes(gu_code)
 
@@ -353,8 +372,12 @@ def crawl_single_gu(
             gu_stats["found"] += 1
             gu_stats["apartments"] += len(results)
 
+            # 데이터 필터링 적용
+            filtered_results = filter_records(results, filter_options)
+            gu_stats["filtered_out"] += len(results) - len(filtered_results)
+
             # 스트리밍: 바로 CSV에 기록
-            for apt in results:
+            for apt in filtered_results:
                 csv_dict = map_dto_to_csv(apt)
                 seq = csv_dict["seq"]
 
@@ -389,7 +412,7 @@ def crawl_single_gu(
         f"  [{gu_name}] 완료 - "
         f"데이터:{gu_stats['found']} 공백:{gu_stats['empty']} "
         f"에러:{gu_stats['error']} 아파트:{gu_stats['apartments']}건 "
-        f"스킵:{gu_stats['skipped']}",
+        f"필터링:{gu_stats['filtered_out']}건 스킵:{gu_stats['skipped']}",
         log_f,
     )
 
@@ -424,6 +447,7 @@ def main() -> None:
         "total_apartments": 0,
         "skipped_dongs": 0,
         "unique_seqs": set(),
+        "filtered_out": 0,
     }
 
     # 타겟 구 목록 (테스트용 제한)
@@ -437,6 +461,11 @@ def main() -> None:
     log_message(f"구별 동 코드 범위: {DONG_CODE_START}~{DONG_CODE_END - 1}", log_f)
     log_message(f"요청 간 딜레이: {REQUEST_DELAY}초", log_f)
     log_message(f"타임아웃: {REQUEST_TIMEOUT}초, 최대 재시도: {MAX_RETRIES}회", log_f)
+    log_message(
+        f"필터 옵션: min_household={FILTER_OPTIONS.min_household}, "
+        f"require_valid_coords={FILTER_OPTIONS.require_valid_coords}",
+        log_f,
+    )
     log_message(f"출력 파일: {output_path}", log_f)
     log_message(f"체크포인트 파일: {CHECKPOINT_FILE}", log_f)
     log_message("=" * 60, log_f)
@@ -448,7 +477,14 @@ def main() -> None:
 
         # 단일 구 크롤링 (추출된 함수)
         gu_stats = crawl_single_gu(
-            gu_code, gu_name, completed_dongs, stats["unique_seqs"], writer, csv_f, log_f
+            gu_code,
+            gu_name,
+            completed_dongs,
+            stats["unique_seqs"],
+            writer,
+            csv_f,
+            log_f,
+            FILTER_OPTIONS,
         )
 
         # 전체 통계에 구별 통계 누적
@@ -457,6 +493,7 @@ def main() -> None:
         stats["error_dongs"] += gu_stats["error"]
         stats["total_apartments"] += gu_stats["apartments"]
         stats["skipped_dongs"] += gu_stats["skipped"]
+        stats["filtered_out"] += gu_stats["filtered_out"]
         stats["total_processed"] += gu_stats["found"] + gu_stats["empty"] + gu_stats["error"]
 
         # 구 간 배치 딜레이
@@ -480,6 +517,7 @@ def main() -> None:
     print(f"에러 발생: {stats['error_dongs']}개")
     print(f"체크포인트로 스킵: {stats['skipped_dongs']}개")
     print(f"총 수집 아파트: {stats['total_apartments']}건")
+    print(f"필터링 제외: {stats['filtered_out']}건")
     print(f"중복 제거 후: {len(stats['unique_seqs'])}건")
     print(f"소요 시간: {elapsed / 60:.1f}분")
     print(f"CSV 파일: {output_path}")
