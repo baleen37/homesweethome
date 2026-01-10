@@ -338,3 +338,150 @@ class TestSetupCsvWriter:
         assert len(header_lines) == 1
 
         f2.close()
+
+
+class TestCrawlSingleGu:
+    """crawl_single_gu 함수 테스트"""
+
+    @patch("seoul_all.crawl_with_retry")
+    @patch("seoul_all.map_dto_to_csv")
+    @patch("seoul_all.log_message")
+    def test_crawl_single_gu_success(self, mock_log, mock_map_dto, mock_crawl_retry):
+        """정상적인 단일 구 크롤링 테스트"""
+        # Mock 설정
+        mock_apt1 = Mock()
+        mock_apt1.model_dump.return_value = {"seq": "12345", "name": "아파트1"}
+        mock_apt2 = Mock()
+        mock_apt2.model_dump.return_value = {"seq": "67890", "name": "아파트2"}
+
+        mock_map_dto.side_effect = [
+            {"seq": "12345", "name": "아파트1", "dong": "1156010100"},
+            {"seq": "67890", "name": "아파트2", "dong": "1156010200"},
+        ]
+
+        # 첫 번째 동은 데이터 있음, 두 번째는 빈 결과, 세 번째는 None
+        mock_crawl_retry.side_effect = [
+            [mock_apt1, mock_apt2],  # 첫 번째 동: 2개 아파트
+            [],  # 두 번째 동: 빈 결과
+            None,  # 세 번째 동: 에러
+        ]
+
+        # Mock CSV writer와 파일
+        mock_writer = Mock()
+        mock_csv_f = Mock()
+        mock_log_f = Mock()
+
+        # 완료된 동 코드 집합 (빈 집합)
+        completed_dongs = set()
+        unique_seqs = set()
+
+        # 함수 호출
+        gu_code = "11560"
+        gu_name = "영등포구"
+
+        # DONG_CODE_START와 DONG_CODE_END를 테스트용으로 수정
+        with (
+            patch.object(seoul_all, "DONG_CODE_START", 1),
+            patch.object(seoul_all, "DONG_CODE_END", 4),
+        ):  # 3개만 테스트
+            stats = seoul_all.crawl_single_gu(
+                gu_code, gu_name, completed_dongs, unique_seqs, mock_writer, mock_csv_f, mock_log_f
+            )
+
+        # 결과 검증
+        assert stats["found"] == 1  # 첫 번째 동만 데이터 있음
+        assert stats["empty"] == 1  # 두 번째 동은 빈 결과
+        assert stats["error"] == 1  # 세 번째 동는 에러
+        assert stats["apartments"] == 2  # 첫 번째 동에서 2개 아파트
+        assert stats["skipped"] == 0  # 스킵된 동 없음
+
+        # CSV writer가 호출되었는지 확인
+        assert mock_writer.writerow.call_count == 2
+
+        # 완료된 동 코드가 추가되었는지 확인 (에러난 동은 추가되지 않음)
+        assert len(completed_dongs) == 2  # 첫 번째와 두 번째 동만 추가
+
+    @patch("seoul_all.crawl_with_retry")
+    @patch("seoul_all.log_message")
+    def test_crawl_single_gu_with_checkpoint_skips(self, mock_log, mock_crawl_retry):
+        """체크포인트로 이미 완료된 동 스킵 테스트"""
+        # Mock CSV writer와 파일
+        mock_writer = Mock()
+        mock_csv_f = Mock()
+        mock_log_f = Mock()
+
+        # 이미 완료된 동 코드 (처음 2개)
+        completed_dongs = {"1156000100", "1156000200"}
+        unique_seqs = set()
+
+        # crawl_with_retry는 호출되지 않아야 함 (모두 스킵)
+        mock_crawl_retry.return_value = []
+
+        # DONG_CODE_START와 DONG_CODE_END를 테스트용으로 수정
+        with (
+            patch.object(seoul_all, "DONG_CODE_START", 1),
+            patch.object(seoul_all, "DONG_CODE_END", 4),
+        ):  # 3개 동 중 2개는 이미 완료
+            stats = seoul_all.crawl_single_gu(
+                gu_code="11560",
+                gu_name="영등포구",
+                completed_dongs=completed_dongs,
+                unique_seqs=unique_seqs,
+                writer=mock_writer,
+                csv_f=mock_csv_f,
+                log_f=mock_log_f,
+            )
+
+        # 결과 검증
+        assert stats["skipped"] == 2  # 2개 동이 체크포인트로 스킵됨
+        assert stats["found"] == 0
+        assert stats["empty"] == 1  # 3번째 동은 빈 결과 반환
+        assert stats["error"] == 0
+        assert stats["apartments"] == 0
+
+        # crawl_with_retry는 1번만 호출되어야 함 (3번째 동만)
+        assert mock_crawl_retry.call_count == 1
+
+    @patch("seoul_all.crawl_with_retry")
+    @patch("seoul_all.map_dto_to_csv")
+    @patch("seoul_all.log_message")
+    def test_crawl_single_gu_handles_duplicate_apartments(
+        self, mock_log, mock_map_dto, mock_crawl_retry
+    ):
+        """중복 아파트 제거 로직 테스트"""
+        # Mock 설정: 같은 seq를 가진 아파트 반환
+        mock_apt = Mock()
+        mock_apt.model_dump.return_value = {"seq": "12345", "name": "아파트1"}
+
+        mock_map_dto.return_value = {"seq": "12345", "name": "아파트1"}
+
+        # 같은 결과를 두 번 반환 (중복)
+        mock_crawl_retry.return_value = [mock_apt]
+
+        # Mock CSV writer와 파일
+        mock_writer = Mock()
+        mock_csv_f = Mock()
+        mock_log_f = Mock()
+
+        completed_dongs = set()
+        unique_seqs = set()
+
+        # DONG_CODE_START와 DONG_CODE_END를 테스트용으로 수정
+        with (
+            patch.object(seoul_all, "DONG_CODE_START", 1),
+            patch.object(seoul_all, "DONG_CODE_END", 3),
+        ):  # 2개 동 테스트
+            seoul_all.crawl_single_gu(
+                gu_code="11560",
+                gu_name="영등포구",
+                completed_dongs=completed_dongs,
+                unique_seqs=unique_seqs,
+                writer=mock_writer,
+                csv_f=mock_csv_f,
+                log_f=mock_log_f,
+            )
+
+        # CSV writer가 호출되었는지 확인
+        # 첫 번째 동: seq "12345"가 unique_seqs에 없으므로 1번 호출
+        # 두 번째 동: seq "12345"가 이미 unique_seqs에 있으므로 호출 안 함
+        assert mock_writer.writerow.call_count == 1

@@ -307,6 +307,99 @@ def map_dto_to_csv(apt: Any) -> dict[str, Any]:
     return csv_dict
 
 
+def crawl_single_gu(
+    gu_code: str,
+    gu_name: str,
+    completed_dongs: set[str],
+    unique_seqs: set[str],
+    writer: csv.DictWriter,
+    csv_f: TextIO,
+    log_f: TextIO,
+) -> dict[str, int]:
+    """단일 구 크롤링
+
+    Args:
+        gu_code: 구 코드 (5자리)
+        gu_name: 구 이름
+        completed_dongs: 이미 완료된 동 코드 집합 (체크포인트)
+        unique_seqs: 중복 제거를 위한 고유 아파트 seq 집합
+        writer: CSV DictWriter 객체
+        csv_f: CSV 파일 객체
+        log_f: 로그 파일 객체
+
+    Returns:
+        구별 통계 (found, empty, error, apartments, skipped)
+    """
+    gu_stats = {"found": 0, "empty": 0, "error": 0, "apartments": 0, "skipped": 0}
+
+    dong_codes = generate_dong_codes(gu_code)
+
+    for idx, dong_code in enumerate(dong_codes):
+        # 이미 완료된 동 코드 건너뛰기
+        if dong_code in completed_dongs:
+            gu_stats["skipped"] += 1
+            continue
+
+        # 재시도 로직이 포함된 크롤링
+        results = crawl_with_retry(dong_code)
+
+        if results is None:
+            # 최대 재시도 횟수 초과로 실패
+            gu_stats["error"] += 1
+            time.sleep(REQUEST_DELAY)
+            continue
+
+        if results:
+            gu_stats["found"] += 1
+            gu_stats["apartments"] += len(results)
+
+            # 스트리밍: 바로 CSV에 기록
+            for apt in results:
+                csv_dict = map_dto_to_csv(apt)
+                seq = csv_dict["seq"]
+
+                if seq not in unique_seqs:
+                    unique_seqs.add(seq)
+                    writer.writerow(csv_dict)
+                    csv_f.flush()
+
+            # PROGRESS_LOG_INTERVAL개마다 진행 상황 출력
+            if gu_stats["found"] % PROGRESS_LOG_INTERVAL == 0:
+                log_message(
+                    f"  [{gu_name}] {dong_code}: +{len(results)}건 "
+                    f"(누적:{len(unique_seqs)}건, "
+                    f"처리:{idx + 1}/{len(dong_codes)})",
+                    log_f,
+                )
+        else:
+            gu_stats["empty"] += 1
+
+        # 완료된 동 코드에 추가
+        completed_dongs.add(dong_code)
+
+        # 배치 단위로 체크포인트 저장
+        if len(completed_dongs) % CHECKPOINT_SAVE_INTERVAL == 0:
+            save_checkpoint(completed_dongs)
+
+        # Rate limiting
+        time.sleep(REQUEST_DELAY)
+
+    # 구 완료 로그 출력
+    log_message(
+        f"  [{gu_name}] 완료 - "
+        f"데이터:{gu_stats['found']} 공백:{gu_stats['empty']} "
+        f"에러:{gu_stats['error']} 아파트:{gu_stats['apartments']}건 "
+        f"스킵:{gu_stats['skipped']}",
+        log_f,
+    )
+
+    # 스킵된 동이 있으면 별도 로그
+    if gu_stats["skipped"] > 0:
+        log_message(f"  [{gu_name}] 체크포인트로 {gu_stats['skipped']}개 동 스킵", log_f)
+
+    return gu_stats
+
+
 def main() -> None:
     """서울 전체 아파트 크롤링 (streaming)"""
     # 로그 파일 생성
@@ -353,73 +446,18 @@ def main() -> None:
     for gu_code, gu_name in gu_list:
         log_message(f"\n[{gu_name} ({gu_code})] 시작...", log_f)
 
-        dong_codes = generate_dong_codes(gu_code)
-        gu_stats = {"found": 0, "empty": 0, "error": 0, "apartments": 0, "skipped": 0}
-
-        for idx, dong_code in enumerate(dong_codes):
-            # 이미 완료된 동 코드 건너뛰기
-            if dong_code in completed_dongs:
-                stats["skipped_dongs"] += 1
-                gu_stats["skipped"] += 1
-                continue
-
-            stats["total_processed"] += 1
-
-            # 재시도 로직이 포함된 크롤링
-            results = crawl_with_retry(dong_code)
-
-            if results is None:
-                # 최대 재시도 횟수 초과로 실패
-                stats["error_dongs"] += 1
-                gu_stats["error"] += 1
-                time.sleep(REQUEST_DELAY)
-                continue
-
-            if results:
-                stats["data_found"] += 1
-                gu_stats["found"] += 1
-                stats["total_apartments"] += len(results)
-                gu_stats["apartments"] += len(results)
-
-                # 스트리밍: 바로 CSV에 기록
-                for apt in results:
-                    csv_dict = map_dto_to_csv(apt)
-                    seq = csv_dict["seq"]
-
-                    if seq not in stats["unique_seqs"]:
-                        stats["unique_seqs"].add(seq)
-                        writer.writerow(csv_dict)
-                        csv_f.flush()
-
-                # PROGRESS_LOG_INTERVAL개마다 진행 상황 출력
-                if stats["data_found"] % PROGRESS_LOG_INTERVAL == 0:
-                    log_message(
-                        f"  [{gu_name}] {dong_code}: +{len(results)}건 "
-                        f"(누적:{len(stats['unique_seqs'])}건, "
-                        f"처리:{idx + 1}/{len(dong_codes)})",
-                        log_f,
-                    )
-            else:
-                stats["empty_dongs"] += 1
-                gu_stats["empty"] += 1
-
-            # 완료된 동 코드에 추가
-            completed_dongs.add(dong_code)
-
-            # 배치 단위로 체크포인트 저장
-            if len(completed_dongs) % CHECKPOINT_SAVE_INTERVAL == 0:
-                save_checkpoint(completed_dongs)
-
-            # Rate limiting
-            time.sleep(REQUEST_DELAY)
-
-        log_message(
-            f"  [{gu_name}] 완료 - "
-            f"데이터:{gu_stats['found']} 공백:{gu_stats['empty']} "
-            f"에러:{gu_stats['error']} 아파트:{gu_stats['apartments']}건 "
-            f"스킵:{gu_stats['skipped']}",
-            log_f,
+        # 단일 구 크롤링 (추출된 함수)
+        gu_stats = crawl_single_gu(
+            gu_code, gu_name, completed_dongs, stats["unique_seqs"], writer, csv_f, log_f
         )
+
+        # 전체 통계에 구별 통계 누적
+        stats["data_found"] += gu_stats["found"]
+        stats["empty_dongs"] += gu_stats["empty"]
+        stats["error_dongs"] += gu_stats["error"]
+        stats["total_apartments"] += gu_stats["apartments"]
+        stats["skipped_dongs"] += gu_stats["skipped"]
+        stats["total_processed"] += gu_stats["found"] + gu_stats["empty"] + gu_stats["error"]
 
         # 구 간 배치 딜레이
         time.sleep(BATCH_DELAY)
