@@ -10,13 +10,18 @@ Usage:
 """
 
 import argparse
+import contextlib
 import csv
 import json
+import logging
 import os
 import sys
 import time
+from collections.abc import Iterator
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, TextIO
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -29,7 +34,7 @@ from crawler.asil import (
 )
 
 # 서울 25개 구 코드
-SEOUL_GU_CODES = {
+SEOUL_GU_CODES: dict[str, str] = {
     "11110": "종로구",
     "11140": "중구",
     "11170": "용산구",
@@ -56,50 +61,99 @@ SEOUL_GU_CODES = {
     "11740": "강동구",
 }
 
-OUTPUT_DIR = "output"
+OUTPUT_DIR: Path = Path("output")
+CSV_FIELDNAMES: list[str] = [
+    "building",
+    "seq",
+    "name",
+    "dong",
+    "dongname",
+    "bungi",
+    "movein",
+    "household",
+    "total_dong",
+    "type",
+    "etc",
+    "offer",
+    "lat",
+    "lng",
+]
 
 
-def setup_csv_writer(filepath: str) -> tuple[csv.DictWriter, Any]:
-    """CSV 파일 생성 및 writer 초기화 (streaming용)
+@dataclass
+class CrawlStats:
+    """크롤링 통계 추적"""
 
-    Returns:
-        (writer, file_object) 튜플
-    """
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    total_processed: int = 0
+    data_found: int = 0
+    empty_dongs: int = 0
+    error_dongs: int = 0
+    total_apartments: int = 0
+    unique_seqs: set[str] = field(default_factory=set)
 
-    file_exists = os.path.exists(filepath)
-    f = open(filepath, "a", newline="", encoding="utf-8")
-    writer = None
-
-    fieldnames = [
-        "building",
-        "seq",
-        "name",
-        "dong",
-        "dongname",
-        "bungi",
-        "movein",
-        "household",
-        "total_dong",
-        "type",
-        "etc",
-        "offer",
-        "lat",
-        "lng",
-    ]
-
-    if not file_exists:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        f.flush()
-    else:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-
-    return writer, f
+    def print_summary(self, elapsed: float, title: str = "크롤링") -> None:
+        """통계 요약 출력"""
+        print(f"\n{'=' * 60}")
+        print(f"{title} 완료!")
+        print(f"{'=' * 60}")
+        print(f"총 처리 동: {self.total_processed}개")
+        print(f"데이터 있는 동: {self.data_found}개")
+        print(f"데이터 없는 동: {self.empty_dongs}개")
+        print(f"에러 발생: {self.error_dongs}개")
+        print(f"총 수집 아파트: {self.total_apartments}건")
+        print(f"중복 제거 후: {len(self.unique_seqs)}건")
+        print(f"소요 시간: {elapsed / 60:.1f}분")
 
 
-def log_message(message: str, file=None) -> None:
-    """로그 출력 (콘솔 + 파일)"""
+@contextlib.contextmanager
+def setup_csv_output(filepath: Path) -> Iterator[tuple[csv.DictWriter, TextIO]]:
+    """CSV 출력을 위한 context manager"""
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    file_exists = filepath.exists()
+
+    with open(filepath, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES)
+        if not file_exists:
+            writer.writeheader()
+            f.flush()
+        yield writer, f
+
+
+@contextlib.contextmanager
+def setup_logger(log_path: Path) -> Iterator[logging.Logger]:
+    """로그를 위한 context manager"""
+    OUTPUT_DIR.mkdir(exist_ok=True)
+
+    logger = logging.getLogger("crawler")
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()  # 기존 핸들러 제거
+
+    # 파일 핸들러
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+
+    # 콘솔 핸들러
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # 포맷터
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    try:
+        yield logger
+    finally:
+        logger.removeHandler(file_handler)
+        logger.removeHandler(console_handler)
+        file_handler.close()
+
+
+def log_message(message: str, file: TextIO | None = None) -> None:
+    """로그 출력 (콘솔 + 파일) - 하위 호환성용"""
     timestamp = datetime.now().strftime("%H:%M:%S")
     log_msg = f"[{timestamp}] {message}"
     print(log_msg, flush=True)
@@ -142,7 +196,51 @@ def generate_dong_codes(gu_code: str) -> list[str]:
     return dong_codes
 
 
-def crawl_single_dong(dong_code: str, output: str | None = None) -> list[dict]:
+def crawl_dong_list(
+    dong_codes: list[str],
+    writer: csv.DictWriter,
+    csv_file: TextIO,
+    logger: logging.Logger,
+    rate_limit: float,
+    stats: CrawlStats,
+    progress_msg_interval: int = 5,
+) -> None:
+    """동 코드 리스트 크롤링 (공통 로직)"""
+    for idx, dong_code in enumerate(dong_codes):
+        stats.total_processed += 1
+
+        try:
+            crawler = AsilAptListCrawler(dong_code=dong_code)
+            results: list[dict[str, Any]] = crawler.crawl()
+
+            if results:
+                stats.data_found += 1
+                stats.total_apartments += len(results)
+
+                for apt in results:
+                    seq = apt["seq"]
+                    if seq not in stats.unique_seqs:
+                        stats.unique_seqs.add(seq)
+                        writer.writerow(apt)
+                        csv_file.flush()
+
+                if stats.data_found % progress_msg_interval == 0:
+                    logger.info(
+                        f"  {dong_code}: +{len(results)}건 "
+                        f"(누적:{len(stats.unique_seqs)}건, "
+                        f"처리:{idx + 1}/{len(dong_codes)})"
+                    )
+            else:
+                stats.empty_dongs += 1
+
+            time.sleep(rate_limit)
+
+        except Exception as e:
+            stats.error_dongs += 1
+            logger.error(f"  {dong_code}: ERROR - {e}")
+
+
+def crawl_single_dong(dong_code: str, output: str | None = None) -> list[dict[str, Any]]:
     """단일 동 크롤링
 
     Args:
@@ -156,18 +254,16 @@ def crawl_single_dong(dong_code: str, output: str | None = None) -> list[dict]:
 
     try:
         crawler = AsilAptListCrawler(dong_code=dong_code)
-        results = crawler.crawl()
+        results: list[dict[str, Any]] = crawler.crawl()
 
         if results:
             print(f"  → {len(results)}개 아파트 수집 완료")
 
             if output:
-                os.makedirs(OUTPUT_DIR, exist_ok=True)
-                output_path = os.path.join(OUTPUT_DIR, output)
-                writer, f = setup_csv_writer(output_path)
-                for apt in results:
-                    writer.writerow(apt)
-                f.close()
+                output_path = OUTPUT_DIR / output
+                with setup_csv_output(output_path) as (writer, f):
+                    for apt in results:
+                        writer.writerow(apt)
                 print(f"  → 저장 완료: {output_path}")
         else:
             print("  → 데이터 없음")
@@ -184,7 +280,7 @@ def crawl_gu(
     output: str | None = None,
     rate_limit: float = 0.5,
 ) -> None:
-    """特定 구 전체 크롤링 (streaming)
+    """특정 구 전체 크롤링 (streaming)
 
     Args:
         gu_code: 구 코드 (5자리)
@@ -192,86 +288,35 @@ def crawl_gu(
         rate_limit: 요청 간 딜레이 (초)
     """
     gu_name = SEOUL_GU_CODES.get(gu_code, gu_code)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    output_path = OUTPUT_DIR / (output or f"{gu_name}_apt_{timestamp}.csv")
+    log_path = OUTPUT_DIR / f"crawl_log_{timestamp}.txt"
 
-    if output is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output = f"{gu_name}_apt_{timestamp}.csv"
+    stats = CrawlStats()
 
-    output_path = os.path.join(OUTPUT_DIR, output)
-    log_path = os.path.join(OUTPUT_DIR, f"crawl_log_{timestamp}.txt")
+    with setup_csv_output(output_path) as (writer, csv_f), setup_logger(log_path) as logger:
+        logger.info(f"{'=' * 60}")
+        logger.info(f"[{gu_name} ({gu_code})] 아파트 크롤링 시작")
+        logger.info(f"요청 간 딜레이: {rate_limit}초")
+        logger.info(f"출력 파일: {output_path}")
+        logger.info(f"{'=' * 60}")
 
-    writer, csv_f = setup_csv_writer(output_path)
-    log_f = open(log_path, "w", encoding="utf-8")
+        start_time = time.time()
+        dong_codes = generate_dong_codes(gu_code)
 
-    stats = {
-        "total_processed": 0,
-        "data_found": 0,
-        "empty_dongs": 0,
-        "error_dongs": 0,
-        "total_apartments": 0,
-        "unique_seqs": set(),
-    }
-
-    log_message("=" * 60, log_f)
-    log_message(f"[{gu_name} ({gu_code})] 아파트 크롤링 시작", log_f)
-    log_message(f"요청 간 딜레이: {rate_limit}초", log_f)
-    log_message(f"출력 파일: {output_path}", log_f)
-    log_message("=" * 60, log_f)
-
-    start_time = time.time()
-    dong_codes = generate_dong_codes(gu_code)
-
-    for idx, dong_code in enumerate(dong_codes):
-        stats["total_processed"] += 1
-
-        try:
-            crawler = AsilAptListCrawler(dong_code=dong_code)
-            results = crawler.crawl()
-
-            if results:
-                stats["data_found"] += 1
-                stats["total_apartments"] += len(results)
-
-                for apt in results:
-                    seq = apt["seq"]
-                    if seq not in stats["unique_seqs"]:
-                        stats["unique_seqs"].add(seq)
-                        writer.writerow(apt)
-                        csv_f.flush()
-
-                if stats["data_found"] % 5 == 0:
-                    log_message(
-                        f"  {dong_code}: +{len(results)}건 "
-                        f"(누적:{len(stats['unique_seqs'])}건, "
-                        f"처리:{idx + 1}/{len(dong_codes)})",
-                        log_f,
-                    )
-            else:
-                stats["empty_dongs"] += 1
-
-            time.sleep(rate_limit)
-
-        except Exception as e:
-            stats["error_dongs"] += 1
-            log_message(f"  {dong_code}: ERROR - {e}", log_f)
-
-    csv_f.close()
-    log_f.close()
+        crawl_dong_list(
+            dong_codes=dong_codes,
+            writer=writer,
+            csv_file=csv_f,
+            logger=logger,
+            rate_limit=rate_limit,
+            stats=stats,
+            progress_msg_interval=5,
+        )
 
     elapsed = time.time() - start_time
-
-    print("\n" + "=" * 60)
-    print(f"[{gu_name}] 크롤링 완료!")
-    print("=" * 60)
-    print(f"총 처리 동: {stats['total_processed']}개")
-    print(f"데이터 있는 동: {stats['data_found']}개")
-    print(f"데이터 없는 동: {stats['empty_dongs']}개")
-    print(f"에러 발생: {stats['error_dongs']}개")
-    print(f"총 수집 아파트: {stats['total_apartments']}건")
-    print(f"중복 제거 후: {len(stats['unique_seqs'])}건")
-    print(f"소요 시간: {elapsed / 60:.1f}분")
+    stats.print_summary(elapsed, f"[{gu_name}]")
     print(f"CSV 파일: {output_path}")
 
 
@@ -285,114 +330,56 @@ def crawl_seoul_all(
         output: 출력 파일명 (None이면 자동 생성)
         rate_limit: 요청 간 딜레이 (초)
     """
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if output is None:
-        output = f"seoul_all_apt_{timestamp}.csv"
+    output_path = OUTPUT_DIR / (output or f"seoul_all_apt_{timestamp}.csv")
+    log_path = OUTPUT_DIR / f"crawl_log_{timestamp}.txt"
 
-    output_path = os.path.join(OUTPUT_DIR, output)
-    log_path = os.path.join(OUTPUT_DIR, f"crawl_log_{timestamp}.txt")
+    stats = CrawlStats()
 
-    writer, csv_f = setup_csv_writer(output_path)
-    log_f = open(log_path, "w", encoding="utf-8")
+    with setup_csv_output(output_path) as (writer, csv_f), setup_logger(log_path) as logger:
+        logger.info(f"{'=' * 60}")
+        logger.info("서울 전체 아파트 크롤링 시작")
+        logger.info("타겟 구: 25개")
+        logger.info(f"요청 간 딜레이: {rate_limit}초")
+        logger.info(f"출력 파일: {output_path}")
+        logger.info(f"{'=' * 60}")
 
-    stats = {
-        "total_processed": 0,
-        "data_found": 0,
-        "empty_dongs": 0,
-        "error_dongs": 0,
-        "total_apartments": 0,
-        "unique_seqs": set(),
-    }
+        start_time = time.time()
 
-    log_message("=" * 60, log_f)
-    log_message("서울 전체 아파트 크롤링 시작", log_f)
-    log_message(f"타겟 구: 25개", log_f)
-    log_message(f"요청 간 딜레이: {rate_limit}초", log_f)
-    log_message(f"출력 파일: {output_path}", log_f)
-    log_message("=" * 60, log_f)
+        for gu_code, gu_name in SEOUL_GU_CODES.items():
+            logger.info(f"\n[{gu_name} ({gu_code})] 시작...")
 
-    start_time = time.time()
+            dong_codes = generate_dong_codes(gu_code)
+            gu_stats = CrawlStats()
 
-    for gu_code, gu_name in SEOUL_GU_CODES.items():
-        log_message(f"\n[{gu_name} ({gu_code})] 시작...", log_f)
+            crawl_dong_list(
+                dong_codes=dong_codes,
+                writer=writer,
+                csv_file=csv_f,
+                logger=logger,
+                rate_limit=rate_limit,
+                stats=stats,
+                progress_msg_interval=10,
+            )
 
-        dong_codes = generate_dong_codes(gu_code)
-        gu_stats = {"found": 0, "empty": 0, "error": 0, "apartments": 0}
+            logger.info(
+                f"  [{gu_name}] 완료 - 데이터:{gu_stats.data_found} 에러:{gu_stats.error_dongs}"
+            )
 
-        for idx, dong_code in enumerate(dong_codes):
-            stats["total_processed"] += 1
-
-            try:
-                crawler = AsilAptListCrawler(dong_code=dong_code)
-                results = crawler.crawl()
-
-                if results:
-                    stats["data_found"] += 1
-                    gu_stats["found"] += 1
-                    stats["total_apartments"] += len(results)
-                    gu_stats["apartments"] += len(results)
-
-                    for apt in results:
-                        seq = apt["seq"]
-                        if seq not in stats["unique_seqs"]:
-                            stats["unique_seqs"].add(seq)
-                            writer.writerow(apt)
-                            csv_f.flush()
-
-                    if stats["data_found"] % 10 == 0:
-                        log_message(
-                            f"  [{gu_name}] {dong_code}: +{len(results)}건 "
-                            f"(누적:{len(stats['unique_seqs'])}건, "
-                            f"처리:{idx + 1}/{len(dong_codes)})",
-                            log_f,
-                        )
-                else:
-                    stats["empty_dongs"] += 1
-                    gu_stats["empty"] += 1
-
-                time.sleep(rate_limit)
-
-            except Exception as e:
-                stats["error_dongs"] += 1
-                gu_stats["error"] += 1
-                log_message(f"  [{gu_name}] {dong_code}: ERROR - {e}", log_f)
-
-        log_message(
-            f"  [{gu_name}] 완료 - "
-            f"데이터:{gu_stats['found']} 공백:{gu_stats['empty']} "
-            f"에러:{gu_stats['error']} 아파트:{gu_stats['apartments']}건",
-            log_f,
-        )
-
-        time.sleep(5)
-
-    csv_f.close()
-    log_f.close()
+            time.sleep(5)  # 구 간 대기
 
     elapsed = time.time() - start_time
-
-    print("\n" + "=" * 60)
-    print("서울 전체 크롤링 완료!")
-    print("=" * 60)
-    print(f"총 처리 동: {stats['total_processed']}개")
-    print(f"데이터 있는 동: {stats['data_found']}개")
-    print(f"데이터 없는 동: {stats['empty_dongs']}개")
-    print(f"에러 발생: {stats['error_dongs']}개")
-    print(f"총 수집 아파트: {stats['total_apartments']}건")
-    print(f"중복 제거 후: {len(stats['unique_seqs'])}건")
-    print(f"소요 시간: {elapsed / 60:.1f}분")
+    stats.print_summary(elapsed, "서울 전체")
     print(f"CSV 파일: {output_path}")
 
 
-def test_dong_info(apt_code: str, apt_name: str) -> list[dict]:
+def test_dong_info(apt_code: str, apt_name: str) -> list[dict[str, Any]]:
     """동/호 정보 조회 테스트"""
     print(f"\n{apt_name} ({apt_code})")
     print("-" * 50)
 
     crawler = AsilDongInfoCrawler(apt_code=apt_code)
-    result = crawler.crawl()
+    result: list[dict[str, Any]] = crawler.crawl()
     print(f"결과: {len(result)}개 동")
 
     for item in result:
@@ -407,12 +394,12 @@ def test_asil() -> None:
     print("AsilDongInfoCrawler 테스트")
     print("=" * 50)
 
-    result1 = test_dong_info("20340925", "역삼자이")
-    status1 = "성공" if len(result1) > 0 else "실패"
+    result1: list[dict[str, Any]] = test_dong_info("20340925", "역삼자이")
+    status1: str = "성공" if len(result1) > 0 else "실패"
     print(f"테스트 결과: {status1}")
 
-    result2 = test_dong_info("12064314", "(613-16)")
-    status2 = "성공 (빈 응답 처리)" if len(result2) == 0 else "실패"
+    result2: list[dict[str, Any]] = test_dong_info("12064314", "(613-16)")
+    status2: str = "성공 (빈 응답 처리)" if len(result2) == 0 else "실패"
     print(f"테스트 결과: {status2}")
 
     print("\n" + "=" * 50)
@@ -424,9 +411,9 @@ def test_asil() -> None:
 
 def test_redevelop_api() -> None:
     """재개발 단지 API 테스트"""
-    BASE_URL = "https://asil.kr/json/data_redevelop.jsp"
+    base_url = "https://asil.kr/json/data_redevelop.jsp"
 
-    test_cases = [
+    test_cases: list[dict[str, Any]] = [
         {
             "name": "강남구 전체",
             "params": {
@@ -459,7 +446,7 @@ def test_redevelop_api() -> None:
         print(f"파라미터: {test_case['params']}")
         print("-" * 80)
 
-        url = f"{BASE_URL}?{urlencode(test_case['params'])}"
+        url = f"{base_url}?{urlencode(test_case['params'])}"
         print(f"요청 URL: {url}")
 
         request = Request(
@@ -479,12 +466,11 @@ def test_redevelop_api() -> None:
 
                 if content and content.strip() not in ["[]", "[", "]", ""]:
                     try:
-                        data = json.loads(content)
+                        data: list[dict[str, Any]] = json.loads(content)
                         print(f"파싱 성공! {len(data)}개 항목")
                         if data:
                             print(
-                                f"첫 번째 항목: "
-                                f"{json.dumps(data[0], ensure_ascii=False, indent=2)}"
+                                f"첫 번째 항목: {json.dumps(data[0], ensure_ascii=False, indent=2)}"
                             )
                     except json.JSONDecodeError as e:
                         print(f"JSON 파싱 실패: {e}")
@@ -494,7 +480,7 @@ def test_redevelop_api() -> None:
             print(f"에러 발생: {e}")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="아실(asil.kr) 크롤러 단일 진입점",
         formatter_class=argparse.RawDescriptionHelpFormatter,
