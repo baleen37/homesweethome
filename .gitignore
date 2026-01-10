@@ -1,10 +1,53 @@
-output/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*$py.class
+*.so
+.Python
+
+# Testing
 .pytest_cache/
-.playwright/
 .coverage
 htmlcov/
+*.cover
+
+# Virtual environments
 .venv/
+venv/
 direnv/
+
+# Environment variables
 .env
+.env.local
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Tooling
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+
+# Playwright
+.playwright/
+.playwright-mcp/
+.playwright*
+
+# Project specific
+output/
+scripts/test_*.py
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
