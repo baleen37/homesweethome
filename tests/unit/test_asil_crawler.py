@@ -6,10 +6,14 @@ from crawler.asil import (
     AsilAptListCrawler,
     AsilDongInfoCrawler,
     AsilEducationMapCrawler,
+    AsilListingCrawler,
+    AsilRedevelopCrawler,
     AsilSchoolInfoCrawler,
     AsilTradePriceCrawler,
     AsilTrafficCrawler,
+    AsilVisitorStatsCrawler,
 )
+from crawler.dto.asil_apt_list import AsilAptListDTO
 
 
 class TestAsilAptListCrawler:
@@ -52,8 +56,10 @@ class TestAsilAptListCrawler:
         assert "household=50" in url
         assert "order=0" in url
 
-    def test_parse_returns_list_of_dicts(self):
-        """parse()는 list[dict]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilAptListDTO]를 반환해야 함"""
+        from crawler.dto.asil_apt_list import AsilAptListDTO
+
         crawler = AsilAptListCrawler(dong_code="1168010100")
 
         # Mock JSON 응답 (실제 API 응답 형식)
@@ -62,6 +68,8 @@ class TestAsilAptListCrawler:
             {
                 "seq": "20340925",
                 "name": "역삼자이",
+                "dong": "1168010100",
+                "dongname": "역삼동",
                 "build_year": "2016",
                 "household": "408",
                 "dong_count": "3",
@@ -74,9 +82,9 @@ class TestAsilAptListCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
-        assert isinstance(result[0], dict)
-        assert result[0]["seq"] == "20340925"
-        assert result[0]["name"] == "역삼자이"
+        assert isinstance(result[0], AsilAptListDTO)
+        assert result[0].seq == "20340925"
+        assert result[0].name == "역삼자이"
 
 
 class TestAsilTradePriceCrawler:
@@ -446,8 +454,10 @@ class TestAsilEducationMapCrawler:
         url = crawler.get_url()
         assert "zoom=15" in url
 
-    def test_parse_returns_list_of_dicts(self):
-        """parse()는 list[dict]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilEducationMapDTO]를 반환해야 함"""
+        from crawler.dto.asil_education_map import AsilEducationMapDTO
+
         crawler = AsilEducationMapCrawler(
             s_lat=37.5,
             s_lng=127.0,
@@ -479,6 +489,264 @@ class TestAsilEducationMapCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
+        assert isinstance(result[0], AsilEducationMapDTO)
+        assert result[0].title == "학원수 72개"
+        assert result[0].polygon is not None
+
+
+class TestAsilVisitorStatsCrawler:
+    """AsilVisitorStatsCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilVisitorStatsCrawler, BaseCrawler)
+
+    def test_requires_coordinate_parameters(self):
+        """좌표 파라미터가 필수여야 함"""
+        with pytest.raises(TypeError):
+            AsilVisitorStatsCrawler()
+
+    def test_accepts_required_parameters(self):
+        """필수 파라미터를 받을 수 있어야 함"""
+        crawler = AsilVisitorStatsCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+        assert crawler.s_lat == 37.5
+        assert crawler.s_lng == 127.0
+        assert crawler.e_lat == 37.6
+        assert crawler.e_lng == 127.1
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilVisitorStatsCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/json/data_member.jsp")
+        assert "os=pc" in url
+        assert "user=1" in url
+        assert "s_lat=37.5" in url
+        assert "s_lng=127.0" in url
+        assert "e_lat=37.6" in url
+        assert "e_lng=127.1" in url
+
+    def test_get_url_includes_zoom_parameter(self):
+        """get_url()에 zoom 파라미터가 포함되어야 함"""
+        crawler = AsilVisitorStatsCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+            zoom=15,
+        )
+        url = crawler.get_url()
+        assert "zoom=15" in url
+
+    def test_parse_returns_list_of_dicts(self):
+        """parse()는 list[dict]를 반환해야 함"""
+        crawler = AsilVisitorStatsCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+
+        # Mock JSON 응답 (실제 API 응답 형식)
+        mock_response = """
+        [
+            {
+                "key": "-19917",
+                "company": "중개법인명",
+                "lat": "37.512798",
+                "lng": "127.050655",
+                "photo": "/photo/member/-19917.png"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 1
         assert isinstance(result[0], dict)
-        assert result[0]["title"] == "학원수 72개"
-        assert "polygon" in result[0]
+        assert result[0]["key"] == "-19917"
+        assert result[0]["lat"] == "37.512798"
+        assert result[0]["lng"] == "127.050655"
+
+    def test_parse_handles_empty_response(self):
+        """parse()는 빈 응답을 처리할 수 있어야 함"""
+        crawler = AsilVisitorStatsCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+        result = crawler.parse("[]")
+        assert result == []
+
+
+class TestAsilRedevelopCrawler:
+    """AsilRedevelopCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilRedevelopCrawler, BaseCrawler)
+
+    def test_requires_coordinate_parameters(self):
+        """좌표 파라미터가 필수여야 함"""
+        with pytest.raises(TypeError):
+            AsilRedevelopCrawler()
+
+    def test_accepts_required_parameters(self):
+        """필수 파라미터를 받을 수 있어야 함"""
+        crawler = AsilRedevelopCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+        assert crawler.s_lat == 37.5
+        assert crawler.s_lng == 127.0
+        assert crawler.e_lat == 37.6
+        assert crawler.e_lng == 127.1
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilRedevelopCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/json/data_redevelop.jsp")
+        assert "os=pc" in url
+        assert "user=1" in url
+        assert "s_lat=37.5" in url
+        assert "s_lng=127.0" in url
+        assert "e_lat=37.6" in url
+        assert "e_lng=127.1" in url
+
+    def test_parse_returns_list_of_dicts(self):
+        """parse()는 list[dict]를 반환해야 함"""
+        crawler = AsilRedevelopCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+
+        # Mock JSON 응답 (재개발 구역 정보)
+        mock_response = """
+        [
+            {
+                "name": "역삼동 재개발 구역",
+                "status": "진행 중",
+                "s_lat": "37.5",
+                "s_lng": "127.0"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], dict)
+        assert result[0]["name"] == "역삼동 재개발 구역"
+
+    def test_parse_handles_empty_response(self):
+        """parse()는 빈 응답을 처리할 수 있어야 함"""
+        crawler = AsilRedevelopCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+        result = crawler.parse("[]")
+        assert result == []
+
+
+class TestAsilListingCrawler:
+    """AsilListingCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilListingCrawler, BaseCrawler)
+
+    def test_requires_apt_code_parameter(self):
+        """apt_code 파라미터가 필수여야 함"""
+        with pytest.raises(TypeError):
+            AsilListingCrawler()
+
+    def test_accepts_apt_code_parameter(self):
+        """apt_code 파라미터를 받을 수 있어야 함"""
+        crawler = AsilListingCrawler(apt_code="20340925")
+        assert crawler.apt_code == "20340925"
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilListingCrawler(apt_code="20340925")
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/app/data/data_apt_list.jsp")
+
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilAptListDTO]를 반환해야 함"""
+        crawler = AsilListingCrawler(apt_code="20340925")
+
+        # Mock JSON 응답 (실제 API 응답 형식)
+        mock_response = """
+        [
+            {
+                "seq": "20340925",
+                "name": "역삼자이",
+                "dong": "1168010100",
+                "dongname": "역삼동",
+                "offer": "매물 5건",
+                "household": "408"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], AsilAptListDTO)
+        assert result[0].seq == "20340925"
+        assert result[0].name == "역삼자이"
+
+    def test_parse_handles_empty_response(self):
+        """parse()는 빈 응답을 처리할 수 있어야 함"""
+        crawler = AsilListingCrawler(apt_code="20340925")
+        result = crawler.parse("[]")
+        assert result == []
+
+    def test_parse_filters_listings_with_offer(self):
+        """parse()는 매물이 있는 항목만 필터링해야 함"""
+        crawler = AsilListingCrawler(apt_code="20340925")
+
+        # 매물 유무가 혼합된 응답
+        mock_response = """
+        [
+            {"seq": "1", "name": "A", "dong": "123", "dongname": "test", "offer": "매물 2건"},
+            {"seq": "2", "name": "B", "dong": "123", "dongname": "test", "offer": ""},
+            {"seq": "3", "name": "C", "dong": "123", "dongname": "test", "offer": "매물 1건"},
+            {"seq": "4", "name": "D", "dong": "123", "dongname": "test", "offer": ""}
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        # 매물이 있는 항목만 반환
+        assert len(result) == 2
+        assert result[0].seq == "1"
+        assert result[1].seq == "3"
