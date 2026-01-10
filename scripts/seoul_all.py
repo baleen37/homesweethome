@@ -15,7 +15,7 @@ import os
 import threading
 import time
 from datetime import datetime
-from typing import Any, TypedDict
+from typing import Any, TextIO, TypedDict
 
 from crawler.asil import AsilAptListCrawler
 
@@ -71,6 +71,10 @@ REQUEST_TIMEOUT = 30  # 요청 타임아웃 (초)
 MAX_RETRIES = 3  # 최대 재시도 횟수
 RETRY_BACKOFF_BASE = 2  # 지수 백오프 베이스
 
+# 진행 상황 및 체크포인트 간격
+PROGRESS_LOG_INTERVAL = 10  # 진행 상황 로그 출력 간격
+CHECKPOINT_SAVE_INTERVAL = 10  # 체크포인트 저장 간격
+
 # CSV 필드명 (단일 정의로 중복 제거)
 CSV_FIELDNAMES = [
     "seq",
@@ -111,7 +115,7 @@ class CrawlStats(TypedDict):
     unique_seqs: set[str]
 
 
-def setup_csv_writer(filepath: str) -> tuple[csv.DictWriter, Any]:
+def setup_csv_writer(filepath: str) -> tuple[csv.DictWriter, TextIO]:
     """CSV 파일 생성 및 writer 초기화 (streaming용)
 
     Returns:
@@ -357,7 +361,6 @@ def main() -> None:
             if dong_code in completed_dongs:
                 stats["skipped_dongs"] += 1
                 gu_stats["skipped"] += 1
-                stats["total_processed"] += 1
                 continue
 
             stats["total_processed"] += 1
@@ -388,8 +391,8 @@ def main() -> None:
                         writer.writerow(csv_dict)
                         csv_f.flush()
 
-                # 10개마다 진행 상황 출력
-                if stats["data_found"] % 10 == 0:
+                # PROGRESS_LOG_INTERVAL개마다 진행 상황 출력
+                if stats["data_found"] % PROGRESS_LOG_INTERVAL == 0:
                     log_message(
                         f"  [{gu_name}] {dong_code}: +{len(results)}건 "
                         f"(누적:{len(stats['unique_seqs'])}건, "
@@ -403,8 +406,8 @@ def main() -> None:
             # 완료된 동 코드에 추가
             completed_dongs.add(dong_code)
 
-            # 배치 단위로 체크포인트 저장 (10개마다)
-            if len(completed_dongs) % 10 == 0:
+            # 배치 단위로 체크포인트 저장
+            if len(completed_dongs) % CHECKPOINT_SAVE_INTERVAL == 0:
                 save_checkpoint(completed_dongs)
 
             # Rate limiting
