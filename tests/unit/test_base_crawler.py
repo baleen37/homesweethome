@@ -1,7 +1,8 @@
 """BaseCrawler 추상 클래스 테스트"""
 
-import pytest
 from abc import ABC
+
+import pytest
 
 # 이 import는 BaseCrawler가 존재하지 않으므로 실패할 것입니다 (Red Phase)
 from crawler.base import BaseCrawler

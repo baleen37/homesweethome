@@ -18,6 +18,7 @@ class ExampleCrawler(BaseCrawler):
         """컨텐츠 파싱하여 데이터 추출"""
         return []
 
+
 if __name__ == "__main__":
     crawler = ExampleCrawler()
     results = crawler.crawl()

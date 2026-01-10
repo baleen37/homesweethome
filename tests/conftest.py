@@ -1,5 +1,3 @@
-
-
 def pytest_configure(config):
     """pytest 마커 등록"""
     config.addinivalue_line("markers", "unit: 단위 테스트")
