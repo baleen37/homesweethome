@@ -252,7 +252,11 @@ class AsilDongInfoCrawler(BaseCrawler):
     def parse(self, content: str) -> list[dict]:
         """JSON 응답 파싱 (앞의 \r\n 제거 후 data 필드 반환)"""
         # 응답 앞에 \r\n 8개가 선행하므로 strip() 후 파싱
-        data = json.loads(content.strip())
+        stripped = content.strip()
+        # 빈 응답 처리 (동 정보가 없는 경우)
+        if not stripped:
+            return []
+        data = json.loads(stripped)
         # data 필드를 반환, 없으면 빈 리스트 반환
         return data.get("data", [])
 
