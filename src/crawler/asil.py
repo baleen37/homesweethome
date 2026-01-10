@@ -5,9 +5,10 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from crawler.base import BaseCrawler
+from crawler.dto.asil_apt_list import AsilAptListDTO
 
 
-class AsilAptListCrawler(BaseCrawler):
+class AsilAptListCrawler(BaseCrawler[list[AsilAptListDTO]]):
     """asil.kr 아파트 목록 크롤러"""
 
     BASE_URL = "https://asil.kr/app/data/data_apt_list.jsp"

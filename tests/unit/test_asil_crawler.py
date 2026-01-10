@@ -65,6 +65,8 @@ class TestAsilAptListCrawler:
             {
                 "seq": "20340925",
                 "name": "역삼자이",
+                "dong": "1168010100",
+                "dongname": "역삼동",
                 "build_year": "2016",
                 "household": "408",
                 "dong_count": "3",
@@ -77,7 +79,6 @@ class TestAsilAptListCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
-        assert isinstance(result[0], dict)
         assert result[0]["seq"] == "20340925"
         assert result[0]["name"] == "역삼자이"
 
