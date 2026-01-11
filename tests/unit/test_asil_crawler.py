@@ -3,17 +3,32 @@
 import pytest
 
 from crawler.asil import (
+    AsilAgentInfoCrawler,
     AsilAptListCrawler,
     AsilDongInfoCrawler,
     AsilEducationMapCrawler,
     AsilListingCrawler,
+    AsilOffersListCrawler,
+    AsilPopulationCrawler,
+    AsilPriceIndexCrawler,
+    AsilRankingCrawler,
     AsilRedevelopCrawler,
     AsilSchoolInfoCrawler,
     AsilTradePriceCrawler,
     AsilTrafficCrawler,
+    AsilTransferCrawler,
     AsilVisitorStatsCrawler,
 )
+from crawler.dto.asil_agent import AsilAgentDTO, AsilAgentInfoResponse
 from crawler.dto.asil_apt_list import AsilAptListDTO
+from crawler.dto.asil_offer import AsilOfferDTO, AsilOffersListResponse
+from crawler.dto.asil_population import AsilPopulationDTO
+from crawler.dto.asil_price_index import (
+    AsilPriceIndexRegionDTO,
+    AsilPriceIndexSummaryDTO,
+)
+from crawler.dto.asil_ranking import AsilRankingDTO
+from crawler.dto.asil_transfer import AsilTransferDTO
 
 
 class TestAsilAptListCrawler:
@@ -750,3 +765,316 @@ class TestAsilListingCrawler:
         assert len(result) == 2
         assert result[0].seq == "1"
         assert result[1].seq == "3"
+
+
+class TestAsilRankingCrawler:
+    """AsilRankingCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilRankingCrawler, BaseCrawler)
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilRankingCrawler(area="11", theme="max")
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/app/data/data_ranking.jsp")
+        assert "area=11" in url
+        assert "theme=max" in url
+
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilRankingDTO]를 반환해야 함"""
+        crawler = AsilRankingCrawler(area="11", theme="max")
+
+        mock_response = """
+        [
+            {
+                "idx": "1",
+                "seq": "20414401",
+                "name": "아크로서울포레스트",
+                "movein": "2021",
+                "lat": "37.544463790",
+                "lng": "127.04384744",
+                "price": "290억",
+                "yyyymm": "25년6월",
+                "m2": "104평",
+                "floor": "47층",
+                "addr": "서울 성동구 성수동"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], AsilRankingDTO)
+        assert result[0].idx == "1"
+        assert result[0].name == "아크로서울포레스트"
+
+
+class TestAsilPriceIndexCrawler:
+    """AsilPriceIndexCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilPriceIndexCrawler, BaseCrawler)
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilPriceIndexCrawler(area="11", deal_mode="M")
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/rts_m/contents/inc/data_price.jsp")
+        assert "area=11" in url
+        assert "dealmode=M" in url
+
+    def test_parse_returns_list_of_responses(self):
+        """parse()는 지역 데이터와 요약 객체를 반환해야 함"""
+        crawler = AsilPriceIndexCrawler(area="11", deal_mode="M")
+
+        mock_response = """
+        [
+            {
+                "seq": "11",
+                "name": "서울",
+                "v1": "104.0",
+                "v2": "104.3",
+                "v3": "104.5",
+                "v2_gap": "0.3",
+                "v3_gap": "0.2",
+                "v2_icon": "up",
+                "v3_icon": "up"
+            },
+            {
+                "min": "-0.0",
+                "max": "0.5"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert isinstance(result[0], AsilPriceIndexRegionDTO)
+        assert isinstance(result[1], AsilPriceIndexSummaryDTO)
+        assert result[0].name == "서울"
+        assert result[1].min == "-0.0"
+
+
+class TestAsilOffersListCrawler:
+    """AsilOffersListCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilOffersListCrawler, BaseCrawler)
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilOffersListCrawler(bdong_code="11", page=1)
+        url = crawler.get_url()
+        assert url.startswith("https://realty.asil.kr/api_asil/offers_list.aspx")
+        assert "bdong_cd=11" in url
+        assert "now_page=1" in url
+
+    def test_parse_returns_offers_list_response(self):
+        """parse()는 AsilOffersListResponse를 반환해야 함"""
+        crawler = AsilOffersListCrawler(bdong_code="11", page=1)
+
+        mock_response = """
+        {
+            "list_result": [
+                {
+                    "mm_uid": "33534599",
+                    "RLSTTYPE_CD": "A01",
+                    "RLSTTYPE_NM": "아파트",
+                    "MAP_X": "126.9973225",
+                    "MAP_Y": "37.5068070",
+                    "BLDNM": "래미안원베일리",
+                    "DEALTYPE_CD": "B01",
+                    "DEALTYPE_NM": "전세",
+                    "WRRNT_AMT": "230,000",
+                    "BRKG_NM": "중개사",
+                    "BRKG_TEL": "02-1234-5678",
+                    "CITY_NM": "서울특별시",
+                    "GUN_NM": "서초구",
+                    "BDONG_NM": "반포동",
+                    "DONG_NM": "118",
+                    "SPLY_SPC": "112.65",
+                    "EXCLS_SPC": "84.98",
+                    "CTRT_SPC": "112.65",
+                    "TOT_FLR_CNT": "33",
+                    "CORES_FLR_CNT": "0",
+                    "spc_v1": "112.65",
+                    "spc_v2": "84.98",
+                    "DEAL_AMT": "0",
+                    "LEASE_AMT": "0",
+                    "FETR_DESC": "테스트",
+                    "premium_price": "0",
+                    "prcl_price": "0",
+                    "grnd_spc": "",
+                    "TOT_SPC": "",
+                    "CNST_SPC": "",
+                    "SUB_RLSTTYPE_CD": "아파트",
+                    "SUB_RLSTTYPE_NM": "아파트",
+                    "CORES_FLR_CNT_NM": "저",
+                    "UNDER_FLR": "",
+                    "flr_dp_mthd_cd": "2",
+                    "PHTO_PATH": "",
+                    "SVC_DATE_STRT": "26.01.11",
+                    "MAP_LOC_YN": "",
+                    "PRCS_CD": "4",
+                    "PRTN_UID": "44902",
+                    "pre_flag": "0",
+                    "f_option": "0",
+                    "f_push": "0",
+                    "user_id": "-20040",
+                    "now_page": "1",
+                    "GU_NM": ""
+                }
+            ]
+        }
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, AsilOffersListResponse)
+        assert len(result.list_result) == 1
+        assert isinstance(result.list_result[0], AsilOfferDTO)
+        assert result.list_result[0].mm_uid == "33534599"
+        assert result.list_result[0].BLDNM == "래미안원베일리"
+
+
+class TestAsilAgentInfoCrawler:
+    """AsilAgentInfoCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilAgentInfoCrawler, BaseCrawler)
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilAgentInfoCrawler(user_id="-20040")
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/json/agentInfo.jsp")
+        assert "user=-20040" in url
+
+    def test_parse_returns_agent_info_response(self):
+        """parse()는 AsilAgentInfoResponse를 반환해야 함"""
+        crawler = AsilAgentInfoCrawler(user_id="-20040")
+
+        mock_response = """
+        {
+            "result": true,
+            "agent": {
+                "seq": "-20040",
+                "company": "테스트중개사",
+                "name": "홍길동",
+                "tel": "010-1234-5678",
+                "cel": "02-1234-5678",
+                "addr": "서울시 강남구",
+                "bizNo": "123-45-67890",
+                "lat": "37.5",
+                "lng": "127.0",
+                "photo": "/photo/member/-20040.png"
+            }
+        }
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, AsilAgentInfoResponse)
+        assert result.result is True
+        assert isinstance(result.agent, AsilAgentDTO)
+        assert result.agent.name == "홍길동"
+        assert result.agent.company == "테스트중개사"
+
+
+class TestAsilPopulationCrawler:
+    """AsilPopulationCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilPopulationCrawler, BaseCrawler)
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilPopulationCrawler(area="11")
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/rts_m/contents/inc/data_population.jsp")
+        assert "area=11" in url
+
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilPopulationDTO]를 반환해야 함"""
+        crawler = AsilPopulationCrawler(area="11")
+
+        mock_response = """
+        [
+            {
+                "seq": "11",
+                "name": "서울",
+                "v1": "9390,925명",
+                "v2": "9335,495명",
+                "v3": "9305,678명",
+                "v2_gap": "55,430명",
+                "v3_gap": "29,817명",
+                "v2_icon": "down",
+                "v3_icon": "down"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], AsilPopulationDTO)
+        assert result[0].name == "서울"
+        assert result[0].v1 == "9390,925명"
+
+
+class TestAsilTransferCrawler:
+    """AsilTransferCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilTransferCrawler, BaseCrawler)
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilTransferCrawler(area="11")
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/rts_m/contents/inc/data_transfer.jsp")
+        assert "area=11" in url
+
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilTransferDTO]를 반환해야 함"""
+        crawler = AsilTransferCrawler(area="11")
+
+        mock_response = """
+        [
+            {
+                "rank": 1,
+                "from": "서울",
+                "to": "경기 광명시",
+                "total": "2,891",
+                "value": "451",
+                "color": ""
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], AsilTransferDTO)
+        assert result[0].rank == 1
+        assert result[0].from_ == "서울"
+        assert result[0].to == "경기 광명시"

@@ -1,13 +1,20 @@
 """asil.kr 크롤러 구현"""
 
 import json
+from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from crawler.base import BaseCrawler
+from crawler.dto.asil_agent import AsilAgentDTO, AsilAgentInfoResponse
 from crawler.dto.asil_apt_list import AsilAptListDTO
 from crawler.dto.asil_education_map import AsilEducationMapDTO  # noqa: F401
+from crawler.dto.asil_offer import AsilOfferDTO, AsilOffersListResponse
+from crawler.dto.asil_population import AsilPopulationDTO
+from crawler.dto.asil_price_index import AsilPriceIndexResponse
+from crawler.dto.asil_ranking import AsilRankingDTO
 from crawler.dto.asil_trade_price import AsilTradePriceDTO
+from crawler.dto.asil_transfer import AsilTransferDTO
 
 
 class AsilAptListCrawler(BaseCrawler[list[AsilAptListDTO]]):
@@ -605,3 +612,447 @@ class AsilListingCrawler(BaseCrawler[list[AsilAptListDTO]]):
             return []
         # 매물 정보(offer 필드)가 있는 항목만 필터링하여 DTO 변환
         return [AsilAptListDTO(**item) for item in data if item.get("offer")]
+
+
+class AsilRankingCrawler(BaseCrawler[list[AsilRankingDTO]]):
+    """asil.kr 아파트 순위 크롤러"""
+
+    BASE_URL = "https://asil.kr/app/data/data_ranking.jsp"
+    ENCODING = "utf-8"
+
+    def __init__(
+        self,
+        area: str = "11",
+        theme: str = "max",
+        deal: str = "1",
+        range_filter: int = 0,
+        start_year: str = "",
+        start_month: str = "",
+        start_day: str = "",
+        end_year: str = "",
+        end_month: str = "",
+        end_day: str = "",
+        apt_name: str = "",
+    ):
+        """
+        Args:
+            area: 지역 코드 (11=서울)
+            theme: 랭킹 타입 (max=최고가, min=최저가)
+            deal: 거래 유형 (1=매매/전세, 2=전세, 3=월세)
+            range_filter: 범위 필터
+            start_year: 시작 연도
+            start_month: 시작 월
+            start_day: 시작 일
+            end_year: 끝 연도
+            end_month: 끝 월
+            end_day: 끝 일
+            apt_name: 아파트 이름 (선택 사항)
+        """
+        self.area = area
+        self.theme = theme
+        self.deal = deal
+        self.range_filter = range_filter
+        self.start_year = start_year
+        self.start_month = start_month
+        self.start_day = start_day
+        self.end_year = end_year
+        self.end_month = end_month
+        self.end_day = end_day
+        self.apt_name = apt_name
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "apt": self.apt_name,
+            "area": self.area,
+            "theme": self.theme,
+            "deal": self.deal,
+            "range": self.range_filter,
+            "sY": self.start_year,
+            "sM": self.start_month,
+            "sD": self.start_day,
+            "eY": self.end_year,
+            "eM": self.end_month,
+            "eD": self.end_day,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[AsilRankingDTO]:
+        """JSON 응답 파싱"""
+        data = json.loads(content)
+        if not isinstance(data, list):
+            return []
+        return [AsilRankingDTO(**item) for item in data]
+
+
+class AsilPriceIndexCrawler(BaseCrawler[list[AsilPriceIndexResponse]]):
+    """asil.kr 가격 지수 크롤러"""
+
+    BASE_URL = "https://asil.kr/rts_m/contents/inc/data_price.jsp"
+    ENCODING = "euc_kr"
+
+    def __init__(
+        self,
+        area: str = "11",
+        price_type: int = 1,
+        deal_mode: str = "M",
+        year: str = "",
+        month: str = "",
+        day: str = "",
+        start_year: str = "",
+        start_month: str = "",
+        start_day: str = "",
+        end_year: str = "",
+        end_month: str = "",
+        end_day: str = "",
+    ):
+        """
+        Args:
+            area: 지역 코드 (11=서울)
+            price_type: 가격 타입 (1=매매가 지수)
+            deal_mode: 거래 모드 (M=매매, J=전세)
+            year: 기준 연도
+            month: 기준 월
+            day: 기준 일
+            start_year: 시작 연도
+            start_month: 시작 월
+            start_day: 시작 일
+            end_year: 끝 연도
+            end_month: 끝 월
+            end_day: 끝 일
+        """
+        self.area = area
+        self.price_type = price_type
+        self.deal_mode = deal_mode
+        self.year = year
+        self.month = month
+        self.day = day
+        self.start_year = start_year
+        self.start_month = start_month
+        self.start_day = start_day
+        self.end_year = end_year
+        self.end_month = end_month
+        self.end_day = end_day
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "area": self.area,
+            "ptype": self.price_type,
+            "dealmode": self.deal_mode,
+            "Y": self.year,
+            "M": self.month,
+            "D": self.day,
+            "sY": self.start_year,
+            "sM": self.start_month,
+            "sD": self.start_day,
+            "eY": self.end_year,
+            "eM": self.end_month,
+            "eD": self.end_day,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기 (EUC-KR 인코딩)"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[AsilPriceIndexResponse]:
+        """JSON 응답 파싱 (지역 데이터 + 요약 객체)"""
+        data = json.loads(content)
+        if not isinstance(data, list):
+            return []
+        # 마지막 항목은 요약 객체 (min, max만 있는 경우)
+        result: list[AsilPriceIndexResponse] = []
+        for item in data:
+            if "min" in item and "max" in item and len(item) == 2:
+                # 요약 객체 - pydantic 모델로 자동 변환
+                from crawler.dto.asil_price_index import AsilPriceIndexSummaryDTO
+
+                result.append(AsilPriceIndexSummaryDTO(**item))  # type: ignore[arg-type]
+            else:
+                from crawler.dto.asil_price_index import AsilPriceIndexRegionDTO
+
+                result.append(AsilPriceIndexRegionDTO(**item))  # type: ignore[arg-type]
+        return result
+
+
+class AsilOffersListCrawler(BaseCrawler[AsilOffersListResponse]):
+    """asil.kr 매물 목록 크롤러 (페이지네이션 지원)"""
+
+    BASE_URL = "https://realty.asil.kr/api_asil/offers_list.aspx"
+    ENCODING = "utf-8"
+
+    def __init__(
+        self,
+        sub_rlst: str = "A01,A04,B01,A02,B02,F01",
+        deal_type: str = "",
+        order_by: str = "1",
+        min_price: int = 0,
+        max_price: int = 0,
+        min_jeonse_price: int = 0,
+        max_jeonse_price: int = 0,
+        min_space: int = 0,
+        max_space: int = 0,
+        bdong_code: str = "11",
+        bld_code: str = "",
+        page: int = 1,
+    ):
+        """
+        Args:
+            sub_rlst: 부동산 유형 리스트 (A01=아파트매매, A04=재건축,
+                B01=전세, B02=월세, F01=다가구)
+            deal_type: 거래 유형 (빈 문자열=전체)
+            order_by: 정렬 (1=최신순)
+            min_price: 최소 매매가 (만원)
+            max_price: 최대 매매가 (만원)
+            min_jeonse_price: 최소 전세가 (만원)
+            max_jeonse_price: 최대 전세가 (만원)
+            min_space: 최소 면적
+            max_space: 최대 면적
+            bdong_code: 법정동 코드
+            bld_code: 건물 코드
+            page: 페이지 번호
+        """
+        self.sub_rlst = sub_rlst
+        self.deal_type = deal_type
+        self.order_by = order_by
+        self.min_price = min_price
+        self.max_price = max_price
+        self.min_jeonse_price = min_jeonse_price
+        self.max_jeonse_price = max_jeonse_price
+        self.min_space = min_space
+        self.max_space = max_space
+        self.bdong_code = bdong_code
+        self.bld_code = bld_code
+        self.page = page
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "srch_sub_rlst": self.sub_rlst,
+            "srch_dealtype": self.deal_type,
+            "srch_order_by": self.order_by,
+            "srch_min_prc": self.min_price,
+            "srch_max_prc": self.max_price,
+            "srch_le_min_prc": self.min_jeonse_price,
+            "srch_le_max_prc": self.max_jeonse_price,
+            "srch_min_spc": self.min_space,
+            "srch_max_spc": self.max_space,
+            "bdong_cd": self.bdong_code,
+            "asil_bldcode": self.bld_code,
+            "now_page": self.page,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> AsilOffersListResponse:
+        """JSON 응답 파싱"""
+        data: dict[str, Any] = json.loads(content)
+        list_result = data.get("list_result", [])
+        if not isinstance(list_result, list):
+            list_result = []
+        offers = [AsilOfferDTO(**item) for item in list_result]
+        return AsilOffersListResponse(list_result=offers)
+
+
+class AsilAgentInfoCrawler(BaseCrawler[AsilAgentInfoResponse]):
+    """asil.kr 중개사 정보 크롤러"""
+
+    BASE_URL = "https://asil.kr/json/agentInfo.jsp"
+    ENCODING = "utf-8"
+
+    def __init__(self, user_id: str = "-20040"):
+        """
+        Args:
+            user_id: 사용자 ID (중개사 ID)
+        """
+        self.user_id = user_id
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {"user": self.user_id}
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> AsilAgentInfoResponse:
+        """JSON 응답 파싱"""
+        data: dict[str, Any] = json.loads(content)
+        agent_data = data.get("agent", {})
+        agent = AsilAgentDTO(**agent_data)
+        return AsilAgentInfoResponse(result=data.get("result", False), agent=agent)
+
+
+class AsilPopulationCrawler(BaseCrawler[list[AsilPopulationDTO]]):
+    """asil.kr 인구 통계 크롤러"""
+
+    BASE_URL = "https://asil.kr/rts_m/contents/inc/data_population.jsp"
+    ENCODING = "euc_kr"
+
+    def __init__(
+        self,
+        area: str = "11",
+        year: str = "",
+        month: str = "",
+        mode: int = 2,
+    ):
+        """
+        Args:
+            area: 지역 코드 (11=서울)
+            year: 연도
+            month: 월
+            mode: 데이터 모드 (1=월간, 2=분기, 3=연간)
+        """
+        self.area = area
+        self.year = year
+        self.month = month
+        self.mode = mode
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "area": self.area,
+            "Y": self.year,
+            "M": self.month,
+            "mode": self.mode,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기 (EUC-KR 인코딩)"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[AsilPopulationDTO]:
+        """JSON 응답 파싱"""
+        data = json.loads(content)
+        if not isinstance(data, list):
+            return []
+        return [AsilPopulationDTO(**item) for item in data]
+
+
+class AsilTransferCrawler(BaseCrawler[list[AsilTransferDTO]]):
+    """asil.kr 인구 유동 크롤러"""
+
+    BASE_URL = "https://asil.kr/rts_m/contents/inc/data_transfer.jsp"
+    ENCODING = "euc_kr"
+
+    def __init__(
+        self,
+        area: str = "11",
+        start_year: str = "",
+        start_month: str = "",
+        end_year: str = "",
+        end_month: str = "",
+        mode: int = 3,
+        household: int = 0,
+    ):
+        """
+        Args:
+            area: 지역 코드 (11=서울)
+            start_year: 시작 연도
+            start_month: 시작 월
+            end_year: 끝 연도
+            end_month: 끝 월
+            mode: 모드 (1=유입, 2=유출, 3=순이동)
+            household: 세대수 (0=전체, 1-10=특정 세대수)
+        """
+        self.area = area
+        self.start_year = start_year
+        self.start_month = start_month
+        self.end_year = end_year
+        self.end_month = end_month
+        self.mode = mode
+        self.household = household
+
+    def get_url(self) -> str:
+        """API 요청 URL 생성"""
+        params = {
+            "area": self.area,
+            "sY": self.start_year,
+            "sM": self.start_month,
+            "eY": self.end_year,
+            "eM": self.end_month,
+            "mode": self.mode,
+            "household": self.household,
+        }
+        return f"{self.BASE_URL}?{urlencode(params)}"
+
+    def fetch(self, url: str) -> str:
+        """URL에서 JSON 데이터 가져오기 (EUC-KR 인코딩)"""
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://asil.kr/",
+            },
+        )
+        with urlopen(request, timeout=10) as response:
+            return response.read().decode(self.ENCODING)
+
+    def parse(self, content: str) -> list[AsilTransferDTO]:
+        """JSON 응답 파싱"""
+        data = json.loads(content)
+        if not isinstance(data, list):
+            return []
+        return [AsilTransferDTO(**item) for item in data]

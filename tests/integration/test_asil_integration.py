@@ -1,19 +1,29 @@
 """AsilCrawler 통합 테스트 - 실제 API 호출"""
 
+import urllib.error
+
 import pytest
 
 from crawler.asil import (
+    AsilAgentInfoCrawler,
     AsilAptListCrawler,
     AsilDongInfoCrawler,
     AsilEducationMapCrawler,
     AsilListingCrawler,
+    AsilOffersListCrawler,
+    AsilPopulationCrawler,
+    AsilPriceIndexCrawler,
+    AsilRankingCrawler,
     AsilRedevelopCrawler,
     AsilSchoolInfoCrawler,
     AsilTradePriceCrawler,
     AsilTrafficCrawler,
+    AsilTransferCrawler,
     AsilVisitorStatsCrawler,
 )
+from crawler.dto.asil_agent import AsilAgentDTO, AsilAgentInfoResponse
 from crawler.dto.asil_apt_list import AsilAptListDTO
+from crawler.dto.asil_offer import AsilOfferDTO, AsilOffersListResponse
 
 
 @pytest.mark.integration
@@ -473,3 +483,314 @@ class TestAsilListingCrawlerIntegration:
         # 매물이 있는 항목만 필터링되어야 함
         for listing in result:
             assert listing.offer
+
+
+@pytest.mark.integration
+class TestAsilRankingCrawlerIntegration:
+    """AsilRankingCrawler 통합 테스트"""
+
+    def test_fetch_real_ranking_max_price(self):
+        """서울(11) 지역의 최고가 랭킹을 실제로 가져옴"""
+        crawler = AsilRankingCrawler(area="11", theme="max")
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 최고가 랭킹에는 적어도 1개 이상의 데이터가 있어야 함
+        # API에서 데이터를 반환하지 않을 수도 있으므로 유연하게 처리
+        if len(result) > 0:
+            # 각 랭킹 정보에 필수 필드가 있어야 함
+            ranking = result[0]
+            assert ranking.idx
+            assert ranking.seq
+            assert ranking.name
+            assert ranking.price
+
+    def test_fetch_real_ranking_min_price(self):
+        """서울(11) 지역의 최저가 랭킹을 실제로 가져옴"""
+        crawler = AsilRankingCrawler(area="11", theme="min")
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 최저가 랭킹에는 적어도 1개 이상의 데이터가 있어야 함
+        # API에서 데이터를 반환하지 않을 수도 있으므로 유연하게 처리
+        if len(result) > 0:
+            # 각 랭킹 정보에 필수 필드가 있어야 함
+            ranking = result[0]
+            assert ranking.idx
+            assert ranking.seq
+            assert ranking.name
+            assert ranking.price
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilRankingCrawler(area="11", theme="max")
+
+        # crawl()은 get_url() -> fetch() -> parse() 순서로 호출해야 함
+        result = crawler.crawl()
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, list)
+
+
+@pytest.mark.integration
+class TestAsilPriceIndexCrawlerIntegration:
+    """AsilPriceIndexCrawler 통합 테스트"""
+
+    def test_fetch_real_price_index_seoul(self):
+        """서울(11) 지역의 매매가 지수를 실제로 가져옴"""
+        crawler = AsilPriceIndexCrawler(area="11", deal_mode="M")
+        try:
+            result = crawler.crawl()
+        except urllib.error.HTTPError as e:
+            pytest.skip(f"API 서버 오류: {e.code}")
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 가격 지수에는 적어도 1개 이상의 데이터가 있어야 함
+        assert len(result) > 0
+
+        # 데이터 구조 확인 (지역 데이터 또는 요약 데이터)
+        first_item = result[0]
+        # 지역 데이터 또는 요약 데이터여야 함
+        assert hasattr(first_item, "seq") or hasattr(first_item, "min")
+
+    def test_fetch_price_index_with_date_range(self):
+        """날짜 범위를 지정하여 가격 지수를 가져옴"""
+        crawler = AsilPriceIndexCrawler(
+            area="11",
+            deal_mode="M",
+            start_year="2024",
+            start_month="1",
+            start_day="1",
+            end_year="2024",
+            end_month="12",
+            end_day="31",
+        )
+        try:
+            result = crawler.crawl()
+        except urllib.error.HTTPError as e:
+            pytest.skip(f"API 서버 오류: {e.code}")
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 구조 확인
+        if len(result) > 0:
+            # 마지막 항목은 요약 객체일 수 있음
+            last_item = result[-1]
+            if hasattr(last_item, "min"):
+                # 요약 객체
+                assert last_item.min
+                assert last_item.max
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilPriceIndexCrawler(area="11", deal_mode="M")
+
+        try:
+            result = crawler.crawl()
+        except urllib.error.HTTPError as e:
+            pytest.skip(f"API 서버 오류: {e.code}")
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, list)
+
+
+@pytest.mark.integration
+class TestAsilPopulationCrawlerIntegration:
+    """AsilPopulationCrawler 통합 테스트"""
+
+    def test_fetch_real_population_seoul(self):
+        """서울(11)의 인구 통계를 실제로 가져옴"""
+        crawler = AsilPopulationCrawler(area="11", year="2024", month="1", mode=1)
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 필수 필드 확인
+        if len(result) > 0:
+            pop = result[0]
+            assert pop.seq
+            assert pop.name
+            # 인구값 필드가 있어야 함
+            assert pop.v1 or pop.v2 or pop.v3
+
+    def test_fetch_population_with_year_month(self):
+        """특정 연도/월의 인구 통계를 가져옴"""
+        crawler = AsilPopulationCrawler(area="11", year="2024", month="1", mode=1)
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 필수 필드 확인
+        if len(result) > 0:
+            pop = result[0]
+            assert pop.seq
+            assert pop.name
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilPopulationCrawler(area="11", year="2024", month="1", mode=1)
+
+        result = crawler.crawl()
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, list)
+
+
+@pytest.mark.integration
+class TestAsilTransferCrawlerIntegration:
+    """AsilTransferCrawler 통합 테스트"""
+
+    def test_fetch_real_transfer_seoul(self):
+        """서울(11)의 인구 유동 데이터를 실제로 가져옴"""
+        crawler = AsilTransferCrawler(
+            area="11",
+            start_year="2024",
+            start_month="1",
+            end_year="2024",
+            end_month="12",
+        )
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 필수 필드 확인
+        if len(result) > 0:
+            transfer = result[0]
+            assert transfer.rank >= 0
+            assert transfer.from_ or transfer.to
+
+    def test_fetch_transfer_with_date_range(self):
+        """특정 기간의 인구 유동 데이터를 가져옴"""
+        crawler = AsilTransferCrawler(
+            area="11",
+            start_year="2024",
+            start_month="1",
+            end_year="2024",
+            end_month="12",
+        )
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 필수 필드 확인
+        if len(result) > 0:
+            transfer = result[0]
+            assert transfer.rank >= 0
+            # total과 value 필드가 숫자 형식 문자열이어야 함
+            assert transfer.total or transfer.value
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilTransferCrawler(
+            area="11",
+            start_year="2024",
+            start_month="1",
+            end_year="2024",
+            end_month="12",
+        )
+
+        result = crawler.crawl()
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, list)
+
+
+@pytest.mark.integration
+class TestAsilOffersListCrawlerIntegration:
+    """AsilOffersListCrawler 통합 테스트"""
+
+    def test_fetch_real_offers_list_seoul(self):
+        """서울(bdong_code="11")의 매물 목록을 실제로 가져옴"""
+        crawler = AsilOffersListCrawler(bdong_code="11", page=1)
+        result = crawler.crawl()
+
+        # 결과가 AsilOffersListResponse여야 함
+        assert isinstance(result, AsilOffersListResponse)
+
+        # list_result 필드가 리스트여야 함
+        assert isinstance(result.list_result, list)
+
+        # 서울에는 적어도 1개 이상의 매물이 있어야 함 (데이터가 있다고 가정)
+        # API가 빈 결과를 반환할 수 있으므로 graceful하게 처리
+        if len(result.list_result) > 0:
+            # 각 매물 정보에 필수 필드가 있어야 함
+            offer = result.list_result[0]
+            assert isinstance(offer, AsilOfferDTO)
+            assert offer.mm_uid
+            assert offer.BLDNM
+
+    def test_fetch_offers_list_with_filters(self):
+        """가격/면적 필터가 적용된 매물 목록을 가져옴"""
+        crawler = AsilOffersListCrawler(
+            bdong_code="11",
+            min_price=50000,  # 5억 이상
+            max_price=200000,  # 20억 이하
+            min_space=80,  # 80㎡ 이상
+            max_space=160,  # 160㎡ 이하
+            page=1,
+        )
+        result = crawler.crawl()
+
+        assert isinstance(result, AsilOffersListResponse)
+        assert isinstance(result.list_result, list)
+
+        # 필터링된 결과 확인 (데이터가 있는 경우)
+        for offer in result.list_result:
+            # 매물이 존재하면 적어도 기본 필드는 있어야 함
+            assert offer.mm_uid
+            assert offer.BLDNM
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilOffersListCrawler(bdong_code="11", page=1)
+
+        result = crawler.crawl()
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, AsilOffersListResponse)
+        assert isinstance(result.list_result, list)
+
+
+@pytest.mark.integration
+class TestAsilAgentInfoCrawlerIntegration:
+    """AsilAgentInfoCrawler 통합 테스트"""
+
+    def test_fetch_real_agent_info(self):
+        """유효한 user_id("-20040")의 중개사 정보를 실제로 가져옴"""
+        crawler = AsilAgentInfoCrawler(user_id="-20040")
+        result = crawler.crawl()
+
+        # 결과가 AsilAgentInfoResponse여야 함
+        assert isinstance(result, AsilAgentInfoResponse)
+
+        # result 필드가 bool이어야 함
+        assert isinstance(result.result, bool)
+
+        # API가 성공하면 중개사 정보가 있어야 함
+        if result.result:
+            assert isinstance(result.agent, AsilAgentDTO)
+            # 중개사 필수 필드 확인
+            assert result.agent.seq
+            assert result.agent.company
+            assert result.agent.name
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilAgentInfoCrawler(user_id="-20040")
+
+        result = crawler.crawl()
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, AsilAgentInfoResponse)
+        assert isinstance(result.result, bool)
