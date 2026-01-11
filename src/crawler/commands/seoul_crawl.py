@@ -57,6 +57,7 @@ SEOUL_GU_CODES = {
 CSV_FIELDNAMES = [
     "seq",
     "name",
+    "gu_name",
     "dong",
     "dongname",
     "bungi",
@@ -331,6 +332,7 @@ def map_dto_to_csv(apt: Any) -> dict[str, Any]:
     apt_dict["movein"] = apt_dict.pop("build_year", None)
     apt_dict["total_dong"] = apt_dict.pop("dong_count", None)
     apt_dict["type"] = apt_dict.pop("maemul_count", None)
+    apt_dict["gu_name"] = apt.gu_name
 
     address = apt_dict.pop("address", None)
     apt_dict["etc"] = address

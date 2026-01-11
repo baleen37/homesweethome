@@ -30,7 +30,12 @@ class TestAsilAptListCrawlerIntegration:
     """AsilAptListCrawler 통합 테스트"""
 
     def test_fetch_real_apt_list_for_yeoksam(self):
-        """역삼동(1168010100)의 아파트 목록을 실제로 가져옴"""
+        """역삼동(1168010100)의 아파트 목록을 실제로 가져옴
+
+        API 동작 참고:
+        - min_household=0으로 요청하면 API 응답의 household 필드가 '0'으로 에코됨
+        - min_household>0으로 요청하면 API 응답에 실제 세대수가 반환됨
+        """
         crawler = AsilAptListCrawler(dong_code="1168010100")
         result = crawler.crawl()
 
@@ -50,19 +55,45 @@ class TestAsilAptListCrawlerIntegration:
         # build_year는 movein 필드로 매핑되어 있음 (alias 적용)
         assert apt.build_year is not None
 
+        # API 동작 검증: min_household=0으로 요청하면 household가 '0'으로 에코됨
+        # 이는 API의 설계상의 동작으로, 요청 파라미터의 household 값을 응답 필드에 그대로 반환함
+        assert apt.household == "0", (
+            f"min_household=0 요청 시 household 필드가 '0'으로 에코되어야 함. "
+            f"실제 값: {repr(apt.household)}"
+        )
+
     def test_fetch_real_apt_list_with_min_household_filter(self):
-        """세대수 필터가 적용된 아파트 목록을 가져옴"""
+        """세대수 필터가 적용된 아파트 목록을 가져옴
+
+        API 동작 참고:
+        - min_household>0으로 요청하면 API 응답에 실제 세대수가 반환됨
+        - API는 min_household 값 이상의 세대수를 가진 아파트만 필터링하여 반환
+        """
         crawler = AsilAptListCrawler(dong_code="1168010100", min_household=100)
         result = crawler.crawl()
 
         assert isinstance(result, list)
+
+        # min_household>0이므로 결과가 있어야 함
+        assert len(result) > 0
+
         # 100세대 이상인 아파트만 필터링되어야 함
         # 실제 API에서 필터링을 수행하는지 확인
         for apt in result:
             # 세대수 필드에 콤마가 포함된 경우 제거 (예: "1,050" → 1050)
             household_str = apt.household or "0"
             household = int(household_str.replace(",", ""))
-            assert household >= 100
+            assert household >= 100, (
+                f"{apt.name}의 세대수 {household}가 min_household=100보다 작습니다"
+            )
+
+        # 첫 번째 아파트로 실제 세대수가 반환되는지 검증
+        # min_household>0이면 household 필드에 실제 세대수가 반환됨
+        first_apt = result[0]
+        assert first_apt.household != "0", (
+            f"min_household>0 요청 시 household 필드가 실제 세대수여야 함. "
+            f"실제 값: {repr(first_apt.household)}"
+        )
 
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""

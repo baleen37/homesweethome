@@ -102,6 +102,24 @@ class TestAsilAptListCrawler:
         assert result[0].seq == "20340925"
         assert result[0].name == "역삼자이"
 
+    def test_gu_name_returns_district_from_dong_code(self):
+        """gu_name property는 법정동 코드 앞 5자리에서 구 이름을 반환해야 함"""
+
+        crawler = AsilAptListCrawler(dong_code="1168010100")
+        mock_response = """
+        [
+            {
+                "seq": "20340925",
+                "name": "역삼자이",
+                "dong": "1168010100",
+                "dongname": "역삼동"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert result[0].gu_name == "강남구"
+
 
 class TestAsilTradePriceCrawler:
     """AsilTradePriceCrawler 단위 테스트"""

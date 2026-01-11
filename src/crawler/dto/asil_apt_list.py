@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from crawler.constants import get_gu_name
+
 
 class AsilAptListDTO(BaseModel):
     """ASIL 아파트 목록 DTO
@@ -22,3 +24,12 @@ class AsilAptListDTO(BaseModel):
     offer: str | None = Field(default=None, description="매물 정보")
     lat: str | None = Field(default=None, description="위도")
     lng: str | None = Field(default=None, description="경도")
+
+    @property
+    def gu_name(self) -> str | None:
+        """구 이름
+
+        법정동 코드 앞 5자리에서 구 코드를 추출하여 구 이름을 반환합니다.
+        """
+        gu_code = self.dong[:5]
+        return get_gu_name(gu_code)
