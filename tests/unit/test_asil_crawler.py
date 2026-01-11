@@ -21,6 +21,7 @@ from crawler.asil import (
 )
 from crawler.dto.asil_agent import AsilAgentDTO, AsilAgentInfoResponse
 from crawler.dto.asil_apt_list import AsilAptListDTO
+from crawler.dto.asil_dong_info import AsilDongInfoDTO
 from crawler.dto.asil_offer import AsilOfferDTO, AsilOffersListResponse
 from crawler.dto.asil_population import AsilPopulationDTO
 from crawler.dto.asil_price_index import (
@@ -223,8 +224,10 @@ class TestAsilSchoolInfoCrawler:
         url = crawler.get_url()
         assert "type1=3" in url
 
-    def test_parse_returns_list_of_dicts(self):
-        """parse()는 list[dict]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilSchoolInfoDTO]를 반환해야 함"""
+        from crawler.dto.asil_school import AsilSchoolInfoDTO
+
         crawler = AsilSchoolInfoCrawler(school_type="elementary")
 
         # Mock JSON 응답 (실제 API 응답 형식)
@@ -242,9 +245,9 @@ class TestAsilSchoolInfoCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
-        assert isinstance(result[0], dict)
-        assert result[0]["seq"] == "B100001394"
-        assert result[0]["name"] == "경희초등학교"
+        assert isinstance(result[0], AsilSchoolInfoDTO)
+        assert result[0].seq == "B100001394"
+        assert result[0].name == "경희초등학교"
 
     def test_parse_handles_empty_response(self):
         """parse()는 빈 응답을 처리할 수 있어야 함"""
@@ -412,8 +415,9 @@ class TestAsilDongInfoCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 2
-        assert result[0]["dong"] == "101"
-        assert result[1]["dong"] == "102"
+        assert isinstance(result[0], AsilDongInfoDTO)
+        assert result[0].dong == "101"
+        assert result[1].dong == "102"
 
     def test_parse_returns_data_field(self):
         """parse()는 응답의 data 필드를 반환해야 함"""
@@ -423,7 +427,8 @@ class TestAsilDongInfoCrawler:
 
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
-        assert result[0]["dong"] == "101"
+        assert isinstance(result[0], AsilDongInfoDTO)
+        assert result[0].dong == "101"
 
     def test_parse_handles_empty_data(self):
         """parse()는 빈 데이터를 올바르게 처리해야 함"""

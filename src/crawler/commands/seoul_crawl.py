@@ -18,11 +18,6 @@ from datetime import datetime
 from typing import Any, TextIO, TypedDict
 
 from crawler.asil import AsilAptListCrawler
-from crawler.utils.data_quality import (
-    DataQualityStats,
-    analyze_data_quality,
-    log_quality_summary,
-)
 from crawler.utils.filter import FilterOptions, filter_records
 
 # 서울 25개 구 코드
@@ -83,7 +78,6 @@ class CrawlStats(TypedDict):
     skipped_dongs: int
     unique_seqs: set[str]
     filtered_out: int
-    quality_stats: DataQualityStats
 
 
 @dataclass
@@ -135,11 +129,6 @@ class SeoulCrawlConfig:
     def checkpoint_file(self) -> str:
         """체크포인트 파일 경로"""
         return os.path.join(self.output_dir, "crawl_checkpoint.json")
-
-    @property
-    def quality_report_file(self) -> str:
-        """품질 리포트 파일 경로"""
-        return os.path.join(self.output_dir, f"quality_report_{self.timestamp}.txt")
 
 
 def setup_csv_writer(filepath: str) -> tuple[csv.DictWriter, TextIO]:
@@ -351,8 +340,7 @@ def crawl_single_gu(
     csv_f: TextIO,
     log_f: TextIO,
     config: SeoulCrawlConfig,
-    enable_quality_log: bool = True,
-) -> dict[str, int | DataQualityStats]:
+) -> dict[str, int]:
     """단일 구 크롤링
 
     Args:
@@ -364,10 +352,9 @@ def crawl_single_gu(
         csv_f: CSV 파일 객체
         log_f: 로그 파일 객체
         config: 크롤링 설정
-        enable_quality_log: 품질 로그 출력 여부
 
     Returns:
-        구별 통계 (found, empty, error, apartments, skipped, filtered_out, quality_stats)
+        구별 통계 (found, empty, error, apartments, skipped, filtered_out)
     """
     gu_stats = {
         "found": 0,
@@ -376,7 +363,6 @@ def crawl_single_gu(
         "apartments": 0,
         "skipped": 0,
         "filtered_out": 0,
-        "quality_stats": DataQualityStats(),
     }
 
     all_collected_data = []
@@ -420,12 +406,6 @@ def crawl_single_gu(
                     f"처리:{idx + 1}/{len(dong_codes)})",
                     log_f,
                 )
-
-                if enable_quality_log:
-                    batch_quality = analyze_data_quality(
-                        all_collected_data, unique_seqs, CSV_FIELDNAMES
-                    )
-                    log_quality_summary(batch_quality, lambda msg: log_message(msg, log_f))
         else:
             gu_stats["empty"] += 1
 
@@ -446,10 +426,5 @@ def crawl_single_gu(
 
     if gu_stats["skipped"] > 0:
         log_message(f"  [{gu_name}] 체크포인트로 {gu_stats['skipped']}개 동 스킵", log_f)
-
-    if all_collected_data and enable_quality_log:
-        gu_quality = analyze_data_quality(all_collected_data, unique_seqs, CSV_FIELDNAMES)
-        gu_stats["quality_stats"] = gu_quality
-        log_quality_summary(gu_quality, lambda msg: log_message(msg, log_f))
 
     return gu_stats

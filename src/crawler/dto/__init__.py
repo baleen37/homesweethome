@@ -2,6 +2,7 @@
 
 from crawler.dto.asil_agent import AsilAgentDTO, AsilAgentInfoResponse
 from crawler.dto.asil_apt_list import AsilAptListDTO
+from crawler.dto.asil_dong_info import AsilDongInfoDTO
 from crawler.dto.asil_education_map import AsilEducationMapDTO
 from crawler.dto.asil_offer import AsilOfferDTO, AsilOffersListResponse
 from crawler.dto.asil_population import AsilPopulationDTO
@@ -21,6 +22,7 @@ __all__ = [
     "AsilAgentDTO",
     "AsilAgentInfoResponse",
     "AsilAptListDTO",
+    "AsilDongInfoDTO",
     "AsilEducationMapDTO",
     "AsilOfferDTO",
     "AsilOffersListResponse",

@@ -36,7 +36,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP"]
-ignore = []
+ignore = ["N802"]  # Allow non-lowercase function names (for Korean test functions)
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/crawler"]

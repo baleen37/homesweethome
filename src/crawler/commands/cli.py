@@ -3,6 +3,7 @@
 서울 아파트 크롤링을 위한 상호작용형 커맨드라인 인터페이스를 제공합니다.
 """
 
+import argparse
 import os
 import sys
 import time
@@ -18,11 +19,7 @@ from crawler.commands.seoul_crawl import (
     save_checkpoint,
     setup_csv_writer,
 )
-from crawler.utils.data_quality import (
-    DataQualityStats,
-    generate_quality_report,
-    save_quality_report,
-)
+from crawler.utils.filter import FilterOptions
 
 
 def select_gu_interactive() -> list[tuple[str, str]]:
@@ -148,10 +145,7 @@ def run_crawl(
         "skipped_dongs": 0,
         "unique_seqs": set(),
         "filtered_out": 0,
-        "quality_stats": DataQualityStats(),
     }
-
-    cumulative_quality = DataQualityStats()
 
     log_message("=" * 60, log_f)
     log_message("서울 아파트 크롤링 시작", log_f)
@@ -192,14 +186,9 @@ def run_crawl(
         stats["filtered_out"] += gu_stats["filtered_out"]
         stats["total_processed"] += gu_stats["found"] + gu_stats["empty"] + gu_stats["error"]
 
-        if isinstance(gu_stats["quality_stats"], DataQualityStats):
-            cumulative_quality += gu_stats["quality_stats"]
-
         time.sleep(config.batch_delay)
 
     save_checkpoint(completed_dongs, config.checkpoint_file, config.timestamp)
-
-    stats["quality_stats"] = cumulative_quality
 
     csv_f.close()
     log_f.close()
@@ -238,56 +227,193 @@ def print_results(
     print(f"로그 파일: {config.log_file}")
     print(f"체크포인트 파일: {config.checkpoint_file}")
 
-    if stats["quality_stats"].total_records > 0:
-        print("\n" + "=" * 60)
-        print("데이터 품질 분석")
-        print("=" * 60)
 
-        save_quality_report(stats["quality_stats"], config.quality_report_file)
+def parse_args() -> argparse.Namespace:
+    """커맨드라인 인자 파싱
 
-        quality = stats["quality_stats"]
-        print(f"총 레코드: {quality.total_records:,}건")
-        print(
-            f"세대수 >= 1: {quality.household_positive:,}건 "
-            f"({quality.household_positive / quality.total_records * 100:.1f}%)"
-        )
-        print(
-            f"세대수 = 0: {quality.household_zero:,}건 "
-            f"({quality.household_zero / quality.total_records * 100:.1f}%)"
-        )
-        print(
-            f"유효한 좌표: {quality.valid_coords:,}건 "
-            f"({quality.valid_coords / quality.total_records * 100:.1f}%)"
-        )
-        print(
-            f"유효하지 않은 좌표: {quality.invalid_coords:,}건 "
-            f"({quality.invalid_coords / quality.total_records * 100:.1f}%)"
-        )
-        print(f"중복 레코드: {quality.duplicate_count:,}건 ({quality.duplicate_rate * 100:.1f}%)")
-        print(f"품질 리포트: {config.quality_report_file}")
+    Returns:
+        파싱된 인자 네임스페이스
+    """
+    parser = argparse.ArgumentParser(
+        description="서울 아파트 데이터 크롤링 CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
 
-        print("\n" + generate_quality_report(quality))
+    parser.add_argument(
+        "--gu-code",
+        action="append",
+        dest="gu_code",
+        help="크롤링할 구 코드 (예: 11560). 여러 번 사용 가능.",
+    )
+
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="서울 25개 구 모두 크롤링",
+    )
+
+    parser.add_argument(
+        "--min-household",
+        type=int,
+        default=None,
+        help="최소 세대수 필터 (예: 50)",
+    )
+
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="출력 디렉토리 또는 파일 경로 (예: output 또는 output/test.csv)",
+    )
+
+    parser.add_argument(
+        "--require-valid-coords",
+        action="store_true",
+        default=False,
+        help="유효한 좌표가 있는 레코드만 필터링",
+    )
+
+    parser.add_argument(
+        "--no-require-valid-coords",
+        action="store_false",
+        dest="require_valid_coords",
+        help="유효한 좌표 필터링 비활성화",
+    )
+
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="비대화형 모드 (커맨드라인 인자로 실행)",
+    )
+
+    args = parser.parse_args()
+
+    # 인자가 없으면 대화형 모드로 설정
+    if not args.gu_code and not args.all:
+        args.interactive = True
+    else:
+        args.interactive = False
+
+    return args
 
 
-def main() -> None:
-    """메인 진입점"""
-    mode = select_mode_interactive()
+def build_config_from_args(args: argparse.Namespace) -> SeoulCrawlConfig:
+    """인자로부터 크롤링 설정 생성
 
+    Args:
+        args: 파싱된 커맨드라인 인자
+
+    Returns:
+        크롤링 설정 객체
+    """
     config = SeoulCrawlConfig()
 
-    if mode == "all":
+    # 출력 경로 설정
+    if args.output:
+        output_path = args.output
+        if output_path.endswith(".csv"):
+            # 파일 경로가 직접 지정된 경우
+            config.output_dir = str(os.path.dirname(output_path)) or "output"
+        else:
+            # 디렉토리만 지정된 경우
+            config.output_dir = output_path
+
+    # 필터 옵션 설정
+    filter_kwargs = {}
+    if args.min_household is not None:
+        filter_kwargs["min_household"] = args.min_household
+    if args.require_valid_coords:
+        filter_kwargs["require_valid_coords"] = True
+
+    if filter_kwargs:
+        config.filter_options = FilterOptions(**filter_kwargs)
+
+    return config
+
+
+def select_gu_from_args(args: argparse.Namespace) -> list[tuple[str, str]]:
+    """인자로부터 구 리스트 선택
+
+    Args:
+        args: 파싱된 커맨드라인 인자
+
+    Returns:
+        (구 코드, 구 이름) 리스트
+
+    Raises:
+        ValueError: 유효하지 않은 구 코드이거나 선택된 구가 없는 경우
+    """
+    gu_list = []
+
+    if args.all:
         gu_list = list(SEOUL_GU_CODES.items())
-    elif mode == "select_gu":
-        gu_list = select_gu_interactive()
+    elif args.gu_code:
+        for code in args.gu_code:
+            if code not in SEOUL_GU_CODES:
+                raise ValueError(f"유효하지 않은 구 코드: {code}")
+            gu_list.append((code, SEOUL_GU_CODES[code]))
     else:
-        print("지원하지 않는 모드입니다.")
+        raise ValueError("구 코드를 지정하거나 --all 플래그를 사용하세요")
+
+    return gu_list
+
+
+def main_non_interactive() -> None:
+    """비대화형 모드 메인 진입점"""
+    args = parse_args()
+
+    try:
+        gu_list = select_gu_from_args(args)
+    except ValueError as e:
+        print(f"오류: {e}")
         sys.exit(1)
+
+    config = build_config_from_args(args)
 
     if not gu_list:
         print("선택된 구가 없습니다.")
         sys.exit(1)
 
     run_crawl(gu_list, config)
+
+
+def main() -> None:
+    """메인 진입점"""
+    args = parse_args()
+
+    if args.interactive:
+        # 대화형 모드
+        mode = select_mode_interactive()
+        config = SeoulCrawlConfig()
+
+        if mode == "all":
+            gu_list = list(SEOUL_GU_CODES.items())
+        elif mode == "select_gu":
+            gu_list = select_gu_interactive()
+        else:
+            print("지원하지 않는 모드입니다.")
+            sys.exit(1)
+
+        if not gu_list:
+            print("선택된 구가 없습니다.")
+            sys.exit(1)
+
+        run_crawl(gu_list, config)
+    else:
+        # 비대화형 모드
+        try:
+            gu_list = select_gu_from_args(args)
+        except ValueError as e:
+            print(f"오류: {e}")
+            sys.exit(1)
+
+        config = build_config_from_args(args)
+
+        if not gu_list:
+            print("선택된 구가 없습니다.")
+            sys.exit(1)
+
+        run_crawl(gu_list, config)
 
 
 if __name__ == "__main__":

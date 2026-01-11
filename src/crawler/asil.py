@@ -8,12 +8,14 @@ from urllib.request import Request, urlopen
 from crawler.base import BaseCrawler
 from crawler.dto.asil_agent import AsilAgentDTO, AsilAgentInfoResponse
 from crawler.dto.asil_apt_list import AsilAptListDTO
+from crawler.dto.asil_dong_info import AsilDongInfoDTO
 from crawler.dto.asil_education_map import AsilEducationMapDTO  # noqa: F401
 from crawler.dto.asil_offer import AsilOfferDTO, AsilOffersListResponse
 from crawler.dto.asil_population import AsilPopulationDTO
 from crawler.dto.asil_price_index import AsilPriceIndexResponse
 from crawler.dto.asil_ranking import AsilRankingDTO
 from crawler.dto.asil_redevelop import AsilRedevelopDTO
+from crawler.dto.asil_school import AsilSchoolInfoDTO
 from crawler.dto.asil_trade_price import AsilTradePriceDTO
 from crawler.dto.asil_traffic import AsilTrafficInfoDTO
 from crawler.dto.asil_transfer import AsilTransferDTO
@@ -238,7 +240,7 @@ class AsilTrafficCrawler(BaseCrawler[list[AsilTrafficInfoDTO]]):
         return [AsilTrafficInfoDTO(**item) for item in data]
 
 
-class AsilDongInfoCrawler(BaseCrawler):
+class AsilDongInfoCrawler(BaseCrawler[list[AsilDongInfoDTO]]):
     """asil.kr 동/호 정보 크롤러"""
 
     BASE_URL = "https://asil.kr/app/data/data_apt_dong.jsp"
@@ -270,7 +272,7 @@ class AsilDongInfoCrawler(BaseCrawler):
         with urlopen(request, timeout=10) as response:
             return response.read().decode(self.ENCODING)
 
-    def parse(self, content: str) -> list[dict]:
+    def parse(self, content: str) -> list[AsilDongInfoDTO]:
         """JSON 응답 파싱 (앞의 \r\n 제거 후 data 필드 반환)"""
         # 응답 앞에 \r\n 8개가 선행하므로 strip() 후 파싱
         stripped = content.strip()
@@ -279,10 +281,13 @@ class AsilDongInfoCrawler(BaseCrawler):
             return []
         data = json.loads(stripped)
         # data 필드를 반환, 없으면 빈 리스트 반환
-        return data.get("data", [])
+        dong_list = data.get("data", [])
+        if not isinstance(dong_list, list):
+            return []
+        return [AsilDongInfoDTO(**item) for item in dong_list]
 
 
-class AsilSchoolInfoCrawler(BaseCrawler):
+class AsilSchoolInfoCrawler(BaseCrawler[list[AsilSchoolInfoDTO]]):
     """asil.kr 학군 정보 크롤러"""
 
     BASE_URL = "https://asil.kr/app/data/data_school_list_2024.jsp"
@@ -342,10 +347,12 @@ class AsilSchoolInfoCrawler(BaseCrawler):
         with urlopen(request, timeout=10) as response:
             return response.read().decode(self.ENCODING)
 
-    def parse(self, content: str) -> list[dict]:
+    def parse(self, content: str) -> list[AsilSchoolInfoDTO]:
         """JSON 응답 파싱"""
         data = json.loads(content)
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            return []
+        return [AsilSchoolInfoDTO(**item) for item in data]
 
 
 class AsilEducationMapCrawler(BaseCrawler):

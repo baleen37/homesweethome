@@ -13,6 +13,7 @@ from crawler.asil import (
     AsilOffersListCrawler,
     AsilPopulationCrawler,
     AsilPriceIndexCrawler,
+    AsilRankingCrawler,
     AsilRedevelopCrawler,
     AsilSchoolInfoCrawler,
     AsilTradePriceCrawler,
@@ -22,12 +23,46 @@ from crawler.asil import (
 )
 from crawler.dto.asil_agent import AsilAgentDTO, AsilAgentInfoResponse
 from crawler.dto.asil_apt_list import AsilAptListDTO
+from crawler.dto.asil_dong_info import AsilDongInfoDTO
 from crawler.dto.asil_offer import AsilOfferDTO, AsilOffersListResponse
 
 
 @pytest.mark.integration
 class TestAsilAptListCrawlerIntegration:
     """AsilAptListCrawler 통합 테스트"""
+
+    def _validate_apt_list_dto(self, apt) -> None:
+        """AsilAptListDTO 데이터 필드 검증 헬퍼 메서드"""
+        # 1. AsilAptListDTO 타입인지
+        assert isinstance(apt, AsilAptListDTO), "AsilAptListDTO 타입이어야 함"
+
+        # 2. seq 필드가 존재하고 비어있지 않은지
+        assert apt.seq, "seq 필드는 비어있지 않아야 함"
+
+        # 3. name 필드가 존재하고 비어있지 않은지
+        assert apt.name, "name 필드는 비어있지 않아야 함"
+
+        # 4. dong 필드가 존재하고 비어있지 않은지
+        assert apt.dong, "dong 필드는 비어있지 않아야 함"
+
+        # 5. dongname 필드가 존재하고 비어있지 않은지
+        assert apt.dongname, "dongname 필드는 비어있지 않아야 함"
+
+        # 6. build_year (movein alias) 필드가 존재하는지
+        assert apt.build_year is not None, "build_year 필드는 비어있지 않아야 함"
+
+        # 7. lat, lng가 float로 변환 가능한지 (있는 경우)
+        if apt.lat:
+            try:
+                float(apt.lat)
+            except (ValueError, TypeError):
+                raise AssertionError(f"lat '{apt.lat}'는 float로 변환 가능해야 함")
+
+        if apt.lng:
+            try:
+                float(apt.lng)
+            except (ValueError, TypeError):
+                raise AssertionError(f"lng '{apt.lng}'는 float로 변환 가능해야 함")
 
     def test_fetch_real_apt_list_for_yeoksam(self):
         """역삼동(1168010100)의 아파트 목록을 실제로 가져옴
@@ -47,13 +82,10 @@ class TestAsilAptListCrawlerIntegration:
 
         # 각 아파트 정보에 필수 필드가 있어야 함
         apt = result[0]
-        assert isinstance(apt, AsilAptListDTO)
-        assert apt.seq
-        assert apt.name
+        self._validate_apt_list_dto(apt)
+
         # 실제 API 응답에서 address 필드는 None 반환
         assert apt.address is None
-        # build_year는 movein 필드로 매핑되어 있음 (alias 적용)
-        assert apt.build_year is not None
 
         # API 동작 검증: min_household=0으로 요청하면 household가 '0'으로 에코됨
         # 이는 API의 설계상의 동작으로, 요청 파라미터의 household 값을 응답 필드에 그대로 반환함
@@ -76,6 +108,10 @@ class TestAsilAptListCrawlerIntegration:
 
         # min_household>0이므로 결과가 있어야 함
         assert len(result) > 0
+
+        # 모든 DTO 검증
+        for apt in result:
+            self._validate_apt_list_dto(apt)
 
         # 100세대 이상인 아파트만 필터링되어야 함
         # 실제 API에서 필터링을 수행하는지 확인
@@ -329,7 +365,8 @@ class TestAsilDongInfoCrawlerIntegration:
 
         # 각 동 정보에 필수 필드가 있어야 함
         dong = result[0]
-        assert "dong" in dong
+        assert isinstance(dong, AsilDongInfoDTO)
+        assert dong.dong  # dong 필드가 비어있지 않아야 함
 
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
@@ -345,22 +382,23 @@ class TestAsilDongInfoCrawlerIntegration:
 class TestAsilSchoolInfoCrawlerIntegration:
     """AsilSchoolInfoCrawler 통합 테스트"""
 
-    def _validate_school_dict(self, school: dict) -> None:
-        """학교 데이터(dict) 필드 검증 헬퍼 메서드"""
-        # 1. 각 아이템이 dict인지
-        assert isinstance(school, dict), "각 학교 정보는 dict 타입이어야 함"
+    def _validate_school_dict(self, school) -> None:
+        """학교 데이터(AsilSchoolInfoDTO) 필드 검증 헬퍼 메서드"""
+        from crawler.dto.asil_school import AsilSchoolInfoDTO
 
-        # 2. seq 필드가 존재하고 비어있지 않은지
-        assert "seq" in school, "seq 필드가 존재해야 함"
-        assert school["seq"], "seq 필드는 비어있지 않아야 함"
+        # 1. 각 아이템이 AsilSchoolInfoDTO인지
+        assert isinstance(school, AsilSchoolInfoDTO), (
+            "각 학교 정보는 AsilSchoolInfoDTO 타입이어야 함"
+        )
 
-        # 3. name 필드가 존재하고 비어있지 않은지
-        assert "name" in school, "name 필드가 존재해야 함"
-        assert school["name"], "name 필드는 비어있지 않아야 함"
+        # 2. seq 필드가 비어있지 않은지
+        assert school.seq, "seq 필드는 비어있지 않아야 함"
 
-        # 4. addr 필드가 존재하고 비어있지 않은지
-        assert "addr" in school, "addr 필드가 존재해야 함"
-        assert school["addr"], "addr 필드는 비어있지 않아야 함"
+        # 3. name 필드가 비어있지 않은지
+        assert school.name, "name 필드는 비어있지 않아야 함"
+
+        # 4. addr 필드가 비어있지 않은지
+        assert school.addr, "addr 필드는 비어있지 않아야 함"
 
     def test_fetch_real_elementary_schools_for_gangnam(self):
         """강남구(11680)의 초등학교 목록을 실제로 가져옴"""
@@ -782,6 +820,32 @@ class TestAsilPriceIndexCrawlerIntegration:
 class TestAsilPopulationCrawlerIntegration:
     """AsilPopulationCrawler 통합 테스트"""
 
+    def _validate_population_dto(self, pop) -> None:
+        """AsilPopulationDTO 데이터 필드 검증 헬퍼 메서드"""
+        from crawler.dto.asil_population import AsilPopulationDTO
+
+        # 1. AsilPopulationDTO 타입인지
+        assert isinstance(pop, AsilPopulationDTO), "AsilPopulationDTO 타입이어야 함"
+
+        # 2. seq 필드가 존재하고 비어있지 않은지
+        assert pop.seq, "seq 필드는 비어있지 않아야 함"
+
+        # 3. name 필드가 존재하고 비어있지 않은지
+        assert pop.name, "name 필드는 비어있지 않어야 함"
+
+        # 4. v1, v2, v3 필드가 int 타입인지 (파싱되어야 함)
+        assert isinstance(pop.v1, int), f"v1 필드는 int여야 함: {type(pop.v1)}"
+        assert isinstance(pop.v2, int), f"v2 필드는 int여야 함: {type(pop.v2)}"
+        assert isinstance(pop.v3, int), f"v3 필드는 int여야 함: {type(pop.v3)}"
+
+        # 5. v2_gap, v3_gap 필드가 int 타입인지
+        assert isinstance(pop.v2_gap, int), f"v2_gap 필드는 int여야 함: {type(pop.v2_gap)}"
+        assert isinstance(pop.v3_gap, int), f"v3_gap 필드는 int여야 함: {type(pop.v3_gap)}"
+
+        # 6. v2_icon, v3_icon 필드가 str 타입인지
+        assert isinstance(pop.v2_icon, str), f"v2_icon 필드는 str여야 함: {type(pop.v2_icon)}"
+        assert isinstance(pop.v3_icon, str), f"v3_icon 필드는 str여야 함: {type(pop.v3_icon)}"
+
     def test_fetch_real_population_seoul(self):
         """서울(11)의 인구 통계를 실제로 가져옴"""
         crawler = AsilPopulationCrawler(area="11", year="2024", month="1", mode=1)
@@ -792,11 +856,8 @@ class TestAsilPopulationCrawlerIntegration:
 
         # 데이터가 있으면 필수 필드 확인
         if len(result) > 0:
-            pop = result[0]
-            assert pop.seq
-            assert pop.name
-            # 인구값 필드가 있어야 함
-            assert pop.v1 or pop.v2 or pop.v3
+            for pop in result:
+                self._validate_population_dto(pop)
 
     def test_fetch_population_with_year_month(self):
         """특정 연도/월의 인구 통계를 가져옴"""
@@ -808,9 +869,37 @@ class TestAsilPopulationCrawlerIntegration:
 
         # 데이터가 있으면 필수 필드 확인
         if len(result) > 0:
+            for pop in result:
+                self._validate_population_dto(pop)
+
+    def test_population_data_validation(self):
+        """인구 데이터 필드 상세 검증"""
+        crawler = AsilPopulationCrawler(area="11", year="2024", month="1", mode=1)
+        result = crawler.crawl()
+
+        assert isinstance(result, list)
+
+        # 데이터가 있는 경우 상세 검증 수행
+        if len(result) > 0:
+            # 첫 번째 데이터로 상세 검증
             pop = result[0]
-            assert pop.seq
-            assert pop.name
+
+            # 1. v1 (총인구)이 양수여야 함
+            assert pop.v1 > 0, f"총인구(v1)는 양수여야 함: {pop.v1}"
+
+            # 2. v2_icon이 "up", "down", 또는 빈 문자열인지
+            assert pop.v2_icon in ("up", "down", ""), (
+                f"v2_icon은 'up', 'down', 또는 빈 문자열이어야 함: {pop.v2_icon}"
+            )
+
+            # 3. v3_icon이 "up", "down", 또는 빈 문자열인지
+            assert pop.v3_icon in ("up", "down", ""), (
+                f"v3_icon은 'up', 'down', 또는 빈 문자열이어야 함: {pop.v3_icon}"
+            )
+
+            # 모든 데이터에 대해 기본 검증
+            for pop in result:
+                self._validate_population_dto(pop)
 
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
@@ -1062,3 +1151,151 @@ class TestAsilAgentInfoCrawlerIntegration:
         # 결과가 파싱된 데이터여야 함
         assert isinstance(result, AsilAgentInfoResponse)
         assert isinstance(result.result, bool)
+
+
+@pytest.mark.integration
+class TestAsilRankingCrawlerIntegration:
+    """AsilRankingCrawler 통합 테스트"""
+
+    def _validate_ranking_dto(self, ranking) -> None:
+        """AsilRankingDTO 데이터 필드 검증 헬퍼 메서드"""
+        from crawler.dto.asil_ranking import AsilRankingDTO
+
+        # 1. AsilRankingDTO 타입인지
+        assert isinstance(ranking, AsilRankingDTO), "AsilRankingDTO 타입이어야 함"
+
+        # 2. idx 필드가 존재하고 비어있지 않은지
+        assert ranking.idx, "idx 필드는 비어있지 않아야 함"
+
+        # 3. seq 필드가 존재하고 비어있지 않은지
+        assert ranking.seq, "seq 필드는 비어있지 않아야 함"
+
+        # 4. name 필드가 존재하고 비어있지 않은지
+        assert ranking.name, "name 필드는 비어있지 않아야 함"
+
+        # 5. movein 필드가 존재하는지
+        assert ranking.movein, "movein 필드는 비어있지 않아야 함"
+
+        # 6. lat, lng가 float로 변환 가능한지
+        assert ranking.lat is not None, "lat 필드가 존재해야 함"
+        try:
+            float(ranking.lat)
+        except ValueError:
+            raise AssertionError(f"lat '{ranking.lat}'는 float로 변환 가능해야 함")
+
+        assert ranking.lng is not None, "lng 필드가 존재해야 함"
+        try:
+            float(ranking.lng)
+        except ValueError:
+            raise AssertionError(f"lng '{ranking.lng}'는 float로 변환 가능해야 함")
+
+        # 7. price 필드가 존재하고 비어있지 않은지
+        assert ranking.price, "price 필드는 비어있지 않어야 함"
+
+        # 8. yyyymm 필드가 존재하고 비어있지 않은지
+        assert ranking.yyyymm, "yyyymm 필드는 비어있지 않어야 함"
+
+        # 9. m2 필드가 존재하고 비어있지 않은지
+        assert ranking.m2, "m2 필드는 비어있지 않어야 함"
+
+        # 10. floor 필드가 존재하고 비어있지 않은지
+        assert ranking.floor, "floor 필드는 비어있지 않어야 함"
+
+        # 11. addr 필드가 존재하고 비어있지 않은지
+        assert ranking.addr, "addr 필드는 비어있지 않어야 함"
+
+    def test_fetch_real_ranking_seoul_max_price(self):
+        """서울(11) 지역의 최고가 아파트 순위를 실제로 가져옴"""
+        crawler = AsilRankingCrawler(area="11", theme="max", deal="1")
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 필수 필드 확인
+        if len(result) > 0:
+            for ranking in result:
+                self._validate_ranking_dto(ranking)
+
+    def test_fetch_ranking_with_date_range(self):
+        """날짜 범위를 지정하여 순위 데이터를 가져옴"""
+        crawler = AsilRankingCrawler(
+            area="11",
+            theme="max",
+            deal="1",
+            start_year="2024",
+            start_month="1",
+            start_day="1",
+            end_year="2024",
+            end_month="12",
+            end_day="31",
+        )
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 DTO 검증
+        if len(result) > 0:
+            for ranking in result:
+                self._validate_ranking_dto(ranking)
+
+    def test_fetch_ranking_with_apt_name_filter(self):
+        """아파트 이름 필터가 적용된 순위 데이터를 가져옴"""
+        crawler = AsilRankingCrawler(area="11", theme="max", deal="1", apt_name="역삼자이")
+        result = crawler.crawl()
+
+        # 결과가 리스트여야 함
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 DTO 검증
+        if len(result) > 0:
+            for ranking in result:
+                self._validate_ranking_dto(ranking)
+
+    def test_ranking_data_validation(self):
+        """순위 데이터 필드 상세 검증"""
+        crawler = AsilRankingCrawler(area="11", theme="max", deal="1")
+        result = crawler.crawl()
+
+        assert isinstance(result, list)
+
+        # 데이터가 있는 경우 상세 검증 수행
+        if len(result) > 0:
+            # 첫 번째 데이터로 상세 검증
+            ranking = result[0]
+
+            # 1. idx 필드 타입 검증
+            assert isinstance(ranking.idx, str), "idx 필드는 문자열이어야 함"
+
+            # 2. seq 필드 타입 검증
+            assert isinstance(ranking.seq, str), "seq 필드는 문자열이어야 함"
+
+            # 3. name 필드 타입 검증
+            assert isinstance(ranking.name, str), "name 필드는 문자열이어야 함"
+
+            # 4. price 필드에 "억"이 포함되어 있는지 (예: "290억")
+            assert "억" in ranking.price, f"price 필드에 '억'이 포함되어야 함: {ranking.price}"
+
+            # 5. yyyymm 필드 형식 검증 (예: "25년6월")
+            assert "년" in ranking.yyyymm, f"yyyymm 필드에 '년'이 포함되어야 함: {ranking.yyyymm}"
+            assert "월" in ranking.yyyymm, f"yyyymm 필드에 '월'이 포함되어야 함: {ranking.yyyymm}"
+
+            # 6. m2 필드에 "평"이 포함되어 있는지 (예: "104평")
+            assert "평" in ranking.m2, f"m2 필드에 '평'이 포함되어야 함: {ranking.m2}"
+
+            # 7. floor 필드에 "층"이 포함되어 있는지 (예: "47층")
+            assert "층" in ranking.floor, f"floor 필드에 '층'이 포함되어야 함: {ranking.floor}"
+
+            # 모든 데이터에 대해 기본 검증
+            for ranking in result:
+                self._validate_ranking_dto(ranking)
+
+    def test_crawl_template_method_works(self):
+        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
+        crawler = AsilRankingCrawler(area="11", theme="max", deal="1")
+
+        result = crawler.crawl()
+
+        # 결과가 파싱된 데이터여야 함
+        assert isinstance(result, list)
