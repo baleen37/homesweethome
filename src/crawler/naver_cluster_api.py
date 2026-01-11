@@ -164,6 +164,9 @@ class NaverClusterAPIClient:
 
         Returns:
             dict: 응답 JSON 데이터
+
+        Raises:
+            ValueError: JSON 파싱에 실패하고 HTML 응답인 경우
         """
         # Rate limiting: 랜덤 딜레이 적용
         delay = random.uniform(self.MIN_DELAY_SECONDS, self.MAX_DELAY_SECONDS)
@@ -179,11 +182,29 @@ class NaverClusterAPIClient:
             response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
             response.raise_for_status()
 
-            # Abuse 페이지 감지
+            # Abuse 페이지 감지 (URL 리다이렉트 확인)
             if self.ABUSE_DETECTION_PATH in response.url:
                 return self._fetch_with_playwright(url)
 
-            return response.json()
+            # JSON 파싱 시도
+            try:
+                return response.json()
+            except requests.JSONDecodeError as e:
+                # JSON 파싱 실패 시 HTML 응답 확인
+                content_type = response.headers.get("Content-Type", "")
+                text_preview = response.text[:500] if response.text else ""
+
+                # HTML 응답인 경우 abuse 감지
+                if "text/html" in content_type or "<html" in text_preview.lower():
+                    # Abuse 페이지 HTML인지 확인
+                    if "abuse" in text_preview.lower() or self.ABUSE_DETECTION_PATH in text_preview:
+                        return self._fetch_with_playwright(url)
+
+                # 그 외의 경우 명확한 에러 메시지와 함께 재시도
+                raise ValueError(
+                    f"JSON 파싱 실패 (Content-Type: {content_type}). 응답 미리보기: {text_preview}"
+                ) from e
+
         except requests.RequestException:
             # 요청 실패 시 Playwright 우회 시도
             return self._fetch_with_playwright(url)
@@ -197,6 +218,9 @@ class NaverClusterAPIClient:
 
         Returns:
             dict: 응답 JSON 데이터
+
+        Raises:
+            ValueError: Playwright 우회 후에도 JSON 파싱에 실패한 경우
         """
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -228,7 +252,34 @@ class NaverClusterAPIClient:
 
                 response = session.get(url, timeout=10, allow_redirects=True)
                 response.raise_for_status()
-                return response.json()
+
+                # JSON 파싱 시도
+                try:
+                    return response.json()
+                except requests.JSONDecodeError as e:
+                    # Playwright 우회 후에도 JSON 파싱 실패 시
+                    content_type = response.headers.get("Content-Type", "")
+                    text_preview = response.text[:500] if response.text else ""
+
+                    # 여전히 HTML/abuse 응답인 경우
+                    if "text/html" in content_type or "<html" in text_preview.lower():
+                        if (
+                            "abuse" in text_preview.lower()
+                            or self.ABUSE_DETECTION_PATH in text_preview
+                        ):
+                            raise ValueError(
+                                f"Playwright 우회 후에도 abuse 감지. "
+                                f"Content-Type: {content_type}, "
+                                f"응답 미리보기: {text_preview}"
+                            ) from e
+
+                    # 그 외의 JSON 파싱 실패
+                    raise ValueError(
+                        f"Playwright 우회 후 JSON 파싱 실패. "
+                        f"Content-Type: {content_type}, "
+                        f"응답 미리보기: {text_preview}"
+                    ) from e
+
             finally:
                 browser.close()
 

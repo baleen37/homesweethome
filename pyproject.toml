@@ -30,9 +30,12 @@ markers = [
     "unit: 단위 테스트",
     "integration: 통합 테스트",
     "e2e: E2E 테스트",
+    "slow: 느린 테스트 (기본적으로 skip, -m 'not slow'로 제외 또는 -m 'slow'로만 실행)",
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+addopts = "-m 'not slow'"
+# slow 테스트를 실행하려면: pytest -m 'slow' 또는 pytest (모든 마커 포함)
 
 [tool.ruff]
 line-length = 100

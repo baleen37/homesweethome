@@ -29,6 +29,7 @@ class NaverArticleItemDTO(BaseModel):
     atcl_fetr_desc: str = Field(default="", description="매물설명")
     tag_list: list[str] = Field(default_factory=list, description="태그 리스트")
     bild_nm: str = Field(default="", description="동명")
+    apt_seq: str | None = Field(default=None, description="아파트 고유 코드")
 
 
 class NaverArticleKeyDTO(BaseModel):

@@ -1,21 +1,18 @@
 """네이버 부동산 매물 목록 크롤러
 
-Cluster API + Front API를 조합하여 매물 목록과 상세 정보를 크롤링합니다.
+Cluster API를 사용하여 매물 목록을 크롤링합니다.
 - 중심 좌표와 반경으로 지도 경계 계산
 - Cluster API로 매물 목록 조회
-- Front API로 매물 상세 정보 조회
 - 페이지네이션 자동 처리
 """
 
 import time
-from typing import Any
 
 import requests
 
 from crawler.dto.naver_article import NaverArticleItemDTO
 from crawler.naver_cluster_api import NaverClusterAPIClient
 from crawler.naver_coordinate import bounds_from_center
-from crawler.naver_front_api import NaverFrontAPIClient
 
 
 class RateLimit:
@@ -29,8 +26,8 @@ class NaverListingCrawler:
     """
     네이버 부동산 매물 목록 크롤러
 
-    좌표 기반으로 매물 목록을 조회하고 상세 정보를 수집합니다.
-    Cluster API와 Front API를 조합하여 완전한 매물 정보를 제공합니다.
+    좌표 기반으로 매물 목록을 조회합니다.
+    Cluster API를 사용하여 매물 정보를 제공합니다.
     """
 
     def __init__(
@@ -95,7 +92,6 @@ class NaverListingCrawler:
             dprc_max=dprc_max,
             zoom=zoom,
         )
-        self.front_client = NaverFrontAPIClient()
 
     def _rate_limit(self, type: str = "between_requests"):
         """
@@ -154,80 +150,3 @@ class NaverListingCrawler:
                 break
 
         return all_articles
-
-    def crawl_listing_detail(
-        self, article_id: str, real_estate_type: str, trade_type: str
-    ) -> dict[str, Any] | None:
-        """
-        매물 상세 정보 크롤링
-
-        Args:
-            article_id: 매물 ID
-            real_estate_type: 부동산 유형 (APT, OPST 등)
-            trade_type: 거래 유형 (A1=매매, B1=전세, B2=월세)
-
-        Returns:
-            dict | None: 매물 상세 정보
-        """
-        try:
-            # URL 빌드
-            url = self.front_client.get_article_basic_info_url(
-                article_id=article_id,
-                real_estate_type=real_estate_type,
-                trade_type=trade_type,
-            )
-
-            # API 요청
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            response_json = response.json()
-
-            # 응답 파싱
-            result = {
-                "price_info": self.front_client.parse_basic_info_price(response_json),
-                "detail_info": self.front_client.parse_basic_info_detail(response_json),
-                "size_info": self.front_client.parse_basic_info_size(response_json),
-            }
-
-            return result
-
-        except requests.RequestException as e:
-            print(f"매물 상세 정보 요청 실패 (article_id: {article_id}): {e}")
-            return None
-        except Exception as e:
-            print(f"매물 상세 정보 파싱 실패 (article_id: {article_id}): {e}")
-            return None
-
-    def crawl_all(self, max_pages: int = 10) -> list[dict[str, Any]]:
-        """
-        매물 목록과 상세 정보를 모두 크롤링
-
-        Args:
-            max_pages: 최대 페이지 수 (기본값 10)
-
-        Returns:
-            list[dict]: 매물 목록 + 상세 정보
-        """
-        # 매물 목록 조회
-        articles = self.crawl_listings(max_pages=max_pages)
-
-        results = []
-        for article in articles:
-            # 매물 기본 정보
-            article_dict = article.model_dump()
-
-            # 매물 상세 정보 조회
-            detail = self.crawl_listing_detail(
-                article_id=article.atcl_no,
-                real_estate_type=article.rlet_tp_cd,
-                trade_type=article.trad_tp_cd,
-            )
-
-            # 병합
-            article_dict.update(detail or {})
-            results.append(article_dict)
-
-            # Rate limiting (각 API 호출 후)
-            self._rate_limit(type="between_requests")
-
-        return results

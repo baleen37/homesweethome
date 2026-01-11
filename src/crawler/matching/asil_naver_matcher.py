@@ -3,6 +3,7 @@
 import math
 from typing import TYPE_CHECKING
 
+from crawler.dto.asil_apt_list import AsilAptListDTO
 from crawler.dto.asil_offer_detail import AsilOfferDetailDTO
 from crawler.dto.naver_article import NaverArticleItemDTO
 from crawler.dto.naver_listing import NaverAptDTO
@@ -13,6 +14,9 @@ if TYPE_CHECKING:
 
 # 두 DTO 타입 모두 지원하는 Union 타입
 NaverAptType = NaverAptDTO | NaverArticleItemDTO
+
+# ASIL DTO 타입 모두 지원하는 Union 타입
+AsilAptType = AsilOfferDetailDTO | AsilAptListDTO
 
 
 class AsilNaverMatcher:
@@ -58,9 +62,9 @@ class AsilNaverMatcher:
         return earth_radius_m * c
 
     @staticmethod
-    def _extract_apt_info(naver_apt: NaverAptType) -> tuple[str, float | None, float | None]:
+    def _extract_naver_info(naver_apt: NaverAptType) -> tuple[str, float | None, float | None]:
         """
-        DTO 타입에 따라 적절한 필드 추출
+        Naver DTO 타입에 따라 적절한 필드 추출
 
         Args:
             naver_apt: NaverAptDTO 또는 NaverArticleItemDTO
@@ -72,6 +76,23 @@ class AsilNaverMatcher:
             return (naver_apt.atcl_nm, naver_apt.lat, naver_apt.lng)
         else:
             return (naver_apt.complex_name, naver_apt.latitude, naver_apt.longitude)
+
+    @staticmethod
+    def _extract_asil_info(asil_apt: AsilAptType) -> tuple[str, str, float | None, float | None]:
+        """
+        ASIL DTO 타입에 따라 적절한 필드 추출
+
+        Args:
+            asil_apt: AsilOfferDetailDTO 또는 AsilAptListDTO
+
+        Returns:
+            (아파트코드, 아파트이름, 위도, 경도) 튜플
+        """
+        if isinstance(asil_apt, AsilOfferDetailDTO):
+            return (asil_apt.mm_uid, asil_apt.BLDNM, asil_apt.MAP_Y, asil_apt.MAP_X)
+        else:
+            # AsilAptListDTO
+            return (asil_apt.seq, asil_apt.name, asil_apt.lat, asil_apt.lng)
 
     @staticmethod
     def normalize_name(name: str) -> str:
@@ -175,14 +196,14 @@ class AsilNaverMatcher:
 
     @staticmethod
     def match_by_coordinate(
-        asil_apt: AsilOfferDetailDTO,
+        asil_apt: AsilAptType,
         candidates: "Sequence[NaverAptType]",
     ) -> MatchResultDTO | None:
         """
         좌표 기반 매칭
 
         Args:
-            asil_apt: ASIL 아파트 정보
+            asil_apt: ASIL 아파트 정보 (AsilOfferDetailDTO 또는 AsilAptListDTO)
             candidates: Naver 아파트 후보 목록 (NaverAptDTO 또는 NaverArticleItemDTO)
 
         Returns:
@@ -191,11 +212,18 @@ class AsilNaverMatcher:
         if not candidates:
             return None
 
-        # ASIL 좌표 파싱
+        # ASIL 좌표 및 정보 파싱
+        asil_code, asil_name, asil_lat_str, asil_lon_str = AsilNaverMatcher._extract_asil_info(
+            asil_apt
+        )
+
         try:
-            asil_lat = float(asil_apt.MAP_Y)
-            asil_lon = float(asil_apt.MAP_X)
+            asil_lat = float(asil_lat_str) if asil_lat_str else 0
+            asil_lon = float(asil_lon_str) if asil_lon_str else 0
         except (ValueError, TypeError):
+            return None
+
+        if asil_lat == 0 or asil_lon == 0:
             return None
 
         asil_coord = (asil_lat, asil_lon)
@@ -206,7 +234,7 @@ class AsilNaverMatcher:
 
         for candidate in candidates:
             # DTO 타입에 따라 좌표 추출
-            _, cand_lat, cand_lon = AsilNaverMatcher._extract_apt_info(candidate)
+            _, cand_lat, cand_lon = AsilNaverMatcher._extract_naver_info(candidate)
 
             if cand_lat is None or cand_lon is None:
                 continue
@@ -232,15 +260,15 @@ class AsilNaverMatcher:
             )
 
         # DTO 타입에 따라 필드 추출
-        naver_name, _, _ = AsilNaverMatcher._extract_apt_info(best_candidate)
+        naver_name, _, _ = AsilNaverMatcher._extract_naver_info(best_candidate)
         if isinstance(best_candidate, NaverArticleItemDTO):
             naver_code = best_candidate.atcl_no
         else:
             naver_code = best_candidate.complex_no
 
         return MatchResultDTO(
-            asil_apt_code=asil_apt.mm_uid,
-            asil_apt_name=asil_apt.BLDNM,
+            asil_apt_code=asil_code,
+            asil_apt_name=asil_name,
             naver_apt_code=naver_code,
             naver_apt_name=naver_name,
             confidence=confidence,
@@ -250,14 +278,14 @@ class AsilNaverMatcher:
 
     @staticmethod
     def match_by_fuzzy_name(
-        asil_apt: AsilOfferDetailDTO,
+        asil_apt: AsilAptType,
         candidates: "Sequence[NaverAptType]",
     ) -> MatchResultDTO | None:
         """
         퍼지 이름 매칭
 
         Args:
-            asil_apt: ASIL 아파트 정보
+            asil_apt: ASIL 아파트 정보 (AsilOfferDetailDTO 또는 AsilAptListDTO)
             candidates: Naver 아파트 후보 목록 (NaverAptDTO 또는 NaverArticleItemDTO)
 
         Returns:
@@ -266,7 +294,8 @@ class AsilNaverMatcher:
         if not candidates:
             return None
 
-        asil_name = asil_apt.BLDNM
+        # ASIL 이름 추출
+        _, asil_name, _, _ = AsilNaverMatcher._extract_asil_info(asil_apt)
 
         # 가장 유사한 이름 찾기
         best_candidate = None
@@ -274,7 +303,7 @@ class AsilNaverMatcher:
 
         for candidate in candidates:
             # DTO 타입에 따라 이름 추출
-            naver_name, _, _ = AsilNaverMatcher._extract_apt_info(candidate)
+            naver_name, _, _ = AsilNaverMatcher._extract_naver_info(candidate)
             similarity = AsilNaverMatcher.name_similarity(asil_name, naver_name)
 
             if similarity > best_similarity:
@@ -286,15 +315,18 @@ class AsilNaverMatcher:
             return None
 
         # DTO 타입에 따라 필드 추출
-        naver_name, _, _ = AsilNaverMatcher._extract_apt_info(best_candidate)
+        naver_name, _, _ = AsilNaverMatcher._extract_naver_info(best_candidate)
         if isinstance(best_candidate, NaverArticleItemDTO):
             naver_code = best_candidate.atcl_no
         else:
             naver_code = best_candidate.complex_no
 
+        # ASIL 코드 추출
+        asil_code, _, _, _ = AsilNaverMatcher._extract_asil_info(asil_apt)
+
         return MatchResultDTO(
-            asil_apt_code=asil_apt.mm_uid,
-            asil_apt_name=asil_apt.BLDNM,
+            asil_apt_code=asil_code,
+            asil_apt_name=asil_name,
             naver_apt_code=naver_code,
             naver_apt_name=naver_name,
             confidence=best_similarity,

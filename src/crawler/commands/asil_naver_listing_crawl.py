@@ -1,20 +1,24 @@
 """ASIL 아파트 목록 → Naver 매칭 → 매물 크롤링 CLI"""
 
-import json
 import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from crawler.asil import AsilAptListCrawler
+from crawler.asil import AsilAptListCrawler, AsilTradePriceCrawler
 from crawler.commands.cli_common import (
     add_all_argument,
     add_output_argument,
     create_dong_code_parser,
     resolve_dong_codes,
 )
+from crawler.dto.asil_apt_list import AsilAptListDTO
 from crawler.dto.naver_article import NaverArticleItemDTO
-from crawler.export.csv_export import export_naver_articles_to_csv
+from crawler.export.csv_export import (
+    export_matched_apts_to_csv,
+    export_naver_articles_with_apt_seq,
+)
+from crawler.matching.asil_naver_matcher import AsilNaverMatcher
 from crawler.naver_cluster_api import NaverClusterAPIClient
 from crawler.naver_listing_crawler import NaverListingCrawler
 
@@ -55,19 +59,22 @@ def crawl_asil_to_naver_listings(
     dong_codes: list[str],
     output_path: Path,
     radius_m: int = 500,
+    max_apts: int | None = None,
 ) -> int:
     """
     ASIL 아파트 목록 → Naver 매칭 → 매물 크롤링
 
     Args:
         dong_codes: 법정동 코드 리스트
-        output_path: 출력 CSV 경로
+        output_path: 출력 CSV 경로 (확장자 제거한 기본 경로)
         radius_m: 매물 검색 반경 (기본 500m)
+        max_apts: 최대 처리할 아파트 수 (None이면 모든 아파트 처리)
 
     Returns:
         크롤링한 매물 수
     """
-    all_listings = []
+    all_listings: list[NaverArticleItemDTO] = []
+    matched_apts_list: list[AsilAptListDTO] = []
     total_apts = 0
     matched_apts = 0
     skipped_no_coord = 0
@@ -89,8 +96,14 @@ def crawl_asil_to_naver_listings(
 
         # 2. 각 아파트별 Naver 매칭 및 매물 크롤링
         for apt in apt_list:
+            # max_apts 체크
+            if max_apts is not None and matched_apts >= max_apts:
+                print(f"  - 최대 {max_apts}개 아파트 처리 완료, 중단")
+                break
+
             total_apts += 1
             apt_name = getattr(apt, "name", "")
+            apt_seq = getattr(apt, "seq", "")
             lat = getattr(apt, "lat", 0)
             lng = getattr(apt, "lng", 0)
 
@@ -133,16 +146,54 @@ def crawl_asil_to_naver_listings(
                     skipped_no_match += 1
                     continue
 
-                # 가장 가까운 매물 선택 (첫 번째 사용)
-                matched_article = articles[0]
+                # AsilNaverMatcher로 좌표 기반 매칭 (100m 이내, 신뢰도 계산)
+                match_result = AsilNaverMatcher.match_by_coordinate(apt, articles)
+
+                if match_result is None:
+                    print(
+                        f"      - Naver 매칭 실패 (100m 이내 매물 없음), "
+                        f"후보 수: {len(articles)}, 스킵"
+                    )
+                    skipped_no_match += 1
+                    continue
+
+                matched_article = articles[0]  # Cluster API 결과의 첫 번째 매물 사용
                 matched_lat = matched_article.lat
                 matched_lng = matched_article.lng
 
                 print(
-                    f"      - Naver 매칭 성공: {matched_article.atcl_nm} "
-                    f"(좌표: {matched_lat}, {matched_lng})"
+                    f"      - Naver 매칭 성공: {match_result.naver_apt_name} "
+                    f"(거리: {match_result.distance_m:.1f}m, "
+                    f"신뢰도: {match_result.confidence:.2f}, "
+                    f"좌표: {matched_lat}, {matched_lng})"
                 )
                 matched_apts += 1
+
+                # ASIL 실거래가 조회
+                try:
+                    trade_crawler = AsilTradePriceCrawler(
+                        apt_code=apt_seq,
+                        sido_code="11",
+                        area_m2=84,
+                    )
+                    trade_prices = trade_crawler.crawl()
+                    if trade_prices:
+                        trade_price = trade_prices[0]
+                        # 실거래가 요약 정보를 apt에 추가
+                        apt.date_m = trade_price.date_m
+                        apt.date_j = trade_price.date_j
+                        apt.max_m = trade_price.max_m
+                        apt.max_j = trade_price.max_j
+                        apt.price_total = trade_price.price_total
+                        print(
+                            f"      - 실거래가: 최근매매({trade_price.date_m}), "
+                            f"최근전세({trade_price.date_j})"
+                        )
+                except Exception as e:
+                    print(f"      - 실거래가 조회 실패: {e}")
+
+                # 매칭된 아파트 저장
+                matched_apts_list.append(apt)
 
                 # 3. 매칭된 좌표로 Naver 매물 크롤링
                 listing_crawler = NaverListingCrawler(
@@ -155,12 +206,16 @@ def crawl_asil_to_naver_listings(
 
                 if listings:
                     print(f"      - {len(listings)}개 매물 찾음")
+                    # apt_seq 설정
+                    for listing in listings:
+                        listing.apt_seq = apt_seq
                     all_listings.extend(listings)
                 else:
                     print("      - 매물 없음")
 
-            except json.JSONDecodeError:
-                print("      - Naver API 빈 응답, 스킵")
+            except ValueError as e:
+                # JSON 파싱 실패 (abuse 감지 후 Playwright 우회 실패 등)
+                print(f"      - Naver API 응답 파싱 실패: {e}")
                 skipped_no_match += 1
                 continue
             except Exception as e:
@@ -177,8 +232,14 @@ def crawl_asil_to_naver_listings(
     after_count = len(all_listings)
     removed = before_count - after_count
 
-    # CSV 내보내기
-    export_naver_articles_to_csv(all_listings, output_path)
+    # CSV 내보내기 (두 개의 시트)
+    # 1. 아파트 목록 시트
+    apts_output_path = output_path.with_name(f"{output_path.stem}_apts.csv")
+    export_matched_apts_to_csv(matched_apts_list, apts_output_path)
+
+    # 2. 매물 시트
+    articles_output_path = output_path.with_name(f"{output_path.stem}_articles.csv")
+    export_naver_articles_with_apt_seq(all_listings, articles_output_path)
 
     print("\n=== 크롤링 완료 ===")
     print(f"전체 아파트: {total_apts}개")
@@ -187,7 +248,8 @@ def crawl_asil_to_naver_listings(
     print(f"스킵 (매칭 실패): {skipped_no_match}개")
     print(f"에러: {errors}개")
     print(f"중복 제거: {removed}개 ({before_count} → {after_count})")
-    print(f"완료: {after_count}개 매물 → {output_path}")
+    print(f"완료: {len(matched_apts_list)}개 아파트 → {apts_output_path}")
+    print(f"완료: {after_count}개 매물 → {articles_output_path}")
 
     return after_count
 

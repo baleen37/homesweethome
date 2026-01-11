@@ -22,6 +22,12 @@ class AsilAptListDTO(BaseModel):
     offer: str | None = Field(default=None, description="매물 정보")
     lat: str | None = Field(default=None, description="위도")
     lng: str | None = Field(default=None, description="경도")
+    # 실거래가 요약 정보
+    date_m: str | None = Field(default=None, description="최근 매매일 (YY.MM)")
+    date_j: str | None = Field(default=None, description="최근 전세일 (YY.MM)")
+    max_m: str | None = Field(default=None, description="최고 매매가")
+    max_j: str | None = Field(default=None, description="최고 전세가")
+    price_total: str | None = Field(default=None, description="총 거래 건수")
 
     @property
     def gu_name(self) -> str | None:
