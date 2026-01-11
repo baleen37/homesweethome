@@ -3,6 +3,63 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class AsilTradePriceDetailDTO(BaseModel):
+    """ASIL 실거래가 상세 DTO
+
+    일별 거래 상세 정보 (동, 층, 가격 등)
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    def __contains__(self, key: str) -> bool:
+        """Support 'in' operator for checking field names (including extra fields)"""
+        return key in self.model_dump()
+
+    money: str | None = Field(default=None, description="매매가 (Base64 암호화)")
+    rent: str | None = Field(default=None, description="전세가 (Base64 암호화)")
+    floor: str | None = Field(default=None, description="층")
+    dong: str | None = Field(default=None, description="동 (Base64 암호화)")
+    day: str | None = Field(default=None, description="거래 일")
+    type: str | None = Field(default=None, description="거래 유형 코드")
+    apt: str | None = Field(default=None, description="아파트 코드")
+
+
+class AsilTradePriceDayDTO(BaseModel):
+    """ASIL 실거래가 일별 DTO
+
+    특정 일의 거래 정보 리스트
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    def __contains__(self, key: str) -> bool:
+        """Support 'in' operator for checking field names (including extra fields)"""
+        return key in self.model_dump()
+
+    day: int | None = Field(default=None, description="거래 일")
+    val: list[AsilTradePriceDetailDTO] | None = Field(
+        default=None, description="거래 상세 정보 리스트"
+    )
+
+
+class AsilTradePriceMonthDTO(BaseModel):
+    """ASIL 실거래가 월별 DTO
+
+    특정 월의 거래 정보 리스트
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    def __contains__(self, key: str) -> bool:
+        """Support 'in' operator for checking field names (including extra fields)"""
+        return key in self.model_dump()
+
+    yyyymm: str | None = Field(default=None, description="거래 연월 (YYYYMM)")
+    val: list[AsilTradePriceDayDTO] | None = Field(
+        default=None, description="일별 거래 정보 리스트"
+    )
+
+
 class AsilTradePriceDTO(BaseModel):
     """ASIL 실거래가 DTO
 
@@ -15,16 +72,12 @@ class AsilTradePriceDTO(BaseModel):
         """Support 'in' operator for checking field names (including extra fields)"""
         return key in self.model_dump()
 
-    deal_year: str | None = Field(default=None, description="거래 연도")
-    deal_month: str | None = Field(default=None, description="거래 월")
-    deal_day: str | None = Field(default=None, description="거래 일")
-    price: str | None = Field(default=None, description="거래 가격 (만원)")
-    area_m2: str | None = Field(default=None, description="전용면적 (m²)")
-    floor: str | None = Field(default=None, description="층")
-    deal_type: str | None = Field(default=None, description="거래 유형 (매매/전세/월세)")
-    build_year: str | None = Field(default=None, description="건축 연도")
-    apt_name: str | None = Field(default=None, description="아파트 이름")
-    apt_code: str | None = Field(default=None, description="아파트 코드")
-    sido_code: str | None = Field(default=None, description="시도 코드")
-    dong_code: str | None = Field(default=None, description="법정동 코드")
-    dong_name: str | None = Field(default=None, description="법정동 이름")
+    val: list[AsilTradePriceMonthDTO] | None = Field(
+        default=None, description="월별 거래 정보 리스트"
+    )
+    price_total: str | None = Field(default=None, description="총 거래 건수")
+    is_more: str | None = Field(default=None, description="추가 데이터 존재 여부")
+    max_m: str | None = Field(default=None, description="최고 매매가")
+    max_j: str | None = Field(default=None, description="최고 전세가")
+    date_m: str | None = Field(default=None, description="최근 매매일 (YY.MM)")
+    date_j: str | None = Field(default=None, description="최근 전세일 (YY.MM)")

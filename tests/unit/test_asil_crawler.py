@@ -29,6 +29,7 @@ from crawler.dto.asil_price_index import (
 )
 from crawler.dto.asil_ranking import AsilRankingDTO
 from crawler.dto.asil_transfer import AsilTransferDTO
+from crawler.dto.asil_visitor_stats import AsilVisitorStatsDTO
 
 
 class TestAsilAptListCrawler:
@@ -508,6 +509,35 @@ class TestAsilEducationMapCrawler:
         assert result[0].title == "학원수 72개"
         assert result[0].polygon is not None
 
+    def test_parse_handles_incomplete_json(self):
+        """parse()는 불완전한 JSON 응답을 처리할 수 있어야 함"""
+        crawler = AsilEducationMapCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+
+        # 불완전한 JSON 응답 (API가 "["만 반환하는 경우)
+        incomplete_response = "["
+
+        result = crawler.parse(incomplete_response)
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+    def test_parse_handles_empty_array(self):
+        """parse()는 빈 배열 응답을 처리할 수 있어야 함"""
+        crawler = AsilEducationMapCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+
+        result = crawler.parse("[]")
+        assert isinstance(result, list)
+        assert len(result) == 0
+
 
 class TestAsilVisitorStatsCrawler:
     """AsilVisitorStatsCrawler 단위 테스트"""
@@ -565,8 +595,8 @@ class TestAsilVisitorStatsCrawler:
         url = crawler.get_url()
         assert "zoom=15" in url
 
-    def test_parse_returns_list_of_dicts(self):
-        """parse()는 list[dict]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilVisitorStatsDTO]를 반환해야 함"""
         crawler = AsilVisitorStatsCrawler(
             s_lat=37.5,
             s_lng=127.0,
@@ -590,10 +620,12 @@ class TestAsilVisitorStatsCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
-        assert isinstance(result[0], dict)
-        assert result[0]["key"] == "-19917"
-        assert result[0]["lat"] == "37.512798"
-        assert result[0]["lng"] == "127.050655"
+        assert isinstance(result[0], AsilVisitorStatsDTO)
+        assert result[0].key == "-19917"
+        assert result[0].company == "중개법인명"
+        assert result[0].lat == "37.512798"
+        assert result[0].lng == "127.050655"
+        assert result[0].photo == "/photo/member/-19917.png"
 
     def test_parse_handles_empty_response(self):
         """parse()는 빈 응답을 처리할 수 있어야 함"""
@@ -1010,8 +1042,8 @@ class TestAsilPopulationCrawler:
         assert url.startswith("https://asil.kr/rts_m/contents/inc/data_population.jsp")
         assert "area=11" in url
 
-    def test_parse_returns_list_of_dtos(self):
-        """parse()는 list[AsilPopulationDTO]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos_with_int_values(self):
+        """parse()는 list[AsilPopulationDTO]를 반환해야 하며, 인구값은 int로 파싱되어야 함"""
         crawler = AsilPopulationCrawler(area="11")
 
         mock_response = """
@@ -1019,11 +1051,11 @@ class TestAsilPopulationCrawler:
             {
                 "seq": "11",
                 "name": "서울",
-                "v1": "9390,925명",
-                "v2": "9335,495명",
-                "v3": "9305,678명",
-                "v2_gap": "55,430명",
-                "v3_gap": "29,817명",
+                "v1": "9505,926명",
+                "v2": "9424,873명",
+                "v3": "9384,325명",
+                "v2_gap": "81,053명",
+                "v3_gap": "40,548명",
                 "v2_icon": "down",
                 "v3_icon": "down"
             }
@@ -1035,7 +1067,60 @@ class TestAsilPopulationCrawler:
         assert len(result) == 1
         assert isinstance(result[0], AsilPopulationDTO)
         assert result[0].name == "서울"
-        assert result[0].v1 == "9390,925명"
+        # 인구값은 int로 파싱되어야 함 (콤마와 "명" 제거)
+        assert result[0].v1 == 9505926
+        assert result[0].v2 == 9424873
+        assert result[0].v3 == 9384325
+        # 차이값도 int로 파싱되어야 함
+        assert result[0].v2_gap == 81053
+        assert result[0].v3_gap == 40548
+
+    def test_parse_handles_different_population_formats(self):
+        """다양한 인구값 형식을 처리해야 함"""
+        crawler = AsilPopulationCrawler(area="11")
+
+        mock_response = """
+        [
+            {
+                "seq": "11110",
+                "name": "종로구",
+                "v1": "144,543명",
+                "v2": "141,223명",
+                "v3": "139,378명",
+                "v2_gap": "3,320명",
+                "v3_gap": "1,845명",
+                "v2_icon": "down",
+                "v3_icon": "down"
+            },
+            {
+                "seq": "11",
+                "name": "서울",
+                "v1": "9505,926명",
+                "v2": "9424,873명",
+                "v3": "9384,325명",
+                "v2_gap": "81,053명",
+                "v3_gap": "40,548명",
+                "v2_icon": "down",
+                "v3_icon": "down"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+        # 종로구 데이터 확인
+        assert result[0].name == "종로구"
+        assert result[0].v1 == 144543
+        assert result[0].v2 == 141223
+        assert result[0].v3 == 139378
+
+        # 서울 데이터 확인
+        assert result[1].name == "서울"
+        assert result[1].v1 == 9505926
+        assert result[1].v2 == 9424873
+        assert result[1].v3 == 9384325
 
 
 class TestAsilTransferCrawler:

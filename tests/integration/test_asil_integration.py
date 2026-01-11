@@ -46,9 +46,10 @@ class TestAsilAptListCrawlerIntegration:
         assert isinstance(apt, AsilAptListDTO)
         assert apt.seq
         assert apt.name
-        # 실제 API 응답에서 address, build_year 필드는 항상 None 반환
+        # 실제 API 응답에서 address 필드는 None 반환
         assert apt.address is None
-        assert apt.build_year is None
+        # build_year는 movein 필드로 매핑되어 있음 (alias 적용)
+        assert apt.build_year is not None
 
     def test_fetch_real_apt_list_with_min_household_filter(self):
         """세대수 필터가 적용된 아파트 목록을 가져옴"""
@@ -138,9 +139,16 @@ class TestAsilCrawlerFullWorkflow:
 
         assert len(apt_list) > 0
 
-        # 2. 첫 번째 아파트 선택
-        first_apt = apt_list[0]
-        apt_code = first_apt.seq
+        # 2. 역삼자이 아파트 찾기 (114㎡ 타입이 있어 실거래가 조회에 적합)
+        yeoksam_jai = None
+        for apt in apt_list:
+            if apt.seq == "20340925" or "역삼자이" in apt.name:
+                yeoksam_jai = apt
+                break
+
+        # 역삼자이를 찾지 못하면 첫 번째 아파트 사용
+        target_apt = yeoksam_jai if yeoksam_jai else apt_list[0]
+        apt_code = target_apt.seq
 
         # 3. 해당 아파트의 실거래가 가져오기
         # 역삼자이의 경우 114㎡ 타입이 있으므로 해당 면적으로 조회
@@ -151,13 +159,61 @@ class TestAsilCrawlerFullWorkflow:
         )
         trade_prices = price_crawler.crawl()
 
-        # 실거래가가 반환되어야 함 (해당 면적의 데이터가 없을 수도 있음)
+        # 실거래가가 리스트로 반환되어야 함
         assert isinstance(trade_prices, list)
+
+        # 역삼자이인 경우 실거래가 데이터가 있어야 함
+        if yeoksam_jai:
+            assert len(trade_prices) > 0
+            # 실거래가 데이터 구조 검증
+            trade = trade_prices[0]
+            assert hasattr(trade, "val")
+            assert hasattr(trade, "price_total")
+            assert hasattr(trade, "is_more")
 
 
 @pytest.mark.integration
 class TestAsilTrafficCrawlerIntegration:
     """AsilTrafficCrawler 통합 테스트"""
+
+    def _validate_traffic_dto(self, traffic) -> None:
+        """AsilTrafficInfoDTO 필드 검증 헬퍼 메서드"""
+        # 1. 각 아이템이 dict인지
+        assert isinstance(traffic, dict), "각 아이템은 dict이어야 함"
+
+        # 2. key 필드가 존재하고 비어있지 않은지
+        assert "key" in traffic, "key 필드가 존재해야 함"
+        assert traffic["key"], "key 필드는 비어있지 않아야 함"
+
+        # 3. title 필드가 존재하고 비어있지 않은지
+        assert "title" in traffic, "title 필드가 존재해야 함"
+        assert traffic["title"], "title 필드는 비어있지 않아야 함"
+
+        # 4. lat, lng가 float로 변환 가능한지
+        if traffic.get("lat"):
+            try:
+                float(traffic["lat"])
+            except (ValueError, TypeError):
+                raise AssertionError(f"lat '{traffic['lat']}'는 float로 변환 가능해야 함")
+
+        if traffic.get("lng"):
+            try:
+                float(traffic["lng"])
+            except (ValueError, TypeError):
+                raise AssertionError(f"lng '{traffic['lng']}'는 float로 변환 가능해야 함")
+
+        # 5. s_year, e_year가 있으면 "YYYY" 형식인지
+        if traffic.get("s_year"):
+            msg = f"s_year은 4자리 연도여야 함: {traffic['s_year']}"
+            assert len(traffic["s_year"]) == 4, msg
+            msg = f"s_year은 숫자로 구성되어야 함: {traffic['s_year']}"
+            assert traffic["s_year"].isdigit(), msg
+
+        if traffic.get("e_year"):
+            msg = f"e_year은 4자리 연도여야 함: {traffic['e_year']}"
+            assert len(traffic["e_year"]) == 4, msg
+            msg = f"e_year은 숫자로 구성되어야 함: {traffic['e_year']}"
+            assert traffic["e_year"].isdigit(), msg
 
     def test_fetch_real_traffic_data_for_gangnam(self):
         """강남구 좌표로 교통정보를 실제로 가져옴"""
@@ -191,6 +247,23 @@ class TestAsilTrafficCrawlerIntegration:
         result = crawler.crawl()
 
         assert isinstance(result, list)
+
+    def test_traffic_data_validation(self):
+        """교통정보 데이터 필드 검증"""
+        crawler = AsilTrafficCrawler(
+            s_lat=37.514575,
+            s_lng=127.044555,
+            e_lat=37.504575,
+            e_lng=127.054555,
+        )
+        result = crawler.crawl()
+
+        assert isinstance(result, list)
+
+        # 데이터가 있으면 상세 검증 수행
+        if len(result) > 0:
+            for traffic in result:
+                self._validate_traffic_dto(traffic)
 
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
@@ -240,6 +313,23 @@ class TestAsilDongInfoCrawlerIntegration:
 class TestAsilSchoolInfoCrawlerIntegration:
     """AsilSchoolInfoCrawler 통합 테스트"""
 
+    def _validate_school_dict(self, school: dict) -> None:
+        """학교 데이터(dict) 필드 검증 헬퍼 메서드"""
+        # 1. 각 아이템이 dict인지
+        assert isinstance(school, dict), "각 학교 정보는 dict 타입이어야 함"
+
+        # 2. seq 필드가 존재하고 비어있지 않은지
+        assert "seq" in school, "seq 필드가 존재해야 함"
+        assert school["seq"], "seq 필드는 비어있지 않아야 함"
+
+        # 3. name 필드가 존재하고 비어있지 않은지
+        assert "name" in school, "name 필드가 존재해야 함"
+        assert school["name"], "name 필드는 비어있지 않아야 함"
+
+        # 4. addr 필드가 존재하고 비어있지 않은지
+        assert "addr" in school, "addr 필드가 존재해야 함"
+        assert school["addr"], "addr 필드는 비어있지 않아야 함"
+
     def test_fetch_real_elementary_schools_for_gangnam(self):
         """강남구(11680)의 초등학교 목록을 실제로 가져옴"""
         crawler = AsilSchoolInfoCrawler(school_type="elementary", area_code="11680")
@@ -251,10 +341,9 @@ class TestAsilSchoolInfoCrawlerIntegration:
         # 강남구에는 적어도 1개 이상의 초등학교가 있어야 함
         assert len(result) > 0
 
-        # 각 학교 정보에 필수 필드가 있어야 함
-        school = result[0]
-        assert "seq" in school
-        assert "name" in school
+        # 모든 학교 데이터 검증
+        for school in result:
+            self._validate_school_dict(school)
 
     def test_fetch_real_middle_schools_for_gangnam(self):
         """강남구(11680)의 중학교 목록을 실제로 가져옴"""
@@ -267,10 +356,9 @@ class TestAsilSchoolInfoCrawlerIntegration:
         # 강남구에는 적어도 1개 이상의 중학교가 있어야 함
         assert len(result) > 0
 
-        # 각 학교 정보에 필수 필드가 있어야 함
-        school = result[0]
-        assert "seq" in school
-        assert "name" in school
+        # 모든 학교 데이터 검증
+        for school in result:
+            self._validate_school_dict(school)
 
     def test_fetch_schools_with_bounds(self):
         """좌표 기반 검색으로 학교 목록을 가져옴"""
@@ -286,6 +374,11 @@ class TestAsilSchoolInfoCrawlerIntegration:
 
         # 결과가 리스트여야 함
         assert isinstance(result, list)
+
+        # 데이터가 있으면 검증
+        if len(result) > 0:
+            for school in result:
+                self._validate_school_dict(school)
 
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
@@ -335,10 +428,97 @@ class TestAsilEducationMapCrawlerIntegration:
         # 결과가 파싱된 데이터여야 함
         assert isinstance(result, list)
 
+    def test_education_map_data_validation(self):
+        """학군 지도 데이터 필드 검증"""
+        from crawler.dto.asil_education_map import AsilEducationMapDTO
+
+        crawler = AsilEducationMapCrawler(
+            s_lat=37.54,
+            s_lng=127.00,
+            e_lat=37.63,
+            e_lng=127.14,
+        )
+        result = crawler.crawl()
+
+        assert isinstance(result, list)
+
+        # 데이터가 있는 경우에만 상세 검증 수행
+        if len(result) > 0:
+            edu_map = result[0]
+
+            # 1. AsilEducationMapDTO 타입인지
+            assert isinstance(edu_map, AsilEducationMapDTO), "AsilEducationMapDTO 타입이어야 함"
+
+            # 2. title 필드가 존재하고 비어있지 않은지
+            assert edu_map.title is not None, "title 필드가 존재해야 함"
+            assert len(edu_map.title) > 0, "title 필드는 비어있지 않아야 함"
+
+            # 3. lat, lng가 float로 변환 가능한지
+            assert edu_map.lat is not None, "lat 필드가 존재해야 함"
+            try:
+                float(edu_map.lat)
+            except ValueError:
+                raise AssertionError(f"lat '{edu_map.lat}'는 float로 변환 가능해야 함")
+
+            assert edu_map.lng is not None, "lng 필드가 존재해야 함"
+            try:
+                float(edu_map.lng)
+            except ValueError:
+                raise AssertionError(f"lng '{edu_map.lng}'는 float로 변환 가능해야 함")
+
+            # 4. polygon 필드가 있는지 (GeoJSON 형식)
+            # polygon은 옵션 필드이므로 있는 경우에만 검증
+            if edu_map.polygon is not None:
+                assert isinstance(edu_map.polygon, list), "polygon은 리스트여야 함"
+                # polygon 데이터가 있으면 첫 번째 요소의 구조 확인
+                if len(edu_map.polygon) > 0:
+                    # GeoJSON Polygon 형식: coordinates 필드가 있어야 함
+                    polygon_item = edu_map.polygon[0]
+                    assert hasattr(polygon_item, "coordinates"), (
+                        "polygon 항목은 coordinates 필드를 가져야 함"
+                    )
+                    # coordinates는 3중 리스트 구조: [[[lng, lat], ...]]
+                    assert isinstance(polygon_item.coordinates, list), "coordinates는 리스트여야 함"
+                    if len(polygon_item.coordinates) > 0:
+                        # 최소한 한 좌표 쌍이 있어야 함
+                        assert len(polygon_item.coordinates[0]) > 0, "최소한 한 좌표 쌍이 있어야 함"
+
 
 @pytest.mark.integration
 class TestAsilVisitorStatsCrawlerIntegration:
     """AsilVisitorStatsCrawler 통합 테스트"""
+
+    def _validate_visitor_stats_dto(self, stat) -> None:
+        """AsilVisitorStatsDTO 데이터 검증 헬퍼 메서드"""
+        from crawler.dto.asil_visitor_stats import AsilVisitorStatsDTO
+
+        # 1. AsilVisitorStatsDTO 타입인지
+        assert isinstance(stat, AsilVisitorStatsDTO), "AsilVisitorStatsDTO 타입이어야 함"
+
+        # 2. key 필드가 존재하고 비어있지 않은지
+        assert stat.key is not None, "key 필드가 존재해야 함"
+        assert len(stat.key) > 0, "key 필드는 비어있지 않아야 함"
+
+        # 3. company 필드가 존재하고 비어있지 않은지
+        assert stat.company is not None, "company 필드가 존재해야 함"
+        assert len(stat.company) > 0, "company 필드는 비어있지 않아야 함"
+
+        # 4. lat, lng가 float로 변환 가능한지
+        assert stat.lat is not None, "lat 필드가 존재해야 함"
+        try:
+            float(stat.lat)
+        except ValueError:
+            raise AssertionError(f"lat '{stat.lat}'는 float로 변환 가능해야 함")
+
+        assert stat.lng is not None, "lng 필드가 존재해야 함"
+        try:
+            float(stat.lng)
+        except ValueError:
+            raise AssertionError(f"lng '{stat.lng}'는 float로 변환 가능해야 함")
+
+        # 5. photo 필드가 있는지 (옵션 필드이지만 있는 경우 검증)
+        if stat.photo:
+            assert isinstance(stat.photo, str), "photo 필드는 문자열이어야 함"
 
     def test_fetch_real_visitor_stats_for_gangnam_station(self):
         """강남역 좌표로 조회수/관심사용자 통계를 실제로 가져옴"""
@@ -357,9 +537,7 @@ class TestAsilVisitorStatsCrawlerIntegration:
         # 데이터가 있으면 필수 필드 확인
         if len(result) > 0:
             stat = result[0]
-            assert "key" in stat
-            assert "lat" in stat
-            assert "lng" in stat
+            self._validate_visitor_stats_dto(stat)
 
     def test_fetch_visitor_stats_with_different_zoom_level(self):
         """다른 줌 레벨로 조회수 통계를 가져옴"""
@@ -375,6 +553,11 @@ class TestAsilVisitorStatsCrawlerIntegration:
         # 결과가 리스트여야 함
         assert isinstance(result, list)
 
+        # 데이터가 있으면 DTO 검증
+        if len(result) > 0:
+            for stat in result:
+                self._validate_visitor_stats_dto(stat)
+
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
         crawler = AsilVisitorStatsCrawler(
@@ -388,6 +571,12 @@ class TestAsilVisitorStatsCrawlerIntegration:
 
         # 결과가 파싱된 데이터여야 함
         assert isinstance(result, list)
+
+        # 데이터가 있으면 DTO 타입 검증
+        if len(result) > 0:
+            from crawler.dto.asil_visitor_stats import AsilVisitorStatsDTO
+
+            assert isinstance(result[0], AsilVisitorStatsDTO), "DTO 타입이어야 함"
 
 
 @pytest.mark.integration
@@ -654,6 +843,42 @@ class TestAsilPopulationCrawlerIntegration:
 class TestAsilTransferCrawlerIntegration:
     """AsilTransferCrawler 통합 테스트"""
 
+    def _validate_transfer_dto(self, transfer) -> None:
+        """AsilTransferDTO 데이터 검증 헬퍼 메서드"""
+        # 1. rank 필드가 0 이상인지
+        assert transfer.rank >= 0, f"rank 필드는 0 이상이어야 함: {transfer.rank}"
+
+        # 2. from_ 또는 to 필드가 존재하고 비어있지 않은지
+        assert transfer.from_ or transfer.to, "from_ 또는 to 필드 중 하나 이상이 비어있지 않아야 함"
+        if transfer.from_:
+            assert isinstance(transfer.from_, str), "from_ 필드는 문자열이어야 함"
+            assert len(transfer.from_) > 0, "from_ 필드는 비어있지 않아야 함"
+        if transfer.to:
+            assert isinstance(transfer.to, str), "to 필드는 문자열이어야 함"
+            assert len(transfer.to) > 0, "to 필드는 비어있지 않아야 함"
+
+        # 3. total 필드가 콤마 제거 후 int로 변환 가능한지
+        if transfer.total:
+            assert isinstance(transfer.total, str), "total 필드는 문자열이어야 함"
+            total_cleaned = transfer.total.replace(",", "")
+            try:
+                int(total_cleaned)
+            except ValueError:
+                raise AssertionError(
+                    f"total '{transfer.total}'는 콤마 제거 후 int로 변환 가능해야 함"
+                )
+
+        # 4. value 필드가 콤마 제거 후 int로 변환 가능한지
+        if transfer.value:
+            assert isinstance(transfer.value, str), "value 필드는 문자열이어야 함"
+            value_cleaned = transfer.value.replace(",", "")
+            try:
+                int(value_cleaned)
+            except ValueError:
+                raise AssertionError(
+                    f"value '{transfer.value}'는 콤마 제거 후 int로 변환 가능해야 함"
+                )
+
     def test_fetch_real_transfer_seoul(self):
         """서울(11)의 인구 유동 데이터를 실제로 가져옴"""
         crawler = AsilTransferCrawler(
@@ -668,11 +893,10 @@ class TestAsilTransferCrawlerIntegration:
         # 결과가 리스트여야 함
         assert isinstance(result, list)
 
-        # 데이터가 있으면 필수 필드 확인
+        # 데이터가 있으면 상세 검증
         if len(result) > 0:
-            transfer = result[0]
-            assert transfer.rank >= 0
-            assert transfer.from_ or transfer.to
+            for transfer in result:
+                self._validate_transfer_dto(transfer)
 
     def test_fetch_transfer_with_date_range(self):
         """특정 기간의 인구 유동 데이터를 가져옴"""
@@ -688,12 +912,68 @@ class TestAsilTransferCrawlerIntegration:
         # 결과가 리스트여야 함
         assert isinstance(result, list)
 
-        # 데이터가 있으면 필수 필드 확인
+        # 데이터가 있으면 상세 검증
         if len(result) > 0:
+            for transfer in result:
+                self._validate_transfer_dto(transfer)
+
+    def test_transfer_data_validation(self):
+        """인구 유동 데이터 필드 검증"""
+        crawler = AsilTransferCrawler(
+            area="11",
+            start_year="2024",
+            start_month="1",
+            end_year="2024",
+            end_month="12",
+        )
+        result = crawler.crawl()
+
+        assert isinstance(result, list)
+
+        # 데이터가 있는 경우 상세 검증 수행
+        if len(result) > 0:
+            # 첫 번째 데이터로 상세 검증
             transfer = result[0]
-            assert transfer.rank >= 0
-            # total과 value 필드가 숫자 형식 문자열이어야 함
-            assert transfer.total or transfer.value
+
+            # 1. rank 필드가 0 이상인지
+            assert transfer.rank >= 0, f"rank 필드는 0 이상이어야 함: {transfer.rank}"
+
+            # 2. from_ 또는 to 필드가 존재하고 비어있지 않은지
+            assert transfer.from_ or transfer.to, "from_ 또는 to 필드 중 하나 이상이 존재해야 함"
+
+            if transfer.from_:
+                assert isinstance(transfer.from_, str), "from_ 필드는 문자열이어야 함"
+                assert len(transfer.from_) > 0, "from_ 필드는 비어있지 않아야 함"
+
+            if transfer.to:
+                assert isinstance(transfer.to, str), "to 필드는 문자열이어야 함"
+                assert len(transfer.to) > 0, "to 필드는 비어있지 않아야 함"
+
+            # 3. total 필드가 콤마 제거 후 int로 변환 가능한지
+            if transfer.total:
+                assert isinstance(transfer.total, str), "total 필드는 문자열이어야 함"
+                total_cleaned = transfer.total.replace(",", "")
+                try:
+                    int(total_cleaned)
+                except ValueError:
+                    raise AssertionError(
+                        f"total '{transfer.total}'는 콤마 제거 후 int로 변환 가능해야 함"
+                    )
+
+            # 4. value 필드가 콤마 제거 후 int로 변환 가능한지
+            if transfer.value:
+                assert isinstance(transfer.value, str), "value 필드는 문자열이어야 함"
+                value_cleaned = transfer.value.replace(",", "")
+                try:
+                    int(value_cleaned)
+                except ValueError:
+                    raise AssertionError(
+                        f"value '{transfer.value}'는 콤마 제거 후 int로 변환 가능해야 함"
+                    )
+
+            # 모든 데이터에 대해 기본 검증
+            for transfer in result:
+                self._validate_transfer_dto(transfer)
 
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""

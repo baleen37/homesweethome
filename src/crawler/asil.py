@@ -15,6 +15,7 @@ from crawler.dto.asil_price_index import AsilPriceIndexResponse
 from crawler.dto.asil_ranking import AsilRankingDTO
 from crawler.dto.asil_trade_price import AsilTradePriceDTO
 from crawler.dto.asil_transfer import AsilTransferDTO
+from crawler.dto.asil_visitor_stats import AsilVisitorStatsDTO
 
 
 class AsilAptListCrawler(BaseCrawler[list[AsilAptListDTO]]):
@@ -402,9 +403,13 @@ class AsilEducationMapCrawler(BaseCrawler):
         """JSON 응답 파싱 (GeoJSON polygon 형식)"""
         # 빈 응답 처리
         content = content.strip()
-        if not content or content == "[]":
+        if not content or content == "[]" or content == "[":
             return []
-        data = json.loads(content)
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            # 불완전한 JSON 응답 처리 (API가 빈 배열을 반환하는 경우)
+            return []
         if not isinstance(data, list):
             return []
         return [AsilEducationMapDTO(**item) for item in data]
@@ -487,7 +492,7 @@ class AsilRedevelopCrawler(BaseCrawler):
             return []
 
 
-class AsilVisitorStatsCrawler(BaseCrawler):
+class AsilVisitorStatsCrawler(BaseCrawler[list[AsilVisitorStatsDTO]]):
     """asil.kr 조회수/관심사용자 통계 크롤러"""
 
     BASE_URL = "https://asil.kr/json/data_member.jsp"
@@ -542,14 +547,16 @@ class AsilVisitorStatsCrawler(BaseCrawler):
         with urlopen(request, timeout=10) as response:
             return response.read().decode(self.ENCODING)
 
-    def parse(self, content: str) -> list[dict]:
+    def parse(self, content: str) -> list[AsilVisitorStatsDTO]:
         """JSON 응답 파싱"""
         # 빈 응답 처리
         content = content.strip()
         if not content or content == "[]" or content == "[":
             return []
         data = json.loads(content)
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            return []
+        return [AsilVisitorStatsDTO(**item) for item in data]
 
 
 class AsilListingCrawler(BaseCrawler[list[AsilAptListDTO]]):
@@ -710,43 +717,55 @@ class AsilPriceIndexCrawler(BaseCrawler[list[AsilPriceIndexResponse]]):
         area: str = "11",
         price_type: int = 1,
         deal_mode: str = "M",
-        year: str = "",
-        month: str = "",
-        day: str = "",
-        start_year: str = "",
-        start_month: str = "",
-        start_day: str = "",
-        end_year: str = "",
-        end_month: str = "",
-        end_day: str = "",
+        year: str | None = None,
+        month: str | None = None,
+        day: str | None = None,
+        start_year: str | None = None,
+        start_month: str | None = None,
+        start_day: str | None = None,
+        end_year: str | None = None,
+        end_month: str | None = None,
+        end_day: str | None = None,
     ):
         """
         Args:
             area: 지역 코드 (11=서울)
             price_type: 가격 타입 (1=매매가 지수)
             deal_mode: 거래 모드 (M=매매, J=전세)
-            year: 기준 연도
-            month: 기준 월
-            day: 기준 일
-            start_year: 시작 연도
-            start_month: 시작 월
-            start_day: 시작 일
-            end_year: 끝 연도
-            end_month: 끝 월
-            end_day: 끝 일
+            year: 기준 연도 (None인 경우 현재 연도)
+            month: 기준 월 (None인 경우 현재 월)
+            day: 기준 일 (None인 경우 가장 최근 월요일)
+            start_year: 시작 연도 (None인 경우 2주 전 월요일의 연도)
+            start_month: 시작 월 (None인 경우 2주 전 월요일의 월)
+            start_day: 시작 일 (None인 경우 2주 전 월요일의 일)
+            end_year: 끝 연도 (None인 경우 1주 전 월요일의 연도)
+            end_month: 끝 월 (None인 경우 1주 전 월요일의 월)
+            end_day: 끝 일 (None인 경우 1주 전 월요일의 일)
         """
+        from datetime import date, timedelta
+
+        def get_most_recent_monday(d: date) -> date:
+            """가장 최근 월요일 반환 (월요일인 경우 자기 자신)"""
+            days_since_monday = d.weekday()  # 0=월요일, 6=일요일
+            return d - timedelta(days=days_since_monday)
+
+        today = date.today()
+        recent_monday = get_most_recent_monday(today)
+        monday_1_week_ago = recent_monday - timedelta(weeks=1)
+        monday_2_weeks_ago = recent_monday - timedelta(weeks=2)
+
         self.area = area
         self.price_type = price_type
         self.deal_mode = deal_mode
-        self.year = year
-        self.month = month
-        self.day = day
-        self.start_year = start_year
-        self.start_month = start_month
-        self.start_day = start_day
-        self.end_year = end_year
-        self.end_month = end_month
-        self.end_day = end_day
+        self.year = year or str(recent_monday.year)
+        self.month = month or str(recent_monday.month)
+        self.day = day or str(recent_monday.day)
+        self.start_year = start_year or str(monday_2_weeks_ago.year)
+        self.start_month = start_month or str(monday_2_weeks_ago.month)
+        self.start_day = start_day or str(monday_2_weeks_ago.day)
+        self.end_year = end_year or str(monday_1_week_ago.year)
+        self.end_month = end_month or str(monday_1_week_ago.month)
+        self.end_day = end_day or str(monday_1_week_ago.day)
 
     def get_url(self) -> str:
         """API 요청 URL 생성"""
@@ -782,7 +801,11 @@ class AsilPriceIndexCrawler(BaseCrawler[list[AsilPriceIndexResponse]]):
 
     def parse(self, content: str) -> list[AsilPriceIndexResponse]:
         """JSON 응답 파싱 (지역 데이터 + 요약 객체)"""
-        data = json.loads(content)
+        # 응답 앞에 \r\n 8개가 선행하므로 strip() 후 파싱
+        stripped = content.strip()
+        if not stripped:
+            return []
+        data = json.loads(stripped)
         if not isinstance(data, list):
             return []
         # 마지막 항목은 요약 객체 (min, max만 있는 경우)
