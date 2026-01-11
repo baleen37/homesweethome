@@ -4,6 +4,56 @@ import tempfile
 from pathlib import Path
 
 
+def test_export_trade_price_to_csv():
+    """실거래가 CSV 내보내기"""
+    from src.crawler.dto.asil_trade_price import (
+        AsilTradePriceDayDTO,
+        AsilTradePriceDetailDTO,
+        AsilTradePriceDTO,
+        AsilTradePriceMonthDTO,
+    )
+    from src.crawler.export.csv_export import export_trade_price_to_csv
+
+    data = [
+        (
+            "1",
+            [
+                AsilTradePriceDTO(
+                    val=[
+                        AsilTradePriceMonthDTO(
+                            yyyymm="202401",
+                            val=[
+                                AsilTradePriceDayDTO(
+                                    day=15,
+                                    val=[
+                                        AsilTradePriceDetailDTO(
+                                            money="encrypted_100000",
+                                            floor="5",
+                                            type="1",
+                                        )
+                                    ],
+                                )
+                            ],
+                        )
+                    ],
+                )
+            ],
+        )
+    ]
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = Path(tmpdir) / "trade_price.csv"
+        export_trade_price_to_csv(data, output_path)
+
+        assert output_path.exists()
+        content = output_path.read_text(encoding="utf-8")
+        lines = content.strip().split("\n")
+
+        # 헤더 + 데이터 1줄
+        assert len(lines) >= 2
+        assert "apt_seq" in lines[0]
+
+
 def test_export_apt_list_to_csv():
     """아파트 목록 CSV 내보내기"""
     from src.crawler.dto.asil_apt_list import AsilAptListDTO
