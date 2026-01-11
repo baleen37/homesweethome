@@ -46,6 +46,9 @@ class TestAsilAptListCrawlerIntegration:
         assert isinstance(apt, AsilAptListDTO)
         assert apt.seq
         assert apt.name
+        # 실제 API 응답에서 address, build_year 필드는 항상 None 반환
+        assert apt.address is None
+        assert apt.build_year is None
 
     def test_fetch_real_apt_list_with_min_household_filter(self):
         """세대수 필터가 적용된 아파트 목록을 가져옴"""
@@ -93,8 +96,8 @@ class TestAsilTradePriceCrawlerIntegration:
 
         # 각 실거래가 정보에 필수 필드가 있어야 함
         trade = result[0]
-        # 실제 API 응답 필드: date_j, date_m, max_j, max_m 등
-        assert "date_j" in trade or "date_m" in trade
+        # 실제 API 응답 필드: val, price_total, is_more 등
+        assert "val" in trade or "price_total" in trade or "is_more" in trade
 
     def test_fetch_trade_prices_with_deal_mode_filter(self):
         """거래 유형 필터가 적용된 실거래가를 가져옴"""
@@ -460,7 +463,10 @@ class TestAsilListingCrawlerIntegration:
         listing = result[0]
         assert listing.seq
         assert listing.name
+        # 실제 API 응답에서 offer 필드는 "매물 N건" 형태의 문자열 반환
         assert listing.offer
+        assert isinstance(listing.offer, str)
+        assert "매물" in listing.offer
 
     def test_fetch_listings_with_min_household_filter(self):
         """세대수 필터가 적용된 매물 목록을 가져옴"""
@@ -591,7 +597,6 @@ class TestAsilPriceIndexCrawlerIntegration:
     def test_crawl_template_method_works(self):
         """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
         crawler = AsilPriceIndexCrawler(area="11", deal_mode="M")
-
         try:
             result = crawler.crawl()
         except urllib.error.HTTPError as e:
