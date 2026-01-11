@@ -13,7 +13,9 @@ from crawler.dto.asil_offer import AsilOfferDTO, AsilOffersListResponse
 from crawler.dto.asil_population import AsilPopulationDTO
 from crawler.dto.asil_price_index import AsilPriceIndexResponse
 from crawler.dto.asil_ranking import AsilRankingDTO
+from crawler.dto.asil_redevelop import AsilRedevelopDTO
 from crawler.dto.asil_trade_price import AsilTradePriceDTO
+from crawler.dto.asil_traffic import AsilTrafficInfoDTO
 from crawler.dto.asil_transfer import AsilTransferDTO
 from crawler.dto.asil_visitor_stats import AsilVisitorStatsDTO
 
@@ -160,7 +162,7 @@ class AsilTradePriceCrawler(BaseCrawler[list[AsilTradePriceDTO]]):
         return [AsilTradePriceDTO(**item) for item in data]
 
 
-class AsilTrafficCrawler(BaseCrawler):
+class AsilTrafficCrawler(BaseCrawler[list[AsilTrafficInfoDTO]]):
     """asil.kr 교통정보 크롤러"""
 
     BASE_URL = "https://asil.kr/json/data_traffic_naver.jsp"
@@ -228,10 +230,12 @@ class AsilTrafficCrawler(BaseCrawler):
         with urlopen(request, timeout=10) as response:
             return response.read().decode(self.ENCODING)
 
-    def parse(self, content: str) -> list[dict]:
+    def parse(self, content: str) -> list[AsilTrafficInfoDTO]:
         """JSON 응답 파싱"""
         data = json.loads(content)
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            return []
+        return [AsilTrafficInfoDTO(**item) for item in data]
 
 
 class AsilDongInfoCrawler(BaseCrawler):
@@ -415,7 +419,7 @@ class AsilEducationMapCrawler(BaseCrawler):
         return [AsilEducationMapDTO(**item) for item in data]
 
 
-class AsilRedevelopCrawler(BaseCrawler):
+class AsilRedevelopCrawler(BaseCrawler[list[AsilRedevelopDTO]]):
     """asil.kr 재개발 단지 크롤러"""
 
     BASE_URL = "https://asil.kr/json/data_redevelop.jsp"
@@ -478,7 +482,7 @@ class AsilRedevelopCrawler(BaseCrawler):
         with urlopen(request, timeout=10) as response:
             return response.read().decode(self.ENCODING)
 
-    def parse(self, content: str) -> list[dict]:
+    def parse(self, content: str) -> list[AsilRedevelopDTO]:
         """JSON 응답 파싱"""
         # 빈 응답 처리
         content = content.strip()
@@ -486,7 +490,9 @@ class AsilRedevelopCrawler(BaseCrawler):
             return []
         try:
             data = json.loads(content)
-            return data if isinstance(data, list) else []
+            if not isinstance(data, list):
+                return []
+            return [AsilRedevelopDTO(**item) for item in data]
         except json.JSONDecodeError:
             # 불완전한 JSON 응답 처리 (API가 빈 배열을 반환하는 경우)
             return []

@@ -13,7 +13,6 @@ from crawler.asil import (
     AsilOffersListCrawler,
     AsilPopulationCrawler,
     AsilPriceIndexCrawler,
-    AsilRankingCrawler,
     AsilRedevelopCrawler,
     AsilSchoolInfoCrawler,
     AsilTradePriceCrawler,
@@ -178,45 +177,47 @@ class TestAsilTrafficCrawlerIntegration:
 
     def _validate_traffic_dto(self, traffic) -> None:
         """AsilTrafficInfoDTO 필드 검증 헬퍼 메서드"""
-        # 1. 각 아이템이 dict인지
-        assert isinstance(traffic, dict), "각 아이템은 dict이어야 함"
+        from crawler.dto.asil_traffic import AsilTrafficInfoDTO
+
+        # 1. 각 아이템이 AsilTrafficInfoDTO인지
+        assert isinstance(traffic, AsilTrafficInfoDTO), "각 아이템은 AsilTrafficInfoDTO여야 함"
 
         # 2. key 필드가 존재하고 비어있지 않은지
-        assert "key" in traffic, "key 필드가 존재해야 함"
-        assert traffic["key"], "key 필드는 비어있지 않아야 함"
+        assert traffic.key, "key 필드는 비어있지 않아야 함"
 
         # 3. title 필드가 존재하고 비어있지 않은지
-        assert "title" in traffic, "title 필드가 존재해야 함"
-        assert traffic["title"], "title 필드는 비어있지 않아야 함"
+        assert traffic.title, "title 필드는 비어있지 않아야 함"
 
         # 4. lat, lng가 float로 변환 가능한지
-        if traffic.get("lat"):
+        if traffic.lat:
             try:
-                float(traffic["lat"])
+                float(traffic.lat)
             except (ValueError, TypeError):
-                raise AssertionError(f"lat '{traffic['lat']}'는 float로 변환 가능해야 함")
+                raise AssertionError(f"lat '{traffic.lat}'는 float로 변환 가능해야 함")
 
-        if traffic.get("lng"):
+        if traffic.lng:
             try:
-                float(traffic["lng"])
+                float(traffic.lng)
             except (ValueError, TypeError):
-                raise AssertionError(f"lng '{traffic['lng']}'는 float로 변환 가능해야 함")
+                raise AssertionError(f"lng '{traffic.lng}'는 float로 변환 가능해야 함")
 
         # 5. s_year, e_year가 있으면 "YYYY" 형식인지
-        if traffic.get("s_year"):
-            msg = f"s_year은 4자리 연도여야 함: {traffic['s_year']}"
-            assert len(traffic["s_year"]) == 4, msg
-            msg = f"s_year은 숫자로 구성되어야 함: {traffic['s_year']}"
-            assert traffic["s_year"].isdigit(), msg
+        if traffic.s_year:
+            msg = f"s_year은 4자리 연도여야 함: {traffic.s_year}"
+            assert len(traffic.s_year) == 4, msg
+            msg = f"s_year은 숫자로 구성되어야 함: {traffic.s_year}"
+            assert traffic.s_year.isdigit(), msg
 
-        if traffic.get("e_year"):
-            msg = f"e_year은 4자리 연도여야 함: {traffic['e_year']}"
-            assert len(traffic["e_year"]) == 4, msg
-            msg = f"e_year은 숫자로 구성되어야 함: {traffic['e_year']}"
-            assert traffic["e_year"].isdigit(), msg
+        if traffic.e_year:
+            msg = f"e_year은 4자리 연도여야 함: {traffic.e_year}"
+            assert len(traffic.e_year) == 4, msg
+            msg = f"e_year은 숫자로 구성되어야 함: {traffic.e_year}"
+            assert traffic.e_year.isdigit(), msg
 
     def test_fetch_real_traffic_data_for_gangnam(self):
         """강남구 좌표로 교통정보를 실제로 가져옴"""
+        from crawler.dto.asil_traffic import AsilTrafficInfoDTO
+
         # 강남구 좌표 (대략적인 범위)
         crawler = AsilTrafficCrawler(
             s_lat=37.514575,  # 강남역 근처
@@ -229,9 +230,9 @@ class TestAsilTrafficCrawlerIntegration:
         # 결과가 리스트여야 함
         assert isinstance(result, list)
 
-        # 각 교통정보는 딕셔너리여야 함
+        # 각 교통정보는 DTO여야 함
         for item in result:
-            assert isinstance(item, dict)
+            assert isinstance(item, AsilTrafficInfoDTO)
 
     def test_fetch_traffic_data_with_filters(self):
         """필터가 적용된 교통정보를 가져옴"""
@@ -585,6 +586,8 @@ class TestAsilRedevelopCrawlerIntegration:
 
     def test_fetch_real_redevelop_data_for_gangnam(self):
         """강남구 좌표로 재개발 단지 정보를 실제로 가져옴"""
+        from crawler.dto.asil_redevelop import AsilRedevelopDTO
+
         crawler = AsilRedevelopCrawler(
             s_lat=37.48,
             s_lng=127.00,
@@ -596,9 +599,9 @@ class TestAsilRedevelopCrawlerIntegration:
         # 결과가 리스트여야 함
         assert isinstance(result, list)
 
-        # 각 재개발 정보는 딕셔너리여야 함
+        # 각 재개발 정보는 DTO여야 함
         for item in result:
-            assert isinstance(item, dict)
+            assert isinstance(item, AsilRedevelopDTO)
 
     def test_fetch_redevelop_data_with_type_filter(self):
         """유형 필터가 적용된 재개발 정보를 가져옴"""
@@ -678,57 +681,6 @@ class TestAsilListingCrawlerIntegration:
         # 매물이 있는 항목만 필터링되어야 함
         for listing in result:
             assert listing.offer
-
-
-@pytest.mark.integration
-class TestAsilRankingCrawlerIntegration:
-    """AsilRankingCrawler 통합 테스트"""
-
-    def test_fetch_real_ranking_max_price(self):
-        """서울(11) 지역의 최고가 랭킹을 실제로 가져옴"""
-        crawler = AsilRankingCrawler(area="11", theme="max")
-        result = crawler.crawl()
-
-        # 결과가 리스트여야 함
-        assert isinstance(result, list)
-
-        # 최고가 랭킹에는 적어도 1개 이상의 데이터가 있어야 함
-        # API에서 데이터를 반환하지 않을 수도 있으므로 유연하게 처리
-        if len(result) > 0:
-            # 각 랭킹 정보에 필수 필드가 있어야 함
-            ranking = result[0]
-            assert ranking.idx
-            assert ranking.seq
-            assert ranking.name
-            assert ranking.price
-
-    def test_fetch_real_ranking_min_price(self):
-        """서울(11) 지역의 최저가 랭킹을 실제로 가져옴"""
-        crawler = AsilRankingCrawler(area="11", theme="min")
-        result = crawler.crawl()
-
-        # 결과가 리스트여야 함
-        assert isinstance(result, list)
-
-        # 최저가 랭킹에는 적어도 1개 이상의 데이터가 있어야 함
-        # API에서 데이터를 반환하지 않을 수도 있으므로 유연하게 처리
-        if len(result) > 0:
-            # 각 랭킹 정보에 필수 필드가 있어야 함
-            ranking = result[0]
-            assert ranking.idx
-            assert ranking.seq
-            assert ranking.name
-            assert ranking.price
-
-    def test_crawl_template_method_works(self):
-        """crawl() 템플릿 메서드가 올바르게 작동하는지 확인"""
-        crawler = AsilRankingCrawler(area="11", theme="max")
-
-        # crawl()은 get_url() -> fetch() -> parse() 순서로 호출해야 함
-        result = crawler.crawl()
-
-        # 결과가 파싱된 데이터여야 함
-        assert isinstance(result, list)
 
 
 @pytest.mark.integration

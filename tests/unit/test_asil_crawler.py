@@ -322,8 +322,10 @@ class TestAsilTrafficCrawler:
         assert "t_min=2021" in url
         assert "t_max=2027" in url
 
-    def test_parse_returns_list_of_dicts(self):
-        """parse()는 list[dict]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilTrafficInfoDTO]를 반환해야 함"""
+        from crawler.dto.asil_traffic import AsilTrafficInfoDTO
+
         crawler = AsilTrafficCrawler(
             s_lat=37.514575,
             s_lng=127.044555,
@@ -348,9 +350,9 @@ class TestAsilTrafficCrawler:
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
-        assert isinstance(result[0], dict)
-        assert result[0]["key"] == "G000002"
-        assert result[0]["title"] == "GTX B"
+        assert isinstance(result[0], AsilTrafficInfoDTO)
+        assert result[0].key == "G000002"
+        assert result[0].title == "GTX B"
 
 
 class TestAsilDongInfoCrawler:
@@ -683,8 +685,10 @@ class TestAsilRedevelopCrawler:
         assert "e_lat=37.6" in url
         assert "e_lng=127.1" in url
 
-    def test_parse_returns_list_of_dicts(self):
-        """parse()는 list[dict]를 반환해야 함"""
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilRedevelopDTO]를 반환해야 함"""
+        from crawler.dto.asil_redevelop import AsilRedevelopDTO
+
         crawler = AsilRedevelopCrawler(
             s_lat=37.5,
             s_lng=127.0,
@@ -692,23 +696,34 @@ class TestAsilRedevelopCrawler:
             e_lng=127.1,
         )
 
-        # Mock JSON 응답 (재개발 구역 정보)
-        mock_response = """
-        [
+        # Mock JSON 응답 (재개발 구역 정보 - 실제 API 응답 구조)
+        mock_response = """[
             {
-                "name": "역삼동 재개발 구역",
-                "status": "진행 중",
-                "s_lat": "37.5",
-                "s_lng": "127.0"
+                "key": "PB000062",
+                "title": "역삼동 재개발구역",
+                "desc": "사업시행자 정보",
+                "lat": "37.490951974",
+                "lng": "127.04227062",
+                "evt": "N",
+                "evt_title": "",
+                "polygon": [
+                    {
+                        "coordinates": [
+                            [
+                                [127.04133542, 37.491871332],
+                                [127.04149920, 37.491542407]
+                            ]
+                        ]
+                    }
+                ]
             }
-        ]
-        """
+        ]"""
 
         result = crawler.parse(mock_response)
         assert isinstance(result, list)
         assert len(result) == 1
-        assert isinstance(result[0], dict)
-        assert result[0]["name"] == "역삼동 재개발 구역"
+        assert isinstance(result[0], AsilRedevelopDTO)
+        assert result[0].title == "역삼동 재개발구역"
 
     def test_parse_handles_empty_response(self):
         """parse()는 빈 응답을 처리할 수 있어야 함"""
