@@ -22,31 +22,10 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--apt-output",
+        "--output",
         type=str,
-        default="output/apt_list.csv",
-        help="아파트 목록 출력 경로 (기본값: output/apt_list.csv)",
-    )
-
-    parser.add_argument(
-        "--trade-output",
-        type=str,
-        default="output/trade_price.csv",
-        help="실거래가 출력 경로 (기본값: output/trade_price.csv)",
-    )
-
-    parser.add_argument(
-        "--area",
-        type=float,
-        default=84.0,
-        help="실거래가 조회 면적 (m², 기본값: 84.0)",
-    )
-
-    parser.add_argument(
-        "--max-per-dong",
-        type=int,
-        default=10,
-        help="동별 최대 조회 수 (기본값: 10)",
+        default="output",
+        help="출력 디렉토리 (기본값: output)",
     )
 
     return parser.parse_args()
@@ -63,15 +42,14 @@ def main() -> None:
         # 기본값: 5개 샘플 동
         dong_codes = list(SEOUL_LEGAL_DONG_CODES.keys())[:5]
 
-    apt_output_path = Path(args.apt_output)
-    trade_output_path = Path(args.trade_output)
+    output_dir = Path(args.output)
+    apt_output_path = output_dir / "apt_list.csv"
+    trade_output_path = output_dir / "trade_price.csv"
 
     crawl_apt_and_trade(
         dong_codes=dong_codes,
         apt_output_path=apt_output_path,
         trade_output_path=trade_output_path,
-        area_m2=args.area,
-        max_per_dong=args.max_per_dong,
     )
 
 
