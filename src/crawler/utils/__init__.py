@@ -7,6 +7,7 @@ from crawler.utils.data_quality import (
     log_quality_summary,
     save_quality_report,
 )
+from crawler.utils.dong_detector import RepresentativeDongDetector
 from crawler.utils.filter import FilterOptions, filter_records
 from crawler.utils.geo import ll_to_pixel
 
@@ -17,6 +18,8 @@ __all__ = [
     "generate_quality_report",
     "log_quality_summary",
     "save_quality_report",
+    # Dong detector
+    "RepresentativeDongDetector",
     # Filter
     "FilterOptions",
     "filter_records",

@@ -5,6 +5,7 @@ from pathlib import Path
 from src.crawler.asil import AsilAptListCrawler
 from src.crawler.dto.asil_apt_list import AsilAptListDTO
 from src.crawler.export.csv_export import export_apt_list_to_csv
+from src.crawler.utils.dong_detector import RepresentativeDongDetector
 
 
 def deduplicate_apts(apts: list[AsilAptListDTO]) -> list[AsilAptListDTO]:
@@ -44,6 +45,10 @@ def crawl_apt_list_to_csv(
     """
     아파트 목록을 크롤링하여 CSV로 내보냅니다.
 
+    대표동 감지 기능을 사용하여 중복 크롤링을 방지합니다.
+    ASIL API는 대표동(예: 문래동) 조회 시 해당 지역 전체를 반환하므로,
+    이미 처리된 그룹에 속한 동은 자동으로 스킵합니다.
+
     Args:
         dong_codes: 법정동 코드 리스트
         output_path: 출력 CSV 경로
@@ -51,22 +56,52 @@ def crawl_apt_list_to_csv(
     Returns:
         아파트 수
     """
+    detector = RepresentativeDongDetector()
     all_apts = []
+    skipped_count = 0
 
     for dong_code in dong_codes:
         print(f"동 코드 {dong_code} 조회 중...")
         apt_crawler = AsilAptListCrawler(dong_code=dong_code)
         apt_list = apt_crawler.crawl()
-        all_apts.extend(apt_list)
-        print(f"  - {len(apt_list)}개 아파트 찾음")
 
-    # 중복 제거
+        if not apt_list:
+            print("  - 데이터 없음")
+            continue
+
+        # 대표동 감지: 이미 처리된 그룹이면 스킵
+        if detector.should_skip(apt_list):
+            group = detector.get_dong_group(apt_list)
+            print(f"  - {len(apt_list)}개 찾음 (그룹 '{group}' 이미 처리됨, 스킵)")
+            skipped_count += 1
+            continue
+
+        # 대표동인 경우 통계 출력
+        if detector.is_representative(apt_list):
+            group = detector.get_dong_group(apt_list)
+            dong_codes_in_group = detector.get_dong_codes(apt_list)
+            print(
+                f"  - {len(apt_list)}개 찾음 (대표동, 그룹: {group}, "
+                f"포함된 동: {len(dong_codes_in_group)}개)"
+            )
+        else:
+            print(f"  - {len(apt_list)}개 찾음")
+
+        all_apts.extend(apt_list)
+
+    # 최종 중복 제거 (seq 기준)
     before_count = len(all_apts)
     all_apts = deduplicate_apts(all_apts)
     after_count = len(all_apts)
     removed = before_count - after_count
 
     export_apt_list_to_csv(all_apts, output_path)
-    print(f"완료: {after_count}개 아파트 → {output_path} (중복 {removed}개 제거)")
+
+    stats = detector.get_stats()
+    print("\n=== 크롤링 통계 ===")
+    print(f"처리된 동 그룹: {stats['seen_groups']}개")
+    print(f"스킵된 동: {skipped_count}개")
+    print(f"중복 제거: {removed}개 ({before_count} → {after_count})")
+    print(f"완료: {after_count}개 아파트 → {output_path}")
 
     return after_count
