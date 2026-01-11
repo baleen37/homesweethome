@@ -8,10 +8,9 @@ _APT_CRAWLER_PATH = "src.crawler.commands.apt_and_trade_crawl.AsilAptListCrawler
 _TRADE_CRAWLER_PATH = "src.crawler.commands.apt_and_trade_crawl.AsilTradePriceCrawler"
 
 
-def test_crawl_apt_and_trade():
+def test_crawl_apt_and_trade(sample_dto_factory):
     """통합 크롤링 함수 테스트"""
     from src.crawler.commands.apt_and_trade_crawl import crawl_apt_and_trade
-    from src.crawler.dto.asil_apt_list import AsilAptListDTO
     from src.crawler.dto.asil_trade_price import (
         AsilTradePriceDayDTO,
         AsilTradePriceDetailDTO,
@@ -27,15 +26,10 @@ def test_crawl_apt_and_trade():
         # Mock 설정
         mock_apt_crawler = Mock()
         mock_apt_crawler.crawl.return_value = [
-            AsilAptListDTO(
+            sample_dto_factory(
                 seq="1",
                 name="테스트",
-                dong="1150010100",
                 dongname="역삼동",
-                build_year="2000",
-                household="100",
-                lat="37.5",
-                lng="127.0",
             )
         ]
         mock_apt_crawler_cls.return_value = mock_apt_crawler

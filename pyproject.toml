@@ -31,6 +31,8 @@ markers = [
     "integration: 통합 테스트",
     "e2e: E2E 테스트",
 ]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 100

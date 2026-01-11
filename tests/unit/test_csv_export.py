@@ -54,23 +54,18 @@ def test_export_trade_price_to_csv():
         assert "apt_seq" in lines[0]
 
 
-def test_export_apt_list_to_csv():
+def test_export_apt_list_to_csv(sample_dto_factory):
     """아파트 목록 CSV 내보내기"""
-    from src.crawler.dto.asil_apt_list import AsilAptListDTO
     from src.crawler.export.csv_export import export_apt_list_to_csv
 
     data = [
-        AsilAptListDTO(
+        sample_dto_factory(
             seq="1",
             name="테스트아파트",
             dong="1150010100",
             dongname="역삼동",
-            build_year="2000",
-            household="100",
-            lat="37.5",
-            lng="127.0",
         ),
-        AsilAptListDTO(
+        sample_dto_factory(
             seq="2",
             name="무실거래아파트",
             dong="1150010200",

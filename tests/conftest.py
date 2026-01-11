@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from crawler.asil import AsilAptListCrawler
 from crawler.dto.asil_apt_list import AsilAptListDTO
 from crawler.dto.naver_listing import NaverAptDTO
 
@@ -194,3 +195,107 @@ def mock_naver_listings():
             "price": "14억 5,000만",
         },
     ]
+
+
+@pytest.fixture
+def mock_cli_args(monkeypatch):
+    """CLI 인자 Mock fixture
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture
+
+    Returns:
+        Callable: CLI 인자 설정 함수
+    """
+    def _set_args(args_list):
+        monkeypatch.setattr("sys.argv", args_list)
+
+    return _set_args
+
+
+@pytest.fixture
+def mock_http_response():
+    """HTTP 응답 Mock 생성 fixture
+
+    Returns:
+        Callable: HTTP 응답 Mock 생성 함수
+    """
+    from unittest.mock import Mock
+
+    def _create_response(json_data, status_code=200):
+        response = Mock()
+        response.json.return_value = json_data
+        response.raise_for_status = Mock()
+        response.status_code = status_code
+        response.text = str(json_data)
+        return response
+
+    return _create_response
+
+
+# =============================================================================
+# 샘플 DTO Fixtures
+# =============================================================================
+
+
+@pytest.fixture(scope="session")
+def sample_asil_apt_dto():
+    """AsilAptListDTO 샘플 fixture"""
+    return AsilAptListDTO(
+        seq="1",
+        name="테스트아파트",
+        dong="1150010100",
+        dongname="사직동",
+        build_year="2000",
+        household="100",
+        lat="37.5",
+        lng="127.0",
+    )
+
+
+@pytest.fixture
+def sample_dto_factory():
+    """동적 DTO 생성 fixture
+
+    Returns:
+        Callable: DTO 생성 함수
+    """
+
+    def _create_dto(**kwargs):
+        defaults = {
+            "seq": "1",
+            "name": "테스트",
+            "dong": "1150010100",
+            "dongname": "사직동",
+            "build_year": "2000",
+            "household": "100",
+            "lat": "37.5",
+            "lng": "127.0",
+        }
+        defaults.update(kwargs)
+        return AsilAptListDTO(**defaults)
+
+    return _create_dto
+
+
+# =============================================================================
+# 서울 좌표 Fixtures
+# =============================================================================
+
+
+@pytest.fixture(scope="session")
+def seoul_city_hall_coordinates():
+    """서울 시청 좌표 fixture"""
+    return {"lat": 37.5665, "lng": 126.9780}
+
+
+@pytest.fixture(scope="session")
+def gangnam_station_coordinates():
+    """강남역 좌표 fixture"""
+    return {"lat": 37.5138, "lng": 126.8826}
+
+
+@pytest.fixture(scope="session")
+def sample_coordinates():
+    """테스트용 샘플 좌표 fixture"""
+    return {"lat": 37.5, "lng": 126.9}

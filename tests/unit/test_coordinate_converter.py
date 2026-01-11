@@ -63,7 +63,7 @@ class TestCoordinateConverter:
                 f"경도 불일치: x={x}, y={y}, expected={expected_lon}, got={lon}"
             )
 
-    def test_roundtrip_conversion(self):
+    def test_roundtrip_conversion(self, seoul_city_hall_coordinates):
         """
         왕복 변환 테스트: WGS84 -> WCONGNAMUL -> WGS84
 
@@ -74,7 +74,7 @@ class TestCoordinateConverter:
         """
         test_cases = [
             # 서울/경기 지역 주요 좌표 (중부원점 기준 최적 범위)
-            (37.5665, 126.9780),  # 서울시청
+            (seoul_city_hall_coordinates["lat"], seoul_city_hall_coordinates["lng"]),  # 서울시청
             (37.5512, 126.9882),  # 남산타워
             (37.5796, 126.9770),  # 경복궁
             (37.5172, 127.0473),  # 강남역
@@ -121,13 +121,14 @@ class TestCoordinateConverter:
         assert abs(lat - expected_lat) <= 0.0001
         assert abs(lon - expected_lon) <= 0.0001
 
-    def test_coordinate_scale(self):
+    def test_coordinate_scale(self, seoul_city_hall_coordinates):
         """
         좌표값의 스케일 테스트
 
         WCONGNAMUL 좌표는 보통 수십만 단위의 값을 가집니다.
         """
-        lat, lon = 37.5665, 126.9780  # 서울시청
+        lat = seoul_city_hall_coordinates["lat"]
+        lon = seoul_city_hall_coordinates["lng"]
         x, y = wgs84_to_wcongnamul(lat, lon)
 
         # WCONGNAMUL 좌표는 보통 100,000 ~ 1,000,000 범위

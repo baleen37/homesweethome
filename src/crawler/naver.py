@@ -28,28 +28,38 @@ class _NaverBaseCrawler:
 
     BASE_URL = "https://new.land.naver.com"
 
-    def __init__(self, headless: bool = True, block_resources: bool = True):
+    def __init__(
+        self,
+        headless: bool = True,
+        block_resources: bool = True,
+        page: Page | None = None,
+    ):
         """
         Args:
             headless: 헤드리스 모드 여부
             block_resources: 무거운 리소스 차단 여부
+            page: 외부에서 생성한 Playwright Page 객체 (테스트용 공유 브라우저)
         """
         self.headless = headless
         self.block_resources = block_resources
         self.playwright = None
         self.browser: Browser | None = None
         self.context: BrowserContext | None = None
-        self.page: Page | None = None
+        self.page = page  # 외부에서 제공된 page가 있으면 사용
 
     async def __aenter__(self):
         """비동기 컨텍스트 매니저 진입"""
-        self.playwright = await async_playwright().start()
-        await self._setup_browser()
+        # 외부에서 제공된 page가 없으면 새로 생성
+        if self.page is None:
+            self.playwright = await async_playwright().start()
+            await self._setup_browser()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """비동기 컨텍스트 매니저 종료"""
-        await self._close()
+        # 외부에서 제공된 page가 없으면 자원 정리
+        if self.page is None:
+            await self._close()
 
     async def _setup_browser(self):
         """브라우저 설정 - Anti-Bot 우회 기술 적용"""
@@ -175,14 +185,21 @@ class NaverSearchCrawler(_NaverBaseCrawler):
     아파트 이름으로 검색하여 단지 정보를 수집합니다.
     """
 
-    def __init__(self, keyword: str, headless: bool = True, block_resources: bool = True):
+    def __init__(
+        self,
+        keyword: str,
+        headless: bool = True,
+        block_resources: bool = True,
+        page: Page | None = None,
+    ):
         """
         Args:
             keyword: 검색 키워드 (아파트 이름)
             headless: 헤드리스 모드 여부
             block_resources: 무거운 리소스 차단 여부
+            page: 외부에서 생성한 Playwright Page 객체 (테스트용 공유 브라우저)
         """
-        super().__init__(headless, block_resources)
+        super().__init__(headless, block_resources, page)
         self.keyword = keyword
 
     async def _search_async(self) -> list[dict[str, Any]]:
@@ -245,9 +262,11 @@ class NaverSearchCrawler(_NaverBaseCrawler):
 
         return collected_data
 
-    def crawl(self) -> list[NaverAptDTO]:
+    async def crawl_async(self) -> list[NaverAptDTO]:
         """
-        아파트 검색 수행
+        아파트 검색 수행 (비동기 버전)
+
+        테스트에서 공유 브라우저를 사용할 때 사용합니다.
 
         Returns:
             list[NaverAptDTO]: 검색된 아파트 리스트
@@ -256,28 +275,34 @@ class NaverSearchCrawler(_NaverBaseCrawler):
         if not self.keyword or not self.keyword.strip():
             return []
 
-        async def _crawl():
-            async with self:
-                data = await self._search_async()
+        async with self:
+            data = await self._search_async()
 
-                # DTO 변환
-                results = []
-                for item in data:
-                    complex_no = item.get("markerId") or item.get("complexNo", "")
-                    if complex_no:
-                        apt = NaverAptDTO(
-                            complex_no=str(complex_no),
-                            complex_name=item.get("complexName", ""),
-                            article_count=item.get("articleCount", 0),
-                            latitude=item.get("lat"),
-                            longitude=item.get("lng"),
-                            address=item.get("address"),
-                        )
-                        results.append(apt)
+            # DTO 변환
+            results = []
+            for item in data:
+                complex_no = item.get("markerId") or item.get("complexNo", "")
+                if complex_no:
+                    apt = NaverAptDTO(
+                        complex_no=str(complex_no),
+                        complex_name=item.get("complexName", ""),
+                        article_count=item.get("articleCount", 0),
+                        latitude=item.get("lat"),
+                        longitude=item.get("lng"),
+                        address=item.get("address"),
+                    )
+                    results.append(apt)
 
-                return results
+            return results
 
-        return asyncio.run(_crawl())
+    def crawl(self) -> list[NaverAptDTO]:
+        """
+        아파트 검색 수행
+
+        Returns:
+            list[NaverAptDTO]: 검색된 아파트 리스트
+        """
+        return asyncio.run(self.crawl_async())
 
 
 class NaverComplexInfoCrawler(_NaverBaseCrawler):
@@ -287,14 +312,21 @@ class NaverComplexInfoCrawler(_NaverBaseCrawler):
     특정 단지의 상세 정보를 수집합니다.
     """
 
-    def __init__(self, complex_no: str, headless: bool = True, block_resources: bool = True):
+    def __init__(
+        self,
+        complex_no: str,
+        headless: bool = True,
+        block_resources: bool = True,
+        page: Page | None = None,
+    ):
         """
         Args:
             complex_no: 단지 번호
             headless: 헤드리스 모드 여부
             block_resources: 무거운 리소스 차단 여부
+            page: 외부에서 생성한 Playwright Page 객체 (테스트용 공유 브라우저)
         """
-        super().__init__(headless, block_resources)
+        super().__init__(headless, block_resources, page)
         self.complex_no = complex_no
 
     async def _get_complex_info_async(self) -> dict[str, Any] | None:
@@ -335,6 +367,18 @@ class NaverComplexInfoCrawler(_NaverBaseCrawler):
 
         return response_data
 
+    async def crawl_async(self) -> dict[str, Any] | None:
+        """
+        단지 상세 정보 수집 (비동기 버전)
+
+        테스트에서 공유 브라우저를 사용할 때 사용합니다.
+
+        Returns:
+            dict | None: 단지 정보
+        """
+        async with self:
+            return await self._get_complex_info_async()
+
     def crawl(self) -> dict[str, Any] | None:
         """
         단지 상세 정보 수집
@@ -342,12 +386,7 @@ class NaverComplexInfoCrawler(_NaverBaseCrawler):
         Returns:
             dict | None: 단지 정보
         """
-
-        async def _crawl():
-            async with self:
-                return await self._get_complex_info_async()
-
-        return asyncio.run(_crawl())
+        return asyncio.run(self.crawl_async())
 
 
 class NaverListingsCrawler(_NaverBaseCrawler):
@@ -357,14 +396,21 @@ class NaverListingsCrawler(_NaverBaseCrawler):
     특정 단지의 매물 목록을 수집합니다.
     """
 
-    def __init__(self, complex_no: str, headless: bool = True, block_resources: bool = True):
+    def __init__(
+        self,
+        complex_no: str,
+        headless: bool = True,
+        block_resources: bool = True,
+        page: Page | None = None,
+    ):
         """
         Args:
             complex_no: 단지 번호
             headless: 헤드리스 모드 여부
             block_resources: 무거운 리소스 차단 여부
+            page: 외부에서 생성한 Playwright Page 객체 (테스트용 공유 브라우저)
         """
-        super().__init__(headless, block_resources)
+        super().__init__(headless, block_resources, page)
         self.complex_no = complex_no
 
     async def _get_listings_async(self) -> list[dict[str, Any]]:
@@ -409,6 +455,51 @@ class NaverListingsCrawler(_NaverBaseCrawler):
 
         return response_data
 
+    async def crawl_async(self) -> list[NaverListingDTO]:
+        """
+        매물 목록 수집 (비동기 버전)
+
+        테스트에서 공유 브라우저를 사용할 때 사용합니다.
+
+        Returns:
+            list[NaverListingDTO]: 매물 리스트
+        """
+        async with self:
+            data = await self._get_listings_async()
+
+            # 결과 파싱
+            listings = []
+
+            for response in data:
+                articles = response.get("articleList", response.get("articles", []))
+                if not isinstance(articles, list):
+                    continue
+
+                for article in articles:
+                    # 매매만 필터링
+                    trade_type = article.get("tradeType", "")
+                    trade_name = article.get("tradeTypeName", "")
+
+                    if trade_type != "A1" and trade_name != "매매":
+                        continue
+
+                    listing = NaverListingDTO(
+                        article_no=str(article.get("articleNo", "")),
+                        complex_name=article.get("articleName", ""),
+                        complex_no=self.complex_no,
+                        trade_type=trade_name,
+                        deal_price=self._parse_price(article.get("dealOrWarrantPrc", "")),
+                        floor_info=article.get("floorInfo", ""),
+                        area1=article.get("area1"),
+                        area2=article.get("area2"),
+                        direction=article.get("direction", ""),
+                        description=article.get("articleFeatureDesc", ""),
+                        confirm_date=article.get("articleConfirmYmd"),
+                    )
+                    listings.append(listing)
+
+            return listings
+
     def crawl(self) -> list[NaverListingDTO]:
         """
         매물 목록 수집
@@ -416,42 +507,4 @@ class NaverListingsCrawler(_NaverBaseCrawler):
         Returns:
             list[NaverListingDTO]: 매물 리스트
         """
-
-        async def _crawl():
-            async with self:
-                data = await self._get_listings_async()
-
-                # 결과 파싱
-                listings = []
-
-                for response in data:
-                    articles = response.get("articleList", response.get("articles", []))
-                    if not isinstance(articles, list):
-                        continue
-
-                    for article in articles:
-                        # 매매만 필터링
-                        trade_type = article.get("tradeType", "")
-                        trade_name = article.get("tradeTypeName", "")
-
-                        if trade_type != "A1" and trade_name != "매매":
-                            continue
-
-                        listing = NaverListingDTO(
-                            article_no=str(article.get("articleNo", "")),
-                            complex_name=article.get("articleName", ""),
-                            complex_no=self.complex_no,
-                            trade_type=trade_name,
-                            deal_price=self._parse_price(article.get("dealOrWarrantPrc", "")),
-                            floor_info=article.get("floorInfo", ""),
-                            area1=article.get("area1"),
-                            area2=article.get("area2"),
-                            direction=article.get("direction", ""),
-                            description=article.get("articleFeatureDesc", ""),
-                            confirm_date=article.get("articleConfirmYmd"),
-                        )
-                        listings.append(listing)
-
-                return listings
-
-        return asyncio.run(_crawl())
+        return asyncio.run(self.crawl_async())

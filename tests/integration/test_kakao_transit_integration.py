@@ -18,11 +18,12 @@ class TestKakaoTransitCrawler:
         """크롤러 인스턴스 생성"""
         return KakaoTransitCrawler()
 
-    def test_search_transit_route_to_gangnam(self, crawler: KakaoTransitCrawler) -> None:
+    def test_search_transit_route_to_gangnam(
+        self, crawler: KakaoTransitCrawler, gangnam_station_coordinates
+    ) -> None:
         """강남역까지 대중교통 경로 검색"""
-        # 문래동 위치 (예시)
-        start_lat = 37.5138
-        start_lon = 126.8826
+        start_lat = gangnam_station_coordinates["lat"]
+        start_lon = gangnam_station_coordinates["lng"]
 
         result = crawler.search_transit_route(start_lat, start_lon, "강남역")
 
@@ -39,10 +40,12 @@ class TestKakaoTransitCrawler:
         assert first_route.time_text != ""
         assert len(first_route.steps) > 0
 
-    def test_search_transit_route_to_pangyo(self, crawler: KakaoTransitCrawler) -> None:
+    def test_search_transit_route_to_pangyo(
+        self, crawler: KakaoTransitCrawler, gangnam_station_coordinates
+    ) -> None:
         """판교역까지 대중교통 경로 검색"""
-        start_lat = 37.5138
-        start_lon = 126.8826
+        start_lat = gangnam_station_coordinates["lat"]
+        start_lon = gangnam_station_coordinates["lng"]
 
         result = crawler.search_transit_route(start_lat, start_lon, "판교역")
 
@@ -50,10 +53,12 @@ class TestKakaoTransitCrawler:
         assert result.end_name == "판교역"
         assert result.total_routes > 0
 
-    def test_search_transit_route_to_gwanghwamun(self, crawler: KakaoTransitCrawler) -> None:
+    def test_search_transit_route_to_gwanghwamun(
+        self, crawler: KakaoTransitCrawler, gangnam_station_coordinates
+    ) -> None:
         """광화문까지 대중교통 경로 검색"""
-        start_lat = 37.5138
-        start_lon = 126.8826
+        start_lat = gangnam_station_coordinates["lat"]
+        start_lon = gangnam_station_coordinates["lng"]
 
         result = crawler.search_transit_route(start_lat, start_lon, "광화문")
 
@@ -61,10 +66,12 @@ class TestKakaoTransitCrawler:
         assert result.end_name == "광화문"
         assert result.total_routes > 0
 
-    def test_search_transit_route_to_seoul_station(self, crawler: KakaoTransitCrawler) -> None:
+    def test_search_transit_route_to_seoul_station(
+        self, crawler: KakaoTransitCrawler, gangnam_station_coordinates
+    ) -> None:
         """서울역까지 대중교통 경로 검색"""
-        start_lat = 37.5138
-        start_lon = 126.8826
+        start_lat = gangnam_station_coordinates["lat"]
+        start_lon = gangnam_station_coordinates["lng"]
 
         result = crawler.search_transit_route(start_lat, start_lon, "서울역")
 
@@ -72,10 +79,12 @@ class TestKakaoTransitCrawler:
         assert result.end_name == "서울역"
         assert result.total_routes > 0
 
-    def test_search_transit_route_to_yeouido(self, crawler: KakaoTransitCrawler) -> None:
+    def test_search_transit_route_to_yeouido(
+        self, crawler: KakaoTransitCrawler, gangnam_station_coordinates
+    ) -> None:
         """여의도까지 대중교통 경로 검색"""
-        start_lat = 37.5138
-        start_lon = 126.8826
+        start_lat = gangnam_station_coordinates["lat"]
+        start_lon = gangnam_station_coordinates["lng"]
 
         result = crawler.search_transit_route(start_lat, start_lon, "여의도")
 
@@ -83,10 +92,12 @@ class TestKakaoTransitCrawler:
         assert result.end_name == "여의도"
         assert result.total_routes > 0
 
-    def test_search_multiple_destinations(self, crawler: KakaoTransitCrawler) -> None:
+    def test_search_multiple_destinations(
+        self, crawler: KakaoTransitCrawler, gangnam_station_coordinates
+    ) -> None:
         """여러 도착지에 대한 경로 검색"""
-        start_lat = 37.5138
-        start_lon = 126.8826
+        start_lat = gangnam_station_coordinates["lat"]
+        start_lon = gangnam_station_coordinates["lng"]
         destinations = ["강남역", "판교역", "광화문", "서울역", "여의도"]
 
         results = crawler.search_multiple_destinations(start_lat, start_lon, destinations)
@@ -97,18 +108,22 @@ class TestKakaoTransitCrawler:
             if dest in results:
                 assert results[dest].end_name == dest
 
-    def test_invalid_destination_raises_error(self, crawler: KakaoTransitCrawler) -> None:
+    def test_invalid_destination_raises_error(
+        self, crawler: KakaoTransitCrawler, gangnam_station_coordinates
+    ) -> None:
         """지원하지 않는 도착지에 대해 ValueError 발생"""
-        start_lat = 37.5138
-        start_lon = 126.8826
+        start_lat = gangnam_station_coordinates["lat"]
+        start_lon = gangnam_station_coordinates["lng"]
 
         with pytest.raises(ValueError, match="지원하지 않는 도착지"):
             crawler.search_transit_route(start_lat, start_lon, "지원하지않는역")
 
-    def test_route_has_proper_structure(self, crawler: KakaoTransitCrawler) -> None:
+    def test_route_has_proper_structure(
+        self, crawler: KakaoTransitCrawler, gangnam_station_coordinates
+    ) -> None:
         """경로 데이터가 적절한 구조를 가지는지 확인"""
-        start_lat = 37.5138
-        start_lon = 126.8826
+        start_lat = gangnam_station_coordinates["lat"]
+        start_lon = gangnam_station_coordinates["lng"]
 
         result = crawler.search_transit_route(start_lat, start_lon, "강남역")
         route = result.routes[0]
