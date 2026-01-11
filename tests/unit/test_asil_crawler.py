@@ -5,9 +5,13 @@ import pytest
 from crawler.asil import (
     AsilAgentInfoCrawler,
     AsilAptListCrawler,
+    AsilBunyangListCrawler,
     AsilDongInfoCrawler,
     AsilEducationMapCrawler,
     AsilListingCrawler,
+    AsilMapSearchCrawler,
+    AsilMoveinCrawler,
+    AsilOfferDetailCrawler,
     AsilOffersListCrawler,
     AsilPopulationCrawler,
     AsilPriceIndexCrawler,
@@ -22,7 +26,13 @@ from crawler.asil import (
 from crawler.dto.asil_agent import AsilAgentDTO, AsilAgentInfoResponse
 from crawler.dto.asil_apt_list import AsilAptListDTO
 from crawler.dto.asil_dong_info import AsilDongInfoDTO
+from crawler.dto.asil_map_search import AsilMapSearchDTO
+from crawler.dto.asil_movein import AsilMoveinDTO
 from crawler.dto.asil_offer import AsilOfferDTO, AsilOffersListResponse
+from crawler.dto.asil_offer_detail import (
+    AsilOfferDetailDTO,
+    AsilOfferDetailResponse,
+)
 from crawler.dto.asil_population import AsilPopulationDTO
 from crawler.dto.asil_price_index import (
     AsilPriceIndexRegionDTO,
@@ -361,9 +371,7 @@ class TestAsilTrafficCrawler:
                 "key": "G000002",
                 "title": "GTX B",
                 "lat": "37.514575",
-                "lng": "127.044555",
-                "s_year": "2024",
-                "e_year": "2028"
+                "lng": "127.044555"
             }
         ]
         """
@@ -1201,3 +1209,522 @@ class TestAsilTransferCrawler:
         assert result[0].rank == 1
         assert result[0].from_ == "서울"
         assert result[0].to == "경기 광명시"
+
+
+class TestAsilMoveinCrawler:
+    """AsilMoveinCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilMoveinCrawler, BaseCrawler)
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilMoveinCrawler(area="11", sy="2025", sm="1", ey="2025", em="12")
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/app/data/data_movein.jsp")
+        assert "area=11" in url
+        assert "sY=2025" in url
+        assert "sM=1" in url
+        assert "eY=2025" in url
+        assert "eM=12" in url
+
+    def test_get_url_includes_optional_parameters(self):
+        """선택적 파라미터를 URL에 포함해야 함"""
+        crawler = AsilMoveinCrawler(
+            area="11", order=1, orderby="name", sy="2025", sm="1", ey="2025", em="12"
+        )
+        url = crawler.get_url()
+        assert "order=1" in url
+        assert "orderby=name" in url
+
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilMoveinDTO]를 반환해야 함"""
+        crawler = AsilMoveinCrawler(area="11", sy="2025", sm="1", ey="2025", em="12")
+
+        # Mock JSON 응답 (입주 예정 물량 데이터)
+        mock_response = """
+        [
+            {
+                "seq": "20414401",
+                "name": "아크로서울포레스트",
+                "location": "서울 성동구 성수동",
+                "movein_yyyymm": "202506",
+                "household": "100",
+                "lat": "37.544463790",
+                "lng": "127.04384744"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], AsilMoveinDTO)
+        assert result[0].seq == "20414401"
+        assert result[0].name == "아크로서울포레스트"
+        assert result[0].location == "서울 성동구 성수동"
+        assert result[0].movein_yyyymm == "202506"
+        assert result[0].household == "100"
+
+    def test_parse_handles_empty_response(self):
+        """parse()는 빈 응답을 처리할 수 있어야 함"""
+        crawler = AsilMoveinCrawler(area="11", sy="2025", sm="1", ey="2025", em="12")
+        result = crawler.parse("[]")
+        assert result == []
+
+
+class TestAsilMapSearchCrawler:
+    """AsilMapSearchCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilMapSearchCrawler, BaseCrawler)
+
+    def test_requires_coordinate_parameters(self):
+        """좌표 파라미터가 필수여야 함"""
+        with pytest.raises(TypeError):
+            AsilMapSearchCrawler()
+
+    def test_accepts_required_parameters(self):
+        """필수 파라미터를 받을 수 있어야 함"""
+        crawler = AsilMapSearchCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+        assert crawler.s_lat == 37.5
+        assert crawler.s_lng == 127.0
+        assert crawler.e_lat == 37.6
+        assert crawler.e_lng == 127.1
+
+    def test_accepts_optional_parameters(self):
+        """선택적 파라미터를 받을 수 있어야 함"""
+        crawler = AsilMapSearchCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+            zoom=15,
+            code="11",
+            building="apt",
+            deal="123",
+            household=100,
+        )
+        assert crawler.zoom == 15
+        assert crawler.code == "11"
+        assert crawler.building == "apt"
+        assert crawler.deal == "123"
+        assert crawler.household == 100
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilMapSearchCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/json/aptcount_ver_5_9.jsp")
+        assert "s_lat=37.5" in url
+        assert "s_lng=127.0" in url
+        assert "e_lat=37.6" in url
+        assert "e_lng=127.1" in url
+
+    def test_get_url_includes_all_parameters(self):
+        """get_url()에 모든 파라미터가 포함되어야 함"""
+        crawler = AsilMapSearchCrawler(
+            s_lat=37.514575,
+            s_lng=127.044555,
+            e_lat=37.504575,
+            e_lng=127.054555,
+            zoom=13,
+            code="11",
+            building="apt",
+            deal="123",
+            household=50,
+        )
+        url = crawler.get_url()
+        assert "zoom=13" in url
+        assert "code=11" in url
+        assert "building=apt" in url
+        assert "deal=123" in url
+        assert "household=50" in url
+
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilMapSearchDTO]를 반환해야 함"""
+        crawler = AsilMapSearchCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+
+        # Mock JSON 응답 (아파트 지도 검색 결과)
+        mock_response = """
+        [
+            {
+                "seq": "20340925",
+                "name": "역삼자이",
+                "lat": "37.514575",
+                "lng": "127.044555",
+                "count": "5",
+                "deal_count": "2",
+                "jeonse_count": "2",
+                "wolse_count": "1"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], AsilMapSearchDTO)
+        assert result[0].apt_code == "20340925"
+        assert result[0].apt_name == "역삼자이"
+        assert result[0].lat == "37.514575"
+        assert result[0].lng == "127.044555"
+        assert result[0].count == "5"
+        assert result[0].deal_count == "2"
+        assert result[0].jeonse_count == "2"
+        assert result[0].wolse_count == "1"
+
+    def test_parse_handles_empty_response(self):
+        """parse()는 빈 응답을 처리할 수 있어야 함"""
+        crawler = AsilMapSearchCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+        result = crawler.parse("[]")
+        assert result == []
+
+    def test_parse_handles_incomplete_json(self):
+        """parse()는 불완전한 JSON 응답을 처리할 수 있어야 함"""
+        crawler = AsilMapSearchCrawler(
+            s_lat=37.5,
+            s_lng=127.0,
+            e_lat=37.6,
+            e_lng=127.1,
+        )
+
+        # 불완전한 JSON 응답
+        incomplete_response = "["
+        result = crawler.parse(incomplete_response)
+        assert result == []
+
+
+class TestAsilBunyangListCrawler:
+    """AsilBunyangListCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilBunyangListCrawler, BaseCrawler)
+
+    def test_accepts_optional_parameters(self):
+        """선택적 파라미터를 받을 수 있어야 함"""
+        crawler = AsilBunyangListCrawler(area="11")
+        assert crawler.area == "11"
+
+    def test_accepts_all_parameters(self):
+        """모든 파라미터를 받을 수 있어야 함"""
+        crawler = AsilBunyangListCrawler(
+            area="11",
+            type_value="1",
+            page="1",
+            total="100",
+        )
+        assert crawler.area == "11"
+        assert crawler.type_value == "1"
+        assert crawler.page == "1"
+        assert crawler.total == "100"
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilBunyangListCrawler(area="11")
+        url = crawler.get_url()
+        assert url.startswith("https://asil.kr/app/data/data_bunyang_list.jsp")
+        assert "area=11" in url
+
+    def test_get_url_includes_all_parameters(self):
+        """모든 파라미터를 URL에 포함해야 함"""
+        crawler = AsilBunyangListCrawler(
+            area="11",
+            type_value="1",
+            page="2",
+            total="50",
+        )
+        url = crawler.get_url()
+        assert "area=11" in url
+        assert "type=1" in url
+        assert "page=2" in url
+        assert "total=50" in url
+
+    def test_parse_returns_list_of_dtos(self):
+        """parse()는 list[AsilBunyangListDTO]를 반환해야 함"""
+        from crawler.dto.asil_bunyang import AsilBunyangListDTO
+
+        crawler = AsilBunyangListCrawler(area="11")
+
+        # Mock JSON 응답 (분양 목록 형식)
+        mock_response = """
+        [
+            {
+                "seq": "12345",
+                "name": "테스트분양단지",
+                "area": "11",
+                "area_name": "서울",
+                "dong": "1168010100",
+                "dongname": "역삼동",
+                "address": "서울시 강남구 역삼동",
+                "supply_count": "100",
+                "total_count": "200",
+                "bunyang_date": "2024.01",
+                "announcement_date": "2023.12",
+                "movein_date": "2026.01",
+                "min_price": "50000",
+                "max_price": "100000",
+                "min_area": "84",
+                "max_area": "120",
+                "status": "분양중",
+                "constructor": "현대건설",
+                "seller": "민영",
+                "phone": "02-1234-5678",
+                "lat": "37.5",
+                "lng": "127.0"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], AsilBunyangListDTO)
+        assert result[0].seq == "12345"
+        assert result[0].name == "테스트분양단지"
+
+    def test_parse_handles_empty_response(self):
+        """parse()는 빈 응답을 처리할 수 있어야 함"""
+        crawler = AsilBunyangListCrawler(area="11")
+        result = crawler.parse("[]")
+        assert result == []
+
+    def test_parse_filters_valid_items(self):
+        """parse()는 유효한 항목만 반환해야 함"""
+        crawler = AsilBunyangListCrawler(area="11")
+
+        mock_response = """
+        [
+            {
+                "seq": "1",
+                "name": "분양단지A",
+                "area": "11"
+            },
+            {
+                "seq": "2",
+                "area": "11"
+            },
+            {
+                "name": "분양단지B",
+                "area": "11"
+            }
+        ]
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, list)
+        assert len(result) == 3
+
+
+class TestAsilOfferDetailCrawler:
+    """AsilOfferDetailCrawler 단위 테스트"""
+
+    def test_inherits_from_base_crawler(self):
+        """BaseCrawler를 상속받아야 함"""
+        from crawler.base import BaseCrawler
+
+        assert issubclass(AsilOfferDetailCrawler, BaseCrawler)
+
+    def test_requires_mm_uid_parameter(self):
+        """mm_uid 파라미터가 필수여야 함"""
+        with pytest.raises(TypeError):
+            AsilOfferDetailCrawler()
+
+    def test_accepts_mm_uid_parameter(self):
+        """mm_uid 파라미터를 받을 수 있어야 함"""
+        crawler = AsilOfferDetailCrawler(mm_uid="33534599")
+        assert crawler.mm_uid == "33534599"
+
+    def test_get_url_returns_correct_endpoint(self):
+        """get_url()이 올바른 API 엔드포인트를 반환해야 함"""
+        crawler = AsilOfferDetailCrawler(mm_uid="33534599")
+        url = crawler.get_url()
+        assert url.startswith("https://realty.asil.kr/api_asil/data_sale_of_detail.aspx")
+        assert "mm_uid=33534599" in url
+
+    def test_parse_returns_offer_detail_response(self):
+        """parse()는 AsilOfferDetailResponse를 반환해야 함"""
+        crawler = AsilOfferDetailCrawler(mm_uid="33534599")
+
+        # Mock JSON 응답 (실제 API 응답 형식)
+        mock_response = """
+        {
+            "mm_json": [
+                {
+                    "mm_uid": "33534599",
+                    "RLSTTYPE_CD": "A01",
+                    "RLSTTYPE_NM": "아파트",
+                    "SUB_RLSTTYPE_CD": "A01",
+                    "SUB_RLSTTYPE_NM": "아파트",
+                    "DEALTYPE_CD": "B01",
+                    "DEALTYPE_NM": "전세",
+                    "BLDNM": "래미안원베일리",
+                    "DONG_NM": "118",
+                    "directionBase_nm": "거실기준",
+                    "DRCTN_TP_NM": "남동",
+                    "PRD_TOT_BLD_CNT": "23",
+                    "tot_fml_cnt_tit": "총세대수",
+                    "TOT_FML_CNT": "2990",
+                    "flow_title": "해당층/총층",
+                    "flr_1_val": "저",
+                    "flr_2_val": "33",
+                    "RM_CNT": "3",
+                    "BTRM_CNT": "2",
+                    "HEAT_MTD_CD": "-",
+                    "HEAT_MTD_NM": "지역난방",
+                    "HEAT_FUL_CD": "-",
+                    "HEAT_FUL_NM": "열병합",
+                    "FNC_AMT": "-",
+                    "MVIN_PSBL_NM": "즉시입주 협의가능",
+                    "ERTC_TYPE_NM": "",
+                    "prkg_cnt": "5459",
+                    "perprkg_cnt": "(세대당1.8)",
+                    "DEAL_AMT": "",
+                    "premium_price2": "",
+                    "SALES_TYPE_NM": "",
+                    "middle_payment": "0",
+                    "PRD_CSCO_NM": "-",
+                    "cdateType_nm": "사용승인일",
+                    "CNST_DATE": "2023.08",
+                    "MTNC_AMT": "-1",
+                    "mnexItems_val": "",
+                    "AL_WRRNT_AMT": "",
+                    "AL_LEASE_AMT": "",
+                    "WRRNT_AMT": "230000",
+                    "LEASE_AMT": "0",
+                    "bldtype_nm": "",
+                    "park_yn_dp": "아니오",
+                    "CURR_USGE_CONT": "-",
+                    "JIMOK_NM": "",
+                    "RCMD_USGE_CONT": "-",
+                    "USGE_AREA_NM": "",
+                    "land_yn_dp": "없음",
+                    "build_yn_dp": "없음",
+                    "road_yn_dp": "없음",
+                    "RGHT_AMT": "",
+                    "USE_PSBL_POWR": "0",
+                    "ex_meter": "-",
+                    "lawUsageCode_nm": "",
+                    "mm_adr": "서울특별시 서초구  반포동  1",
+                    "FETR_DESC": "34 트인 한강뷰",
+                    "DTL_DESC": "상세 설명",
+                    "pr_area_tit": "전세가",
+                    "amttxt": "23억",
+                    "spctit1": "공급면적",
+                    "spctit2": "전용면적",
+                    "spc1": "112.65",
+                    "spc2": "84.98",
+                    "spc1_1": "34.08",
+                    "spc2_1": "25.71",
+                    "asil_bldcode": "1500072118",
+                    "bldcode": "L111836",
+                    "hscp_no": "142155",
+                    "user_id": "-20040",
+                    "MAP_LOC_YN": "",
+                    "MAP_X": "126.9973225",
+                    "MAP_Y": "37.5068070",
+                    "SVC_DATE_STRT": "20260111",
+                    "SVC_DATE_END": "20260210",
+                    "naver_sdate": "",
+                    "naver_edate": "",
+                    "optionPrice": "",
+                    "PRCS_CD": "4",
+                    "org_ptp_nm": "112B",
+                    "naver_uid": "2602100872",
+                    "loanCode": "null",
+                    "vr_flag": "X",
+                    "naver_status": "",
+                    "kiso_mm_uid": "33534599",
+                    "kiso_bizNo": "8902201802",
+                    "kiso_rname": "아크로원베일리공인중개사사무소",
+                    "kiso_rphone": "02-564-7848",
+                    "kiso_raddr": "서울 서초구 반포대로 291, 1층 113C호",
+                    "kiso_address1": "서울특별시 서초구 반포동",
+                    "kiso_address2": "1 118 호",
+                    "kiso_atclName": "래미안원베일리",
+                    "kiso_atclType": "아파트",
+                    "kiso_tradeType": "전세",
+                    "kiso_atclExpsYmdt": "2026-01-11 16:50:50",
+                    "kiso_price": "230000",
+                    "kiso_space": "112.65/84.98"
+                }
+            ],
+            "builttin_option": [],
+            "mm_img_list": [],
+            "administrationCostInfo": {
+                "chargeCodeType": "02",
+                "chargeCodeType_nm": "기타부과",
+                "chargeCriteriaCode": "03",
+                "chargeCriteriaCode_nm": "최근 1년 관리비 평균",
+                "etcFeeDetails": {
+                    "detailCodeType": "02",
+                 "detailCodeType_nm": "공용관리비는 면적별, 세대별로 부과",
+                    "etcFeeAmount": "370000",
+                    "detailCodeType_nm2": "사용료는 사용량에 따른 부과",
+                    "includeCodeTypes": ["[  11", "  13", "  12", "  14", "  01", "  99]"],
+                    "includeCodeTypes_nm": ["", "", "", "", "", ""]
+                }
+            },
+            "mm_json_list": []
+        }
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, AsilOfferDetailResponse)
+        assert len(result.mm_json) == 1
+        assert isinstance(result.mm_json[0], AsilOfferDetailDTO)
+        assert result.mm_json[0].mm_uid == "33534599"
+        assert result.mm_json[0].BLDNM == "래미안원베일리"
+        assert result.mm_json[0].DEALTYPE_NM == "전세"
+        assert result.mm_json[0].WRRNT_AMT == "230000"
+
+    def test_parse_handles_empty_response(self):
+        """parse()는 빈 응답을 처리할 수 있어야 함"""
+        crawler = AsilOfferDetailCrawler(mm_uid="33534599")
+
+        mock_response = """
+        {
+            "mm_json": [],
+            "builttin_option": [],
+            "mm_img_list": [],
+            "administrationCostInfo": null,
+            "mm_json_list": []
+        }
+        """
+
+        result = crawler.parse(mock_response)
+        assert isinstance(result, AsilOfferDetailResponse)
+        assert len(result.mm_json) == 0
+        assert len(result.builttin_option) == 0
+        assert len(result.mm_img_list) == 0
+        assert result.administrationCostInfo is None
+        assert len(result.mm_json_list) == 0

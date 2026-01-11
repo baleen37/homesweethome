@@ -32,6 +32,3 @@ class AsilTrafficInfoDTO(BaseModel):
     lane: list[list[float]] = Field(default_factory=list, description="노선 좌표 배열")
     type: int = Field(default=1, description="교통 유형")
     station: list[AsilTrafficStationDTO] = Field(default_factory=list, description="역 정보 배열")
-    # 기존 필드 호환성을 위해 기본값 추가 (API 응답에는 없음)
-    s_year: str = Field(default="", description="개시 연도 (API 응답에 없음)")
-    e_year: str = Field(default="", description="종료 연도 (API 응답에 없음)")

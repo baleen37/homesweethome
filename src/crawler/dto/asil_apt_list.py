@@ -19,8 +19,6 @@ class AsilAptListDTO(BaseModel):
     build_year: str | None = Field(default=None, alias="movein", description="건축 연도")
     household: str | None = Field(default=None, description="세대수")
     dong_count: str | None = Field(default=None, alias="total_dong", description="동 수")
-    address: str | None = Field(default=None, description="주소")
-    maemul_count: str | None = Field(default=None, description="매물 수")
     offer: str | None = Field(default=None, description="매물 정보")
     lat: str | None = Field(default=None, description="위도")
     lng: str | None = Field(default=None, description="경도")

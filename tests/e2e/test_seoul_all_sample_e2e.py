@@ -13,7 +13,6 @@ from pathlib import Path
 import pytest
 
 from crawler.utils.data_quality import (
-    DataQualityStats,
     analyze_data_quality,
 )
 from crawler.utils.filter import FilterOptions
@@ -67,8 +66,6 @@ def test_seoul_all_sample_crawling_with_quality_check():
         "movein",
         "household",
         "total_dong",
-        "type",
-        "etc",
         "offer",
         "lat",
         "lng",
@@ -194,8 +191,6 @@ def test_seoul_all_sample_crawling_with_quality_check():
                     "movein": apt_dict.get("build_year"),
                     "household": apt_dict.get("household"),
                     "total_dong": apt_dict.get("dong_count"),
-                    "type": apt_dict.get("maemul_count"),
-                    "etc": apt_dict.get("address"),
                     "offer": apt_dict.get("offer"),
                     "lat": apt_dict.get("lat"),
                     "lng": apt_dict.get("lng"),
@@ -281,8 +276,6 @@ def test_seoul_all_sample_data_completeness():
             "movein",
             "household",
             "total_dong",
-            "type",
-            "etc",
             "offer",
             "lat",
             "lng",
@@ -359,7 +352,6 @@ def test_seoul_all_crawl_single_gu_function():
             csv_f=csv_f,
             log_f=log_f,
             config=config,
-            enable_quality_log=True,
         )
 
         # 검증 1: 함수가 정상적으로 완료
@@ -371,7 +363,6 @@ def test_seoul_all_crawl_single_gu_function():
         assert "error" in gu_stats, "통계에 'error' 필드 누락"
         assert "apartments" in gu_stats, "통계에 'apartments' 필드 누락"
         assert "filtered_out" in gu_stats, "통계에 'filtered_out' 필드 누락"
-        assert "quality_stats" in gu_stats, "통계에 'quality_stats' 필드 누락"
 
         # 검증 3: 최소 데이터 수집 확인
         total_processed = gu_stats["found"] + gu_stats["empty"] + gu_stats["error"]
@@ -388,12 +379,6 @@ def test_seoul_all_crawl_single_gu_function():
             csv_records = list(reader)
             assert len(csv_records) >= 0, "CSV 레코드 수 확인"
 
-        # 검증 6: 데이터 품질 통계 확인
-        quality_stats = gu_stats["quality_stats"]
-        assert isinstance(quality_stats, DataQualityStats), (
-            "quality_stats가 DataQualityStats 타입이 아님"
-        )
-
         # 결과 출력
         print("\n===== crawl_single_gu 테스트 결과 =====")
         print(f"구: {gu_name} ({gu_code})")
@@ -402,7 +387,6 @@ def test_seoul_all_crawl_single_gu_function():
         print(f"에러 발생: {gu_stats['error']}개")
         print(f"총 아파트: {gu_stats['apartments']}건")
         print(f"필터링 제외: {gu_stats['filtered_out']}건")
-        print(f"품질 통계: 총 {quality_stats.total_records}건")
 
 
 @pytest.mark.e2e

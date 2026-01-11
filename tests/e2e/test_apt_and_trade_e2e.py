@@ -6,31 +6,49 @@ from src.crawler.commands.apt_and_trade_crawl import crawl_apt_and_trade
 
 
 @pytest.mark.e2e
-def test_seoul_sample_apt_and_trade_e2e(tmp_path):
+def test_seoul_sample_apt_and_trade_e2e(
+    sample_dong_codes,
+    apt_csv_path,
+    trade_csv_path,
+    verify_csv_file,
+):
     """
     서울 샘플 동 코드에 대한 E2E 테스트
+
+    검증:
+    1. 아파트 데이터 수집 성공
+    2. 실거래가 데이터 수집 성공
+    3. CSV 파일 생성 확인
+    4. CSV 내용 검증
     """
-    apt_path = tmp_path / "seoul_apt_list_e2e.csv"
-    trade_path = tmp_path / "seoul_trade_price_e2e.csv"
-
-    # 샘플 동 코드 (역삼1동, 삼성동 등)
-    dong_codes = ["1150010100", "1150010200"]
-
     apt_count, trade_count = crawl_apt_and_trade(
-        dong_codes=dong_codes,
-        apt_output_path=apt_path,
-        trade_output_path=trade_path,
+        dong_codes=sample_dong_codes,
+        apt_output_path=apt_csv_path,
+        trade_output_path=trade_csv_path,
         max_per_dong=5,
     )
 
-    # 검증
-    assert apt_count > 0
-    assert apt_path.exists()
+    # 아파트 CSV 검증
+    apt_records = verify_csv_file(
+        apt_csv_path,
+        min_lines=2,
+        required_headers=["seq", "name"],
+    )
+    assert apt_count > 0, "아파트 데이터가 수집되지 않음"
+    assert len(apt_records) == apt_count, (
+        f"아파트 CSV 레코드 수와 반환된 수 불일치: {len(apt_records)} != {apt_count}"
+    )
 
-    apt_content = apt_path.read_text(encoding="utf-8")
-    lines = apt_content.strip().split("\n")
-    assert len(lines) >= 2
+    # 실거래가 CSV 검증 (데이터가 있을 경우만)
+    if trade_count > 0:
+        trade_records = verify_csv_file(trade_csv_path, min_lines=2)
+        assert len(trade_records) == trade_count, (
+            f"실거래가 CSV 레코드 수와 반환된 수 불일치: {len(trade_records)} != {trade_count}"
+        )
+    else:
+        # 실거래가 데이터가 없어도 파일은 생성되어야 함 (헤더만 있을 수 있음)
+        assert trade_csv_path.exists(), "실거래가 CSV 파일이 생성되지 않음"
 
     print(f"E2E 결과: {apt_count}개 아파트, {trade_count}개 실거래가")
-    print(f"  - 아파트: {apt_path}")
-    print(f"  - 실거래가: {trade_path}")
+    print(f"  - 아파트: {apt_csv_path}")
+    print(f"  - 실거래가: {trade_csv_path}")
