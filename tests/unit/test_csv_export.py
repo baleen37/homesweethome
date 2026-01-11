@@ -6,13 +6,13 @@ from pathlib import Path
 
 def test_export_trade_price_to_csv():
     """실거래가 CSV 내보내기"""
-    from src.crawler.dto.asil_trade_price import (
+    from crawler.dto.asil_trade_price import (
         AsilTradePriceDayDTO,
         AsilTradePriceDetailDTO,
         AsilTradePriceDTO,
         AsilTradePriceMonthDTO,
     )
-    from src.crawler.export.csv_export import export_trade_price_to_csv
+    from crawler.export.csv_export import export_trade_price_to_csv
 
     data = [
         (
@@ -56,7 +56,7 @@ def test_export_trade_price_to_csv():
 
 def test_export_apt_list_to_csv(sample_dto_factory):
     """아파트 목록 CSV 내보내기"""
-    from src.crawler.export.csv_export import export_apt_list_to_csv
+    from crawler.export.csv_export import export_apt_list_to_csv
 
     data = [
         sample_dto_factory(
@@ -94,8 +94,8 @@ def test_export_apt_list_to_csv(sample_dto_factory):
 
 def test_export_matched_apts_to_csv():
     """ASIL-Naver 매칭 아파트 목록 CSV 내보내기"""
-    from src.crawler.dto.asil_apt_list import AsilAptListDTO
-    from src.crawler.export.csv_export import export_matched_apts_to_csv
+    from crawler.dto.asil_apt_list import AsilAptListDTO
+    from crawler.export.csv_export import export_matched_apts_to_csv
 
     data = [
         AsilAptListDTO(
@@ -135,8 +135,8 @@ def test_export_matched_apts_to_csv():
 
 def test_export_naver_articles_with_apt_seq():
     """apt_seq 추가된 네이버 매물 CSV 내보내기"""
-    from src.crawler.dto.naver_article import NaverArticleItemDTO
-    from src.crawler.export.csv_export import export_naver_articles_with_apt_seq
+    from crawler.dto.naver_article import NaverArticleItemDTO
+    from crawler.export.csv_export import export_naver_articles_with_apt_seq
 
     data = [
         NaverArticleItemDTO(
