@@ -15,41 +15,25 @@ API 엔드포인트:
 import asyncio
 import random
 import re
+from typing import Any
 from urllib.parse import urlencode
 
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
-from crawler.dto.naver_listing import NaverAptDTO, NaverListingDTO, NaverSearchResultDTO
+from crawler.dto.naver_listing import NaverAptDTO, NaverListingDTO
 
 
-class NaverListingCrawler:
-    """
-    네이버 부동산 매물 크롤러
-
-    Anti-Bot 우회 기술:
-    1. Webdriver 속성 숨기기
-    2. 리소스 차단 (이미지, 폰트, 미디어)
-    3. 적절한 헤더 설정
-    4. 랜덤 딜레이
-    5. 사람처럼 보이는 마우스 이동
-    """
+class _NaverBaseCrawler:
+    """네이버 부동산 크롤러 베이스 클래스 - Anti-Bot 공통 기능"""
 
     BASE_URL = "https://new.land.naver.com"
-    MOBILE_BASE_URL = "https://m.land.naver.com"
 
-    def __init__(
-        self,
-        keyword: str = "래미안",
-        headless: bool = True,
-        block_resources: bool = True,
-    ):
+    def __init__(self, headless: bool = True, block_resources: bool = True):
         """
         Args:
-            keyword: 검색 키워드 (아파트 이름)
             headless: 헤드리스 모드 여부
             block_resources: 무거운 리소스 차단 여부
         """
-        self.keyword = keyword
         self.headless = headless
         self.block_resources = block_resources
         self.playwright = None
@@ -138,168 +122,16 @@ class NaverListingCrawler:
         """
         await self.page.mouse.move(x, y, steps=steps)
 
-    async def search_apartments(self) -> NaverSearchResultDTO:
-        """
-        아파트 검색 - 맵 기반 접근 방식
-
-        Returns:
-            NaverSearchResultDTO: 검색 결과
-        """
-        result = NaverSearchResultDTO()
-
-        # 맵 페이지 URL 생성 (서울시청 근처)
-        params = {
-            "ms": "37.5665,126.9780,15",  # 서울시청 좌표
-            "a": "APT",  # 아파트
-            "b": "A1",  # 매매
-        }
-        map_url = f"{self.BASE_URL}/complexes?{urlencode(params)}"
-
-        # 수집한 데이터 저장
-        collected_data = []
-
-        async def handle_response(response):
-            url = response.url
-
-            # 단지 마커 API 수집
-            if "complexes/single-markers" in url:
-                try:
-                    data = await response.json()
-                    if isinstance(data, list):
-                        for item in data:
-                            # 검색어와 일치하는 단지만 필터링
-                            name = item.get("complexName", "")
-                            if self.keyword in name:
-                                collected_data.append(("marker", item))
-                except Exception:
-                    pass
-
-            # 매물 리스트 API 수집
-            elif "/api/articles/complex/" in url:
-                try:
-                    data = await response.json()
-                    collected_data.append(("articles", data))
-                except Exception:
-                    pass
-
-        # 리스너 등록 (페이지 접속 전에 등록해야 함)
-        self.page.on("response", handle_response)
-
-        # 페이지 접속
-        await self.page.goto(map_url, wait_until="domcontentloaded")
-        await self._random_delay(1, 2)
-
-        # 맵 캔버스 대기
-        try:
-            await self.page.wait_for_selector("canvas", timeout=10000)
-        except Exception:
-            pass
-
-        # 사람처럼 마우스 이동
-        await self._human_like_mouse_move(960, 540)
-        await self._random_delay(0.5, 1)
-
-        # 약간의 스크롤로 API 트리거
-        await self.page.mouse.wheel(0, -60)
-        await asyncio.sleep(2)
-
-        # 리스너 제거
-        self.page.remove_listener("response", handle_response)
-
-        # 결과 파싱
-        for data_type, data in collected_data:
-            if data_type == "marker":
-                if isinstance(data, dict):
-                    complex_no = data.get("markerId") or data.get("complexNo", "")
-                    if complex_no:
-                        apt = NaverAptDTO(
-                            complex_no=str(complex_no),
-                            complex_name=data.get("complexName", ""),
-                            article_count=data.get("articleCount", 0),
-                            latitude=data.get("lat"),
-                            longitude=data.get("lng"),
-                            address=data.get("address"),
-                        )
-                        result.apartments.append(apt)
-
-        result.total_count = len(result.apartments)
-        return result
-
-    async def get_listings(self, complex_no: str) -> list[NaverListingDTO]:
-        """
-        특정 단지의 매물 목록 조회
-
-        Args:
-            complex_no: 단지 번호
-
-        Returns:
-            list[NaverListingDTO]: 매물 목록
-        """
-        # 단지 상세 페이지
-        detail_url = f"{self.BASE_URL}/complexes/{complex_no}"
-
-        response_data = []
-
-        async def handle_response(response):
-            if "/api/articles/complex/" in response.url:
-                try:
-                    data = await response.json()
-                    response_data.append(data)
-                except Exception:
-                    pass
-
-        # 리스너 등록 (페이지 접속 전에 등록)
-        self.page.on("response", handle_response)
-
-        # 페이지 접속
-        await self.page.goto(detail_url, wait_until="domcontentloaded")
-        await self._random_delay()
-
-        # 매물 탭 클릭 시도
-        try:
-            await self.page.locator('button:has-text("매매")').first.click()
-            await self._random_delay()
-        except Exception:
-            pass
-
-        # 대기
-        await asyncio.sleep(2)
-
-        # 리스너 제거
-        self.page.remove_listener("response", handle_response)
-
-        # 결과 파싱
-        listings = []
-
-        for data in response_data:
-            articles = data.get("articleList", data.get("articles", []))
-            if not isinstance(articles, list):
-                continue
-
-            for article in articles:
-                # 매매만 필터링
-                trade_type = article.get("tradeType", "")
-                trade_name = article.get("tradeTypeName", "")
-
-                if trade_type != "A1" and trade_name != "매매":
-                    continue
-
-                listing = NaverListingDTO(
-                    article_no=str(article.get("articleNo", "")),
-                    complex_name=article.get("articleName", ""),
-                    complex_no=complex_no,
-                    trade_type=trade_name,
-                    deal_price=self._parse_price(article.get("dealOrWarrantPrc", "")),
-                    floor_info=article.get("floorInfo", ""),
-                    area1=article.get("area1"),
-                    area2=article.get("area2"),
-                    direction=article.get("direction", ""),
-                    description=article.get("articleFeatureDesc", ""),
-                    confirm_date=article.get("articleConfirmYmd"),
-                )
-                listings.append(listing)
-
-        return listings
+    async def _close(self):
+        """브라우저 종료"""
+        if self.page:
+            await self.page.close()
+        if self.context:
+            await self.context.close()
+        if self.browser:
+            await self.browser.close()
+        if self.playwright:
+            await self.playwright.stop()
 
     def _parse_price(self, price_str: str) -> int | None:
         """
@@ -335,35 +167,288 @@ class NaverListingCrawler:
 
         return total if total > 0 else None
 
-    async def _close(self):
-        """브라우저 종료"""
-        if self.page:
-            await self.page.close()
-        if self.context:
-            await self.context.close()
-        if self.browser:
-            await self.browser.close()
-        if self.playwright:
-            await self.playwright.stop()
 
-    def crawl(self) -> NaverSearchResultDTO:
+class NaverSearchCrawler(_NaverBaseCrawler):
+    """
+    네이버 부동산 아파트 검색 크롤러
+
+    아파트 이름으로 검색하여 단지 정보를 수집합니다.
+    """
+
+    def __init__(self, keyword: str, headless: bool = True, block_resources: bool = True):
         """
-        동기 크롤링 메서드
+        Args:
+            keyword: 검색 키워드 (아파트 이름)
+            headless: 헤드리스 모드 여부
+            block_resources: 무거운 리소스 차단 여부
+        """
+        super().__init__(headless, block_resources)
+        self.keyword = keyword
+
+    async def _search_async(self) -> list[dict[str, Any]]:
+        """
+        비동기 검색 수행
 
         Returns:
-            NaverSearchResultDTO: 크롤링 결과
+            list[dict]: 검색된 단지 정보 리스트
+        """
+        # 맵 페이지 URL 생성 (서울시청 근처)
+        params = {
+            "ms": "37.5665,126.9780,15",  # 서울시청 좌표
+            "a": "APT",  # 아파트
+            "b": "A1",  # 매매
+        }
+        map_url = f"{self.BASE_URL}/complexes?{urlencode(params)}"
+
+        # 수집한 데이터 저장
+        collected_data = []
+
+        async def handle_response(response):
+            url = response.url
+
+            # 단지 마커 API 수집
+            if "complexes/single-markers" in url:
+                try:
+                    data = await response.json()
+                    if isinstance(data, list):
+                        for item in data:
+                            # 검색어와 일치하는 단지만 필터링
+                            name = item.get("complexName", "")
+                            if self.keyword in name:
+                                collected_data.append(item)
+                except Exception:
+                    pass
+
+        # 리스너 등록 (페이지 접속 전에 등록해야 함)
+        self.page.on("response", handle_response)
+
+        # 페이지 접속
+        await self.page.goto(map_url, wait_until="domcontentloaded")
+        await self._random_delay(1, 2)
+
+        # 맵 캔버스 대기
+        try:
+            await self.page.wait_for_selector("canvas", timeout=10000)
+        except Exception:
+            pass
+
+        # 사람처럼 마우스 이동
+        await self._human_like_mouse_move(960, 540)
+        await self._random_delay(0.5, 1)
+
+        # 약간의 스크롤로 API 트리거
+        await self.page.mouse.wheel(0, -60)
+        await asyncio.sleep(2)
+
+        # 리스너 제거
+        self.page.remove_listener("response", handle_response)
+
+        return collected_data
+
+    def crawl(self) -> list[NaverAptDTO]:
+        """
+        아파트 검색 수행
+
+        Returns:
+            list[NaverAptDTO]: 검색된 아파트 리스트
         """
 
         async def _crawl():
             async with self:
-                # 검색
-                result = await self.search_apartments()
+                data = await self._search_async()
 
-                # 각 단지의 매물 조회
-                for apt in result.apartments[:3]:  # 테스트를 위해 3개만
-                    listings = await self.get_listings(apt.complex_no)
-                    result.listings.extend(listings)
+                # DTO 변환
+                results = []
+                for item in data:
+                    complex_no = item.get("markerId") or item.get("complexNo", "")
+                    if complex_no:
+                        apt = NaverAptDTO(
+                            complex_no=str(complex_no),
+                            complex_name=item.get("complexName", ""),
+                            article_count=item.get("articleCount", 0),
+                            latitude=item.get("lat"),
+                            longitude=item.get("lng"),
+                            address=item.get("address"),
+                        )
+                        results.append(apt)
 
-                return result
+                return results
+
+        return asyncio.run(_crawl())
+
+
+class NaverComplexInfoCrawler(_NaverBaseCrawler):
+    """
+    네이버 부동산 단지 상세 정보 크롤러
+
+    특정 단지의 상세 정보를 수집합니다.
+    """
+
+    def __init__(self, complex_no: str, headless: bool = True, block_resources: bool = True):
+        """
+        Args:
+            complex_no: 단지 번호
+            headless: 헤드리스 모드 여부
+            block_resources: 무거운 리소스 차단 여부
+        """
+        super().__init__(headless, block_resources)
+        self.complex_no = complex_no
+
+    async def _get_complex_info_async(self) -> dict[str, Any] | None:
+        """
+        비동기 단지 정보 수집
+
+        Returns:
+            dict | None: 단지 정보
+        """
+        # 단지 상세 페이지
+        detail_url = f"{self.BASE_URL}/complexes/{self.complex_no}"
+
+        response_data = None
+
+        async def handle_response(response):
+            nonlocal response_data
+            if f"/complexes/{self.complex_no}" in response.url and response.request.method == "GET":
+                try:
+                    # API 응답 확인
+                    if "complexes" in response.url:
+                        data = await response.json()
+                        response_data = data
+                except Exception:
+                    pass
+
+        # 리스너 등록 (페이지 접속 전에 등록)
+        self.page.on("response", handle_response)
+
+        # 페이지 접속
+        await self.page.goto(detail_url, wait_until="domcontentloaded")
+        await self._random_delay()
+
+        # 대기
+        await asyncio.sleep(2)
+
+        # 리스너 제거
+        self.page.remove_listener("response", handle_response)
+
+        return response_data
+
+    def crawl(self) -> dict[str, Any] | None:
+        """
+        단지 상세 정보 수집
+
+        Returns:
+            dict | None: 단지 정보
+        """
+
+        async def _crawl():
+            async with self:
+                return await self._get_complex_info_async()
+
+        return asyncio.run(_crawl())
+
+
+class NaverListingsCrawler(_NaverBaseCrawler):
+    """
+    네이버 부동산 매물 목록 크롤러
+
+    특정 단지의 매물 목록을 수집합니다.
+    """
+
+    def __init__(self, complex_no: str, headless: bool = True, block_resources: bool = True):
+        """
+        Args:
+            complex_no: 단지 번호
+            headless: 헤드리스 모드 여부
+            block_resources: 무거운 리소스 차단 여부
+        """
+        super().__init__(headless, block_resources)
+        self.complex_no = complex_no
+
+    async def _get_listings_async(self) -> list[dict[str, Any]]:
+        """
+        비동기 매물 목록 수집
+
+        Returns:
+            list[dict]: 매물 정보 리스트
+        """
+        # 단지 상세 페이지
+        detail_url = f"{self.BASE_URL}/complexes/{self.complex_no}"
+
+        response_data = []
+
+        async def handle_response(response):
+            if "/api/articles/complex/" in response.url:
+                try:
+                    data = await response.json()
+                    response_data.append(data)
+                except Exception:
+                    pass
+
+        # 리스너 등록 (페이지 접속 전에 등록)
+        self.page.on("response", handle_response)
+
+        # 페이지 접속
+        await self.page.goto(detail_url, wait_until="domcontentloaded")
+        await self._random_delay()
+
+        # 매물 탭 클릭 시도
+        try:
+            await self.page.locator('button:has-text("매매")').first.click()
+            await self._random_delay()
+        except Exception:
+            pass
+
+        # 대기
+        await asyncio.sleep(2)
+
+        # 리스너 제거
+        self.page.remove_listener("response", handle_response)
+
+        return response_data
+
+    def crawl(self) -> list[NaverListingDTO]:
+        """
+        매물 목록 수집
+
+        Returns:
+            list[NaverListingDTO]: 매물 리스트
+        """
+
+        async def _crawl():
+            async with self:
+                data = await self._get_listings_async()
+
+                # 결과 파싱
+                listings = []
+
+                for response in data:
+                    articles = response.get("articleList", response.get("articles", []))
+                    if not isinstance(articles, list):
+                        continue
+
+                    for article in articles:
+                        # 매매만 필터링
+                        trade_type = article.get("tradeType", "")
+                        trade_name = article.get("tradeTypeName", "")
+
+                        if trade_type != "A1" and trade_name != "매매":
+                            continue
+
+                        listing = NaverListingDTO(
+                            article_no=str(article.get("articleNo", "")),
+                            complex_name=article.get("articleName", ""),
+                            complex_no=self.complex_no,
+                            trade_type=trade_name,
+                            deal_price=self._parse_price(article.get("dealOrWarrantPrc", "")),
+                            floor_info=article.get("floorInfo", ""),
+                            area1=article.get("area1"),
+                            area2=article.get("area2"),
+                            direction=article.get("direction", ""),
+                            description=article.get("articleFeatureDesc", ""),
+                            confirm_date=article.get("articleConfirmYmd"),
+                        )
+                        listings.append(listing)
+
+                return listings
 
         return asyncio.run(_crawl())
