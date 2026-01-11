@@ -6,9 +6,7 @@ from pydantic import BaseModel, Field
 class AsilEducationMapPolygonCoordinate(BaseModel):
     """학군 지도 폴리곤 좌표"""
 
-    coordinates: list[list[list[float]]] = Field(
-        description="폴리곤 좌표 리스트 (경도, 위도 쌍)"
-    )
+    coordinates: list[list[list[float]]] = Field(description="폴리곤 좌표 리스트 (경도, 위도 쌍)")
 
 
 class AsilEducationMapDTO(BaseModel):

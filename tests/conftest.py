@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from crawler.asil import AsilAptListCrawler
+from crawler.dto.asil_apt_list import AsilAptListDTO
+from crawler.dto.naver_listing import NaverAptDTO
 
 
 def pytest_configure(config):
@@ -111,3 +112,85 @@ def verify_csv_file():
         return records
 
     return _verify
+
+
+# =============================================================================
+# ASIL-Naver 통합 테스트용 Mock Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def mock_asil_apts():
+    """ASIL 아파트 목록 mock fixture"""
+    return [
+        AsilAptListDTO(
+            seq="1",
+            name="래미안",
+            dong="1150010700",
+            dongname="사직동",
+            build_year="2005",
+            household="100",
+            lat="37.5138",
+            lng="126.8826",
+        ),
+        AsilAptListDTO(
+            seq="2",
+            name="래미안 2차",
+            dong="1150010700",
+            dongname="사직동",
+            build_year="2010",
+            household="150",
+            lat="37.5140",
+            lng="126.8830",
+        ),
+    ]
+
+
+@pytest.fixture
+def mock_naver_search_results():
+    """Naver 검색 결과 mock fixture"""
+    return [
+        NaverAptDTO(
+            complex_no="3499",
+            complex_name="래미안",
+            article_count=10,
+            build_year=2005,
+            household_count=100,
+            latitude=37.5138,
+            longitude=126.8826,
+            address="서울시 종로구 사직동",
+            area_code="1",
+        ),
+        NaverAptDTO(
+            complex_no="3500",
+            complex_name="래미안 2차",
+            article_count=5,
+            build_year=2010,
+            household_count=80,
+            latitude=37.5140,
+            longitude=126.8830,
+            address="서울시 종로구 사직동",
+            area_code="2",
+        ),
+    ]
+
+
+@pytest.fixture
+def mock_naver_listings():
+    """Naver 매물 목록 mock fixture"""
+    return [
+        {
+            "article_no": "12345",
+            "complex_no": "3499",
+            "floor": "15층",
+            "area": "84.5㎡",
+            "price": "15억",
+        },
+        {
+            "article_no": "12346",
+            "complex_no": "3499",
+            "floor": "10층",
+            "area": "84.5㎡",
+            "price": "14억 5,000만",
+        },
+    ]

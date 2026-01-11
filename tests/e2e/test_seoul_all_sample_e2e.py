@@ -581,18 +581,18 @@ def test_cli_interactive_with_mock_input():
     3. run_crawl 실행
     """
     from crawler.commands.cli import parse_selection
-    from crawler.commands.seoul_crawl import SEOUL_GU_CODES
+    from crawler.constants import SEOUL_GU_CODES
 
-    # 모의 입력: 모드 2 (특정 구 선택), 구 번호 18 (영등포구)
+    # 모의 입력: 모드 2 (특정 구 선택), 구 번호 19 (영등포구)
     mock_mode = "2"
-    mock_selection = "18"  # 영등포구
+    mock_selection = "19"  # 영등포구
 
     # 검증 1: 모드 선택 시뮬레이션
     assert mock_mode == "2", "모드 2 (특정 구 선택)"
 
     # 검증 2: 구 선택 시뮬레이션
     selected_indices = parse_selection(mock_selection, len(SEOUL_GU_CODES))
-    assert selected_indices == [18], f"구 선택 실패: {selected_indices}"
+    assert selected_indices == [19], f"구 선택 실패: {selected_indices}"
 
     # 선택된 구 확인
     gu_list = list(SEOUL_GU_CODES.items())

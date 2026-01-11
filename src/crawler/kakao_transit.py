@@ -12,6 +12,8 @@ import requests
 
 from crawler.coordinate_converter import wgs84_to_wcongnamul
 from crawler.dto.kakao_transit import (
+    KakaoTransitAccessInfoDTO,
+    KakaoTransitRawResponseDTO,
     KakaoTransitResponseDTO,
     KakaoTransitRouteDTO,
     KakaoTransitStepDTO,
@@ -176,8 +178,8 @@ class KakaoTransitCrawler:
             walking_time=int(walking_time.get("value", 0)),
             walking_time_text=str(walking_time.get("text", "")),
             transfers=int(route_data.get("transfers", 0)),
-            fare_cash=int(fare.get("cash", 0)),
-            fare_card=int(fare.get("card", 0)),
+            fare_cash=int(fare.get("value", 0)),
+            fare_card=int(fare.get("value", 0)),
             recommended=bool(route_data.get("recommended", False)),
             shortest_time=bool(route_data.get("shortestTime", False)),
             least_transfer=bool(route_data.get("leastTransfer", False)),
@@ -233,3 +235,130 @@ class KakaoTransitCrawler:
                 # 기타 예기치 않은 에러
                 self.logger.error("경로 검색 중 알 수 없는 에러 발생 (%s): %s", dest, e)
         return results
+
+    def search_transit_route_raw(
+        self,
+        start_lat: float,
+        start_lon: float,
+        end_name: str,
+    ) -> KakaoTransitRawResponseDTO:
+        """
+        대중교통 경로 검색 (원천 데이터 반환)
+
+        API 응답을 파싱하지 않고 원천 데이터를 그대로 반환합니다.
+
+        Args:
+            start_lat: 출발지 위도
+            start_lon: 출발지 경도
+            end_name: 도착지 이름 (강남역, 판교역, 광화문, 서울역, 여의도 중 하나)
+
+        Returns:
+            KakaoTransitRawResponseDTO: 원천 API 응답 데이터
+
+        Raises:
+            ValueError: 지원하지 않는 도착지인 경우
+            requests.RequestException: API 요청 실패
+        """
+        if end_name not in MAJOR_LOCATIONS:
+            raise ValueError(
+                f"지원하지 않는 도착지입니다: {end_name}. "
+                f"지원하는 장소: {list(MAJOR_LOCATIONS.keys())}"
+            )
+
+        end_location = MAJOR_LOCATIONS[end_name]
+
+        # 위경도를 WCONGNAMUL 좌표로 변환
+        start_x, start_y = wgs84_to_wcongnamul(start_lat, start_lon)
+        end_x, end_y = wgs84_to_wcongnamul(end_location["latitude"], end_location["longitude"])
+
+        params = {
+            "inputCoordSystem": "WCONGNAMUL",
+            "outputCoordSystem": "WCONGNAMUL",
+            "service": "map.daum.net",
+            "sX": start_x,
+            "sY": start_y,
+            "sName": "",  # 출발지 이름 (아파트 이름을 알 수 없으므로 비워둠)
+            "sid": "",
+            "eX": end_x,
+            "eY": end_y,
+            "eName": end_name,
+            "eid": "",
+        }
+
+        url = f"{self.API_URL}?{urlencode(params)}"
+        response = self.session.get(url, timeout=30)
+        response.raise_for_status()
+
+        # 원천 JSON 응답을 그대로 반환
+        data = response.json()
+        return KakaoTransitRawResponseDTO(raw_data=data)
+
+    def analyze_access_to_station(
+        self,
+        start_lat: float,
+        start_lon: float,
+        end_name: str,
+    ) -> list[KakaoTransitAccessInfoDTO]:
+        """
+        시작점에서 첫 역까지 접근 정보 분석
+
+        모든 경로에 대해 첫 번째 MOVE 스텝 (시작점 → 첫 역)의 정보를 추출합니다.
+
+        Args:
+            start_lat: 출발지 위도
+            start_lon: 출발지 경도
+            end_name: 도착지 이름
+
+        Returns:
+            각 경로별 첫 역 접근 정보 리스트 (KakaoTransitAccessInfoDTO)
+
+        Raises:
+            ValueError: 지원하지 않는 도착지인 경우
+            requests.RequestException: API 요청 실패
+        """
+        # 원천 데이터를 가져옴
+        raw_response = self.search_transit_route_raw(start_lat, start_lon, end_name)
+
+        # API 응답에서 routes 추출
+        in_local = raw_response.raw_data.get("in_local", {})
+        routes = in_local.get("routes", [])
+
+        # routes가 딕셔너리인 경우 리스트로 변환
+        if isinstance(routes, dict):
+            routes = list(routes.values())
+        elif not isinstance(routes, list):
+            routes = []
+
+        access_info_list = []
+
+        for route_data in routes:
+            if not isinstance(route_data, dict):
+                continue
+
+            ranking = route_data.get("ranking", 0)
+            steps = route_data.get("steps", [])
+
+            # 첫 번째 MOVE 스텝 찾기
+            first_move_step = None
+            for step in steps:
+                if isinstance(step, dict) and step.get("action") == "MOVE":
+                    first_move_step = step
+                    break
+
+            if first_move_step:
+                # 거리/시간 정보 추출
+                distance = first_move_step.get("distance", {})
+                time = first_move_step.get("time", {})
+                end_location = first_move_step.get("endLocation", {})
+
+                access_info_list.append(
+                    KakaoTransitAccessInfoDTO(
+                        route_ranking=ranking,
+                        station_name=end_location.get("name", ""),
+                        walking_distance=int(distance.get("value", 0)),
+                        walking_time=int(time.get("value", 0)),
+                        walking_time_text=str(time.get("text", "")),
+                    )
+                )
+
+        return access_info_list

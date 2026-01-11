@@ -3,6 +3,7 @@ name = "homesweethome"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
+    "httpx>=0.28.1",
     "openpyxl>=3.1.5",
     "pandas>=2.3.3",
     "playwright>=1.40.0",
@@ -21,6 +22,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
