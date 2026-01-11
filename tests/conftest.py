@@ -207,6 +207,7 @@ def mock_cli_args(monkeypatch):
     Returns:
         Callable: CLI 인자 설정 함수
     """
+
     def _set_args(args_list):
         monkeypatch.setattr("sys.argv", args_list)
 

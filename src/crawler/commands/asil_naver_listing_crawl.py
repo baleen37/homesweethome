@@ -1,0 +1,234 @@
+"""ASIL 아파트 목록 → Naver 매칭 → 매물 크롤링 CLI"""
+
+import json
+import time
+from collections.abc import Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from crawler.asil import AsilAptListCrawler
+from crawler.commands.cli_common import (
+    add_all_argument,
+    add_output_argument,
+    create_dong_code_parser,
+    resolve_dong_codes,
+)
+from crawler.dto.naver_article import NaverArticleItemDTO
+from crawler.export.csv_export import export_naver_articles_to_csv
+from crawler.naver_cluster_api import NaverClusterAPIClient
+from crawler.naver_listing_crawler import NaverListingCrawler
+
+if TYPE_CHECKING:
+    pass
+
+
+class RateLimit:
+    """Rate Limiting 상수 (네이버 Abuse 방지)"""
+
+    BETWEEN_APTS = 3.0  # 각 아파트 처리 후 3초 대기 (Abuse 방지)
+
+
+def deduplicate_listings(
+    listings: Sequence[NaverArticleItemDTO],
+) -> list[NaverArticleItemDTO]:
+    """매물 ID 기준 중복 제거
+
+    Args:
+        listings: 매물 DTO 리스트
+
+    Returns:
+        중복 제거된 매물 리스트
+    """
+    seen = set()
+    unique_listings = []
+
+    for listing in listings:
+        atcl_no = listing.atcl_no
+        if atcl_no not in seen:
+            seen.add(atcl_no)
+            unique_listings.append(listing)
+
+    return unique_listings
+
+
+def crawl_asil_to_naver_listings(
+    dong_codes: list[str],
+    output_path: Path,
+    radius_m: int = 500,
+) -> int:
+    """
+    ASIL 아파트 목록 → Naver 매칭 → 매물 크롤링
+
+    Args:
+        dong_codes: 법정동 코드 리스트
+        output_path: 출력 CSV 경로
+        radius_m: 매물 검색 반경 (기본 500m)
+
+    Returns:
+        크롤링한 매물 수
+    """
+    all_listings = []
+    total_apts = 0
+    matched_apts = 0
+    skipped_no_coord = 0
+    skipped_no_match = 0
+    errors = 0
+
+    for dong_code in dong_codes:
+        print(f"동 코드 {dong_code} 조회 중...")
+
+        # 1. ASIL 목록 크롤링
+        apt_crawler = AsilAptListCrawler(dong_code=dong_code)
+        apt_list = apt_crawler.crawl()
+
+        if not apt_list:
+            print("  - 데이터 없음")
+            continue
+
+        print(f"  - {len(apt_list)}개 아파트 찾음")
+
+        # 2. 각 아파트별 Naver 매칭 및 매물 크롤링
+        for apt in apt_list:
+            total_apts += 1
+            apt_name = getattr(apt, "name", "")
+            lat = getattr(apt, "lat", 0)
+            lng = getattr(apt, "lng", 0)
+
+            print(f"    - [{apt_name}] 매칭 중...")
+
+            # 좌표가 없으면 스킵 (문자열 0 또는 숫자 0 체크)
+            try:
+                lat_f = float(lat) if lat else 0
+                lng_f = float(lng) if lng else 0
+            except (ValueError, TypeError):
+                print("      - 좌표 변환 실패, 스킵")
+                skipped_no_coord += 1
+                continue
+
+            if lat_f == 0 or lng_f == 0:
+                print("      - 좌표 없음, 스킵")
+                skipped_no_coord += 1
+                continue
+
+            # Naver Cluster API로 매칭
+            cluster_client = NaverClusterAPIClient(
+                lat=lat_f,
+                lon=lng_f,
+                bottom=lat_f - 0.01,
+                left=lng_f - 0.01,
+                top=lat_f + 0.01,
+                right=lng_f + 0.01,
+                zoom=15,
+            )
+
+            try:
+                # Naver Cluster API 호출
+                url = cluster_client.build_url(page=1)
+                response_json = cluster_client.fetch(url)
+                cluster_response = cluster_client.parse_response(response_json)
+                articles = cluster_response.articles
+
+                if not articles:
+                    print("      - Naver 매칭 실패 (매물 없음), 스킵")
+                    skipped_no_match += 1
+                    continue
+
+                # 가장 가까운 매물 선택 (첫 번째 사용)
+                matched_article = articles[0]
+                matched_lat = matched_article.lat
+                matched_lng = matched_article.lng
+
+                print(
+                    f"      - Naver 매칭 성공: {matched_article.atcl_nm} "
+                    f"(좌표: {matched_lat}, {matched_lng})"
+                )
+                matched_apts += 1
+
+                # 3. 매칭된 좌표로 Naver 매물 크롤링
+                listing_crawler = NaverListingCrawler(
+                    lat=matched_lat,
+                    lon=matched_lng,
+                    radius_m=radius_m,
+                )
+
+                listings = listing_crawler.crawl_listings(max_pages=1)
+
+                if listings:
+                    print(f"      - {len(listings)}개 매물 찾음")
+                    all_listings.extend(listings)
+                else:
+                    print("      - 매물 없음")
+
+            except json.JSONDecodeError:
+                print("      - Naver API 빈 응답, 스킵")
+                skipped_no_match += 1
+                continue
+            except Exception as e:
+                print(f"      - 에러 발생: {e}")
+                errors += 1
+                continue
+
+            # Rate limiting: 각 아파트 처리 후 대기
+            time.sleep(RateLimit.BETWEEN_APTS)
+
+    # 중복 제거
+    before_count = len(all_listings)
+    all_listings = deduplicate_listings(all_listings)
+    after_count = len(all_listings)
+    removed = before_count - after_count
+
+    # CSV 내보내기
+    export_naver_articles_to_csv(all_listings, output_path)
+
+    print("\n=== 크롤링 완료 ===")
+    print(f"전체 아파트: {total_apts}개")
+    print(f"매칭 성공: {matched_apts}개")
+    print(f"스킵 (좌표 없음): {skipped_no_coord}개")
+    print(f"스킵 (매칭 실패): {skipped_no_match}개")
+    print(f"에러: {errors}개")
+    print(f"중복 제거: {removed}개 ({before_count} → {after_count})")
+    print(f"완료: {after_count}개 매물 → {output_path}")
+
+    return after_count
+
+
+def main() -> None:
+    """CLI 메인 함수"""
+    parser = create_dong_code_parser(
+        description="ASIL 아파트 목록 → Naver 매칭 → 매물 크롤링\n\n"
+        "ASIL에서 법정동별 아파트 목록을 추출하고, 각 아파트를 Naver Cluster API로 매칭한 후,\n"
+        "매칭된 아파트 주변의 네이버 매물을 크롤링합니다."
+    )
+
+    add_all_argument(parser)
+    add_output_argument(
+        parser,
+        default="output/asil_naver_listings.csv",
+        help="출력 CSV 경로 (기본값: output/asil_naver_listings.csv)",
+    )
+
+    parser.add_argument(
+        "--radius",
+        type=int,
+        default=500,
+        help="매물 검색 반경 (미터, 기본값: 500)",
+    )
+
+    args = parser.parse_args()
+
+    # 동 코드 결정
+    dong_codes = resolve_dong_codes(args)
+
+    # 출력 경로
+    output_path = Path(args.output)
+
+    # 크롤링 실행
+    crawl_asil_to_naver_listings(
+        dong_codes=dong_codes,
+        output_path=output_path,
+        radius_m=args.radius,
+    )
+
+
+if __name__ == "__main__":
+    main()

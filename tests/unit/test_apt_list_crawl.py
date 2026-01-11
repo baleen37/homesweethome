@@ -10,7 +10,7 @@ def test_crawl_apt_list_to_csv(sample_dto_factory):
     from src.crawler.commands.apt_list_crawl import crawl_apt_list_to_csv
 
     # Mock 크롤러
-    with patch("src.crawler.commands.apt_list_crawl.AsilAptListCrawler") as MockAptCrawler:
+    with patch("src.crawler.commands.apt_list_crawl.AsilAptListCrawler") as mock_apt_crawler_cls:
         # Mock 설정
         mock_apt_crawler = Mock()
         mock_apt_crawler.crawl.return_value = [
@@ -20,7 +20,7 @@ def test_crawl_apt_list_to_csv(sample_dto_factory):
                 dongname="역삼동",
             )
         ]
-        MockAptCrawler.return_value = mock_apt_crawler
+        mock_apt_crawler_cls.return_value = mock_apt_crawler
 
         with tempfile.TemporaryDirectory() as tmpdir:
             apt_path = Path(tmpdir) / "apt.csv"
