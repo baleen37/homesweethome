@@ -200,9 +200,10 @@ class TestSelectGuFromArgs:
         with patch("sys.argv", ["cli", "--all"]):
             args = parse_args()
             gu_list = select_gu_from_args(args)
-            assert len(gu_list) == 24
+            assert len(gu_list) == 25
             assert ("11560", "영등포구") in gu_list
             assert ("11680", "강남구") in gu_list
+            assert ("11545", "금천구") in gu_list
 
     def test_select_gu_invalid_code(self):
         """잘못된 구 코드 처리"""

@@ -32,6 +32,20 @@ from crawler.dto.asil_trade_price import AsilTradePriceDTO
 from crawler.dto.asil_traffic import AsilTrafficInfoDTO
 from crawler.dto.asil_transfer import AsilTransferDTO
 from crawler.dto.asil_visitor_stats import AsilVisitorStatsDTO
+from crawler.dto.kakao_transit import (
+    KakaoTransitRawResponseDTO,
+    KakaoTransitResponseDTO,
+    KakaoTransitRouteDTO,
+    KakaoTransitStepDTO,
+)
+from crawler.dto.naver_article import (
+    NaverArticleDetailDTO,
+    NaverArticleItemDTO,
+    NaverArticleKeyDTO,
+    NaverComplexDTO,
+)
+from crawler.dto.naver_listing import NaverAptDTO, NaverListingDTO, NaverSearchResultDTO
+from crawler.matching.dto import MatchMethod, MatchResultDTO
 
 __all__ = [
     "AsilAgentDTO",
@@ -62,4 +76,17 @@ __all__ = [
     "AsilTradePriceDTO",
     "AsilTransferDTO",
     "AsilVisitorStatsDTO",
+    "KakaoTransitResponseDTO",
+    "KakaoTransitRouteDTO",
+    "KakaoTransitRawResponseDTO",
+    "KakaoTransitStepDTO",
+    "NaverAptDTO",
+    "NaverArticleDetailDTO",
+    "NaverArticleItemDTO",
+    "NaverArticleKeyDTO",
+    "NaverComplexDTO",
+    "NaverListingDTO",
+    "NaverSearchResultDTO",
+    "MatchMethod",
+    "MatchResultDTO",
 ]

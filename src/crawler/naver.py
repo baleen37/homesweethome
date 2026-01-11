@@ -71,7 +71,7 @@ class _NaverBaseCrawler:
             ),
             locale="ko-KR",
             extra_http_headers={
-                "Referer": "https://land.naver.com/",
+                "Referer": "https://new.land.naver.com/",
                 "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             },
         )
@@ -252,6 +252,9 @@ class NaverSearchCrawler(_NaverBaseCrawler):
         Returns:
             list[NaverAptDTO]: 검색된 아파트 리스트
         """
+        # 빈 검색어 처리 (빈 문자열 또는 공백만)
+        if not self.keyword or not self.keyword.strip():
+            return []
 
         async def _crawl():
             async with self:
@@ -389,17 +392,17 @@ class NaverListingsCrawler(_NaverBaseCrawler):
 
         # 페이지 접속
         await self.page.goto(detail_url, wait_until="domcontentloaded")
-        await self._random_delay()
+        await asyncio.sleep(1)
 
-        # 매물 탭 클릭 시도
+        # 매물 탭 클릭 - 명시적인 타임아웃과 함께
         try:
-            await self.page.locator('button:has-text("매매")').first.click()
-            await self._random_delay()
+            await self.page.locator('button:has-text("매매")').first.click(timeout=5000)
+            await asyncio.sleep(1)
         except Exception:
             pass
 
-        # 대기
-        await asyncio.sleep(2)
+        # API 응답을 충분히 기다림
+        await asyncio.sleep(3)
 
         # 리스너 제거
         self.page.remove_listener("response", handle_response)

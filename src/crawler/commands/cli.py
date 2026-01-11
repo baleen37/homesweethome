@@ -10,7 +10,6 @@ import time
 from typing import Literal
 
 from crawler.commands.seoul_crawl import (
-    SEOUL_GU_CODES,
     CrawlStats,
     SeoulCrawlConfig,
     crawl_single_gu,
@@ -19,6 +18,7 @@ from crawler.commands.seoul_crawl import (
     save_checkpoint,
     setup_csv_writer,
 )
+from crawler.constants import SEOUL_GU_CODES
 from crawler.utils.filter import FilterOptions
 
 

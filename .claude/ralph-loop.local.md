@@ -1,9 +1,9 @@
 ---
 active: true
 iteration: 1
-max_iterations: 5
+max_iterations: 3
 completion_promise: null
-started_at: "2026-01-10T19:27:28Z"
+started_at: "2026-01-11T09:04:33Z"
 ---
 
-@scripts/seoul_all.py 문제점을 파악하고 개선해줘. 데이터가 유효한지도 계속 파악하고 그래야해. e2e로 테스트하면서 개선해줘. 다만 테스트 할 때 full 테스트가 아니라 샘플로 테스트 해야해지 효율이 좋아. use subagent
+naver 크롤링  제대로 동작하는지 검증하고 TDD로 개선해줄래? use playwrigth mcp + subagent

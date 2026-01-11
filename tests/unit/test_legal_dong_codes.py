@@ -107,9 +107,31 @@ class TestSeoulGuCodes:
     """SEOUL_GU_CODES 상수 테스트"""
 
     def test_서울_구_코드_존재(self):
-        """현재 등록된 서울 구 코드 개수 확인 (금천구 미포함)"""
-        # 금천구(11545)는 SEOUL_GU_CODES에 누락되어 있음
-        assert len(SEOUL_GU_CODES) >= 24
+        """서울 25개 구 코드가 모두 존재해야 함"""
+        # 서울은 25개 구 (종로구, 중구, 용산구, 성동구, 광진구, 동대문구,
+        # 중랑구, 성북구, 노원구, 도봉구, 강북구, 은평구, 서대문구,
+        # 마포구, 양천구, 강서구, 구로구, 금천구, 영등포구, 동작구,
+        # 관악구, 서초구, 강남구, 송파구, 강동구)
+        assert len(SEOUL_GU_CODES) == 25, f"서울 25개 구가 필요한데 {len(SEOUL_GU_CODES)}개만 있음"
+
+    def test_금천구_코드_존재(self):
+        """금천구 코드가 존재해야 함 (행정안전부 표준 코드: 11545)"""
+        assert "11545" in SEOUL_GU_CODES, "금천구(11545) 코드가 누락됨"
+        assert SEOUL_GU_CODES["11545"] == "금천구"
+
+    def test_광진구_코드_정확성(self):
+        """광진구 코드는 11215여야 함 (행정안전부 표준 코드)"""
+        assert "11215" in SEOUL_GU_CODES, "광진구 코드(11215)가 누락됨"
+        assert SEOUL_GU_CODES["11215"] == "광진구"
+        # 11250은 잘못된 코드이어야 함
+        assert "11250" not in SEOUL_GU_CODES, "11250은 광진구의 잘못된 코드"
+
+    def test_서대문구_코드_정확성(self):
+        """서대문구 코드는 11410이어야 함 (행정안전부 표준 코드)"""
+        assert "11410" in SEOUL_GU_CODES, "서대문구 코드(11410)가 누락됨"
+        assert SEOUL_GU_CODES["11410"] == "서대문구"
+        # 11400은 잘못된 코드이어야 함
+        assert "11400" not in SEOUL_GU_CODES, "11400은 서대문구의 잘못된 코드"
 
     def test_모든_구_코드는_5자리(self):
         for code in SEOUL_GU_CODES.keys():
