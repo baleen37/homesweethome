@@ -23,7 +23,7 @@ class AsilNaverMatcher:
     """ASIL과 Naver 아파트 정보를 매칭하는 클래스"""
 
     # 좌표 매칭: 최대 허용 거리 (미터)
-    MAX_COORDINATE_DISTANCE_M = 100
+    MAX_COORDINATE_DISTANCE_M = 1000
 
     # 퍼지 이름 매칭: 최소 신뢰도 임계값
     MIN_FUZZY_CONFIDENCE = 0.5

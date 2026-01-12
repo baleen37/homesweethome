@@ -18,6 +18,7 @@ from crawler.export.csv_export import (
     export_naver_articles_with_apt_seq,
 )
 from crawler.matching.asil_naver_matcher import AsilNaverMatcher
+from crawler.matching.dto import MatchMethod
 from crawler.naver_cluster_api import NaverClusterAPIClient
 from crawler.naver_listing_crawler import NaverListingCrawler
 
@@ -119,14 +120,15 @@ def crawl_asil_to_naver_listings(
                 skipped_no_coord += 1
                 continue
 
-            # Naver Cluster API로 매칭
+            # Naver Cluster API로 매칭 (법정동 코드 필터링 포함)
             cluster_client = NaverClusterAPIClient(
                 lat=lat_f,
                 lon=lng_f,
-                bottom=lat_f - 0.01,
-                left=lng_f - 0.01,
-                top=lat_f + 0.01,
-                right=lng_f + 0.01,
+                bottom=lat_f - 0.005,  # 약 550m
+                left=lng_f - 0.005,  # 약 450m (서울 위도 기준)
+                top=lat_f + 0.005,
+                right=lng_f + 0.005,
+                cortar_no=apt.dong,  # 법정동 코드 필터링
                 zoom=15,
             )
 
@@ -142,18 +144,48 @@ def crawl_asil_to_naver_listings(
                     skipped_no_match += 1
                     continue
 
-                # AsilNaverMatcher로 좌표 기반 매칭 (100m 이내, 신뢰도 계산)
+                # 2단계 매칭: 좌표 기반 + 이름 퍼지 서치
                 match_result = AsilNaverMatcher.match_by_coordinate(apt, articles)
+
+                # 좌표 매칭 실패 시 이름 퍼지 매칭 시도
+                if match_result is None:
+                    match_result = AsilNaverMatcher.match_by_fuzzy_name(apt, articles)
 
                 if match_result is None:
                     print(
-                        f"      - Naver 매칭 실패 (100m 이내 매물 없음), "
+                        f"      - Naver 매칭 실패 (좌표/이름 매칭 실패), "
                         f"후보 수: {len(articles)}, 스킵"
                     )
                     skipped_no_match += 1
                     continue
 
-                matched_article = articles[0]  # Cluster API 결과의 첫 번째 매물 사용
+                # 원래 좌표 매칭 결과 저장 (이름 매칭 우선 시 좌표 계산용)
+                original_match_result = match_result
+
+                # 좌표 기반 매칭 시 이름 유사도 추가 검증
+                if match_result.method == MatchMethod.COORDINATE:
+                    # 매칭된 아파트 이름 유사도 계산
+                    name_match = AsilNaverMatcher.match_by_fuzzy_name(apt, articles)
+                    if name_match and name_match.confidence >= 0.8:
+                        # 이름이 매우 유사하면 이름 매칭 결과 사용
+                        if name_match.naver_apt_code != match_result.naver_apt_code:
+                            print(
+                                f"      - 이름 매칭 우선: {name_match.naver_apt_name} "
+                                f"(유사도: {name_match.confidence:.2f})"
+                            )
+                            match_result = name_match
+
+                # 원래 좌표 매칭 결과로 매물 찾기 (좌표가 필요하므로)
+                matched_article = next(
+                    (a for a in articles if a.atcl_no == original_match_result.naver_apt_code),
+                    None,
+                )
+
+                if matched_article is None:
+                    print("      - 매칭된 매물을 찾을 수 없음, 스킵")
+                    skipped_no_match += 1
+                    continue
+
                 matched_lat = matched_article.lat
                 matched_lng = matched_article.lng
 
@@ -163,9 +195,15 @@ def crawl_asil_to_naver_listings(
                     skipped_no_match += 1
                     continue
 
+                # 거리 정보 포맷팅 (이름 매칭 시 distance_m이 None일 수 있음)
+                distance_str = (
+                    f"{original_match_result.distance_m:.1f}m"
+                    if original_match_result.distance_m is not None
+                    else "N/A"
+                )
                 print(
                     f"      - Naver 매칭 성공: {match_result.naver_apt_name} "
-                    f"(거리: {match_result.distance_m:.1f}m, "
+                    f"(거리: {distance_str}, "
                     f"신뢰도: {match_result.confidence:.2f}, "
                     f"좌표: {matched_lat}, {matched_lng})"
                 )
@@ -197,10 +235,10 @@ def crawl_asil_to_naver_listings(
                 # 매칭된 아파트 저장
                 matched_apts_list.append(apt)
 
-                # 3. 매칭된 좌표로 Naver 매물 크롤링
+                # 3. ASIL 아파트 좌표로 Naver 매물 크롤링 (매칭된 매물 좌표가 아님)
                 listing_crawler = NaverListingCrawler(
-                    lat=matched_lat,
-                    lon=matched_lng,
+                    lat=lat_f,  # ASIL 아파트의 원래 좌표 사용
+                    lon=lng_f,
                     radius_m=radius_m,
                 )
 

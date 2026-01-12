@@ -58,7 +58,7 @@ class AsilAptListCrawler(BaseCrawler[AsilAptListDTO]):
                 "Referer": "https://asil.kr/",
             },
         )
-        with urlopen(request, timeout=10) as response:
+        with urlopen(request, timeout=30) as response:
             return response.read().decode("utf-8")
 
     def parse(self, content: str) -> list[AsilAptListDTO]:
@@ -138,7 +138,7 @@ class AsilTradePriceCrawler(BaseCrawler[AsilTradePriceDTO]):
                 "Referer": "https://asil.kr/",
             },
         )
-        with urlopen(request, timeout=10) as response:
+        with urlopen(request, timeout=30) as response:
             return response.read().decode(self.ENCODING)
 
     def parse(self, content: str) -> list[AsilTradePriceDTO]:

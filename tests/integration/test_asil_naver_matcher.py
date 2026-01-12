@@ -307,7 +307,8 @@ class TestCoordinateMatching:
             (37.500581, 127.036425, 1.0, "0m 정확히 일치"),
             (37.500800, 127.036425, 0.7, "약 24m - 높은 신뢰도"),
             (37.501000, 127.036500, 0.5, "약 50m - 중간 신뢰도"),
-            (37.501500, 127.036500, 0.5, "약 100m 이내 - 최소 신뢰도"),
+            (37.501500, 127.036500, 0.5, "약 100m - 낮은 신뢰도"),
+            (37.509000, 127.036500, 0.5, "약 950m - 최대 거리 허용"),
         ]
 
         for lat, lng, expected_min_confidence, desc in test_cases:
@@ -322,7 +323,7 @@ class TestCoordinateMatching:
 
             result = AsilNaverMatcher.match_by_coordinate(asil, candidates)
 
-            # 100m 이내만 매칭되어야 함
+            # 1000m 이내만 매칭되어야 함
             if result is not None:
                 msg = (
                     f"{desc}: 신뢰도 부족 "
@@ -330,13 +331,13 @@ class TestCoordinateMatching:
                     f"신뢰도: {result.confidence:.2f})"
                 )
                 assert result.confidence >= expected_min_confidence - 0.1, msg
-                assert result.distance_m <= 100, (
-                    f"{desc}: 거리가 100m 초과 (거리: {result.distance_m:.1f}m)"
+                assert result.distance_m <= 1000, (
+                    f"{desc}: 거리가 1000m 초과 (거리: {result.distance_m:.1f}m)"
                 )
             else:
-                # 100m 이상인 경우 매칭 실패해야 함
+                # 1000m 이상인 경우 매칭 실패해야 함
                 distance = AsilNaverMatcher.haversine((37.500581, 127.036425), (lat, lng))
-                assert distance > 100, f"{desc}: 거리 {distance:.1f}m가 100m 이하임에도 매칭 실패"
+                assert distance > 1000, f"{desc}: 거리 {distance:.1f}m가 1000m 이하임에도 매칭 실패"
 
 
 # =============================================================================
