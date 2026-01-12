@@ -4,7 +4,7 @@
 WGS84(위경도)와 WCONGNAMUL 간의 변환 방법을 보여줍니다.
 """
 
-from src.crawler.coordinate_converter import (
+from crawler.coordinate_converter import (
     wcongnamul_to_wgs84,
     wgs84_to_wcongnamul,
 )

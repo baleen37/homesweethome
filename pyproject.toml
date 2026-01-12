@@ -3,9 +3,6 @@ name = "homesweethome"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "httpx>=0.28.1",
-    "openpyxl>=3.1.5",
-    "pandas>=2.3.3",
     "playwright>=1.40.0",
     "pydantic>=2.0.0",
     "pytest-asyncio>=1.3.0",

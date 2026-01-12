@@ -78,7 +78,7 @@ class AsilNaverMatcher:
             return (naver_apt.complex_name, naver_apt.latitude, naver_apt.longitude)
 
     @staticmethod
-    def _extract_asil_info(asil_apt: AsilAptType) -> tuple[str, str, float | None, float | None]:
+    def _extract_asil_info(asil_apt: AsilAptType) -> tuple[str, str, str | None, str | None]:
         """
         ASIL DTO 타입에 따라 적절한 필드 추출
 

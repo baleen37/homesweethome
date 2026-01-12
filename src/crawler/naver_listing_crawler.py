@@ -12,7 +12,7 @@ import requests
 
 from crawler.dto.naver_article import NaverArticleItemDTO
 from crawler.naver_cluster_api import NaverClusterAPIClient
-from crawler.naver_coordinate import bounds_from_center
+from crawler.utils.geo import bounds_from_center
 
 
 class RateLimit:

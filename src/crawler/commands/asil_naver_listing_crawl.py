@@ -3,7 +3,6 @@
 import time
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from crawler.asil import AsilAptListCrawler, AsilTradePriceCrawler
 from crawler.commands.cli_common import (
@@ -21,9 +20,6 @@ from crawler.export.csv_export import (
 from crawler.matching.asil_naver_matcher import AsilNaverMatcher
 from crawler.naver_cluster_api import NaverClusterAPIClient
 from crawler.naver_listing_crawler import NaverListingCrawler
-
-if TYPE_CHECKING:
-    pass
 
 
 class RateLimit:
@@ -160,6 +156,12 @@ def crawl_asil_to_naver_listings(
                 matched_article = articles[0]  # Cluster API 결과의 첫 번째 매물 사용
                 matched_lat = matched_article.lat
                 matched_lng = matched_article.lng
+
+                # 좌표가 None이면 스킵
+                if matched_lat is None or matched_lng is None:
+                    print("      - 좌표 없음, 스킵")
+                    skipped_no_match += 1
+                    continue
 
                 print(
                     f"      - Naver 매칭 성공: {match_result.naver_apt_name} "
